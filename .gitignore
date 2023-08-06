@@ -12,3 +12,10 @@ Cargo.lock
 
 # MSVC Windows builds of rustc generate these, which store debugging information
 *.pdb
+
+
+# Added by cargo
+
+/target
+
+cef-sys/cef_binary_115.3.11+ga61da9b+chromium-115.0.5790.114_macosarm64_minimal
