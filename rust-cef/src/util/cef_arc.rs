@@ -2,6 +2,8 @@ use std::{marker::PhantomData, ops::Deref, ptr::NonNull, sync::atomic::AtomicUsi
 
 use cef_sys::cef_base_ref_counted_t;
 
+use super::cef_base::{CefBase, CefPtrKind, CefBaseRaw};
+
 // this aquire thing is just lifted from the standard library arc implementation.
 #[cfg(not(sanitize = "thread"))]
 macro_rules! acquire {
@@ -17,27 +19,34 @@ macro_rules! acquire {
     };
 }
 
-/// A marker trait for types that are reference counted by CEF.
-///
-/// This should only be impmented for types from the CEF C API.
-pub unsafe trait CefRefCounted {}
-
-pub(crate) unsafe trait CefRefCountedRaw {
-    type Wrapper: CefRefCounted;
-}
-
 /// A reference counted wrapper for CEF types.
 ///
 /// These are only created by the crate, and not by the user.
 #[repr(transparent)]
-pub struct CefArc<T: CefRefCounted> {
+pub struct CefArc<T: CefBase<Kind=CefPtrKindArc>> {
     ptr: NonNull<CefArcInner<T>>,
 }
 
-unsafe impl<T: CefRefCounted> Send for CefArc<T> where T: Send + Sync {}
+unsafe impl<T: CefBase<Kind=CefPtrKindArc>> Send for CefArc<T> where T: Send + Sync {}
+
+pub struct CefPtrKindArc;
+
+unsafe impl CefPtrKind for CefPtrKindArc {
+    type Pointer<T: CefBase<Kind=Self>> = CefArc<T>;
+
+    fn rust_to_ptr<B: CefBase<Kind=Self>>(rust: Self::Pointer<B>) -> *mut B::CType {
+        rust.ptr.as_ptr().cast()
+    }
+
+    fn ptr_to_rust<R: CefBaseRaw<Kind=Self>>(ptr: *mut R) -> Self::Pointer<R::RustType> {
+        let ptr = ptr.cast::<CefArcInner<R::RustType>>();
+        let non_null: NonNull<_> = unsafe { ptr.as_ref().unwrap().into() };
+        CefArc { ptr: non_null }
+    }
+}
 
 #[repr(C)]
-struct CefArcInner<T: CefRefCounted> {
+struct CefArcInner<T: CefBase<Kind=CefPtrKindArc>> {
     data: T,
     ref_count: AtomicUsize,
 }
@@ -50,7 +59,7 @@ fn wrap_boolean(b: bool) -> i32 {
     }
 }
 
-impl<T: CefRefCounted> CefArcInner<T> {
+impl<T: CefBase<Kind=CefPtrKindArc>> CefArcInner<T> {
     fn get_base(&self) -> &cef_base_ref_counted_t {
         unsafe {
             let base = NonNull::from(&self.data);
@@ -70,7 +79,7 @@ impl<T: CefRefCounted> CefArcInner<T> {
     }
 }
 
-impl<T: CefRefCounted> Clone for CefArc<T> {
+impl<T: CefBase<Kind=CefPtrKindArc>> Clone for CefArc<T> {
     fn clone(&self) -> Self {
         unsafe {
             self.ptr.as_ref().add_ref();
@@ -79,7 +88,7 @@ impl<T: CefRefCounted> Clone for CefArc<T> {
     }
 }
 
-impl<T: CefRefCounted> Drop for CefArc<T> {
+impl<T: CefBase<Kind=CefPtrKindArc>> Drop for CefArc<T> {
     fn drop(&mut self) {
         unsafe {
             self.ptr.as_ref().release();
@@ -87,7 +96,7 @@ impl<T: CefRefCounted> Drop for CefArc<T> {
     }
 }
 
-impl<T: CefRefCounted> Deref for CefArc<T> {
+impl<T: CefBase<Kind=CefPtrKindArc>> Deref for CefArc<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -95,7 +104,7 @@ impl<T: CefRefCounted> Deref for CefArc<T> {
     }
 }
 
-impl<T: CefRefCounted> CefArc<T> {
+impl<T: CefBase<Kind=CefPtrKindArc>> CefArc<T> {
     pub(crate) fn new(inner: T) -> Self {
         let inner = Box::leak(Box::new(CefArcInner {
             data: inner,
@@ -114,22 +123,6 @@ impl<T: CefRefCounted> CefArc<T> {
 
         Self { ptr: inner.into() }
     }
-
-    pub(crate) fn from_ptr<W>(ptr: *mut W) -> Self
-    where
-        W: CefRefCountedRaw<Wrapper = T>,
-    {
-        let ptr = ptr.cast::<CefArcInner<T>>();
-        let non_null: NonNull<_> = unsafe { ptr.as_ref().unwrap().into() };
-        Self { ptr: non_null }
-    }
-
-    pub(crate) fn into_ptr<W>(self) -> *mut W
-    where
-        W: CefRefCountedRaw<Wrapper = T>,
-    {
-        self.ptr.as_ptr().cast()
-    }
 }
 
 pub(crate) fn new_uninit_base() -> cef_base_ref_counted_t {
@@ -142,7 +135,7 @@ pub(crate) fn new_uninit_base() -> cef_base_ref_counted_t {
     }
 }
 
-unsafe extern "C" fn add_ref_ptr<T: CefRefCounted>(ptr: *mut cef_base_ref_counted_t) {
+unsafe extern "C" fn add_ref_ptr<T: CefBase<Kind=CefPtrKindArc>>(ptr: *mut cef_base_ref_counted_t) {
     let inner = ptr.cast::<CefArcInner<T>>();
     let inner = inner.as_ref().unwrap();
     inner
@@ -150,7 +143,7 @@ unsafe extern "C" fn add_ref_ptr<T: CefRefCounted>(ptr: *mut cef_base_ref_counte
         .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 }
 
-unsafe extern "C" fn release_ptr<T: CefRefCounted>(ptr: *mut cef_base_ref_counted_t) -> i32 {
+unsafe extern "C" fn release_ptr<T: CefBase<Kind=CefPtrKindArc>>(ptr: *mut cef_base_ref_counted_t) -> i32 {
     let inner = ptr.cast::<CefArcInner<T>>();
     let inner = inner.as_ref().unwrap();
     if inner
@@ -169,13 +162,13 @@ unsafe extern "C" fn release_ptr<T: CefRefCounted>(ptr: *mut cef_base_ref_counte
     1
 }
 
-unsafe extern "C" fn has_one_ref_ptr<T: CefRefCounted>(ptr: *mut cef_base_ref_counted_t) -> i32 {
+unsafe extern "C" fn has_one_ref_ptr<T: CefBase<Kind=CefPtrKindArc>>(ptr: *mut cef_base_ref_counted_t) -> i32 {
     let inner = ptr.cast::<CefArcInner<T>>();
     let inner = inner.as_ref().unwrap();
     wrap_boolean(inner.ref_count.load(std::sync::atomic::Ordering::Acquire) == 1)
 }
 
-unsafe extern "C" fn has_at_least_one_ref_ptr<T: CefRefCounted>(
+unsafe extern "C" fn has_at_least_one_ref_ptr<T: CefBase<Kind=CefPtrKindArc>>(
     ptr: *mut cef_base_ref_counted_t,
 ) -> i32 {
     let inner = ptr.cast::<CefArcInner<T>>();

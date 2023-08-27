@@ -2,27 +2,18 @@ use std::{marker::PhantomData, ops::Deref, ptr::NonNull, sync::atomic::AtomicUsi
 
 use cef_sys::cef_base_scoped_t;
 
-
-/// A marker trait for types that are reference counted by CEF.
-///
-/// This should only be impmented for types from the CEF C API.
-pub unsafe trait CefScoped {}
-
-pub(crate) unsafe trait CefScopedRaw {
-    type Wrapper: CefScoped;
-}
+use super::cef_base::{CefBase, CefPtrKind, CefBaseRaw};
 
 /// A box for CEF types.
 ///
 /// These are only created by the crate, and not by the user.
 #[repr(transparent)]
-pub struct CefBox<T: CefScoped> {
+pub struct CefBox<T: CefBase<Kind=CefPtrKindBox>> {
     ptr: NonNull<T>,
 }
 
-unsafe impl<T: CefScoped> Send for CefBox<T> where T: Send {}
-unsafe impl<T: CefScoped> Sync for CefBox<T> where T: Sync {}
-
+unsafe impl<T: CefBase<Kind=CefPtrKindBox>> Send for CefBox<T> where T: Send {}
+unsafe impl<T: CefBase<Kind=CefPtrKindBox>> Sync for CefBox<T> where T: Sync {}
 
 fn wrap_boolean(b: bool) -> i32 {
     if b {
@@ -32,7 +23,7 @@ fn wrap_boolean(b: bool) -> i32 {
     }
 }
 
-impl<T: CefScoped> CefBox<T> {
+impl<T: CefBase<Kind=CefPtrKindBox>> CefBox<T> {
     fn get_base(&self) -> &cef_base_scoped_t {
         unsafe {
             let base: NonNull<cef_base_scoped_t> = self.ptr.cast();
@@ -46,7 +37,23 @@ impl<T: CefScoped> CefBox<T> {
     }
 }
 
-impl<T: CefScoped> Drop for CefBox<T> {
+pub struct CefPtrKindBox;
+
+unsafe impl CefPtrKind for CefPtrKindBox {
+    type Pointer<T: CefBase<Kind=Self>> = CefBox<T>;
+
+    fn rust_to_ptr<B: CefBase<Kind=Self>>(rust: Self::Pointer<B>) -> *mut B::CType {
+        rust.ptr.as_ptr().cast()
+    }
+
+    fn ptr_to_rust<R: CefBaseRaw<Kind=Self>>(ptr: *mut R) -> Self::Pointer<R::RustType> {
+        let ptr = ptr.cast::<R::RustType>();
+        let non_null: NonNull<_> = unsafe { ptr.as_ref().unwrap().into() };
+        CefBox { ptr: non_null }
+    }
+}
+
+impl<T: CefBase<Kind=CefPtrKindBox>> Drop for CefBox<T> {
     fn drop(&mut self) {
         unsafe {
             self.delete();
@@ -54,7 +61,7 @@ impl<T: CefScoped> Drop for CefBox<T> {
     }
 }
 
-impl<T: CefScoped> Deref for CefBox<T> {
+impl<T: CefBase<Kind=CefPtrKindBox>> Deref for CefBox<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -62,7 +69,7 @@ impl<T: CefScoped> Deref for CefBox<T> {
     }
 }
 
-impl<T: CefScoped> CefBox<T> {
+impl<T: CefBase<Kind=CefPtrKindBox>> CefBox<T> {
     pub(crate) fn new(inner: T) -> Self {
         let boxed = Box::new(inner);
         let ptr = NonNull::from(&*boxed);
@@ -76,32 +83,13 @@ impl<T: CefScoped> CefBox<T> {
 
         Self { ptr }
     }
-
-    pub(crate) fn from_ptr<W>(ptr: *mut W) -> Self
-    where
-        W: CefScopedRaw<Wrapper = T>,
-    {
-        let ptr = ptr.cast::<T>();
-        let non_null: NonNull<_> = unsafe { ptr.as_ref().unwrap().into() };
-        Self { ptr: non_null }
-    }
-
-    pub(crate) fn into_ptr<W>(self) -> *mut W
-    where
-        W: CefScopedRaw<Wrapper = T>,
-    {
-        self.ptr.as_ptr().cast()
-    }
 }
 
 pub(crate) fn new_uninit_base() -> cef_base_scoped_t {
-    cef_base_scoped_t {
-        size: 0,
-        del: None,
-    }
+    cef_base_scoped_t { size: 0, del: None }
 }
 
-unsafe extern "C" fn del_ptr<T: CefScoped>(ptr: *mut cef_base_scoped_t) {
+unsafe extern "C" fn del_ptr<T: CefBase<Kind=CefPtrKindBox>>(ptr: *mut cef_base_scoped_t) {
     let ptr = ptr.cast::<T>();
 
     let _ = Box::from_raw(ptr);
