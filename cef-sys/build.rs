@@ -30,7 +30,6 @@ fn main() {
         // The input header we would like to generate
         // bindings for.
         .header("wrapper.h")
-        
         .clang_arg(libdir_path_arg)
         // Tell cargo to invalidate the built crate whenever any of the
         // included header files changed.
