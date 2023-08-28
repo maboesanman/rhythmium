@@ -1,6 +1,9 @@
 use cef_sys::cef_command_line_t;
 
-use crate::util::{cef_arc::CefPtrKindArc, cef_base::{CefBase, CefBaseRaw}};
+use crate::util::{
+    cef_arc::CefPtrKindArc,
+    cef_base::{CefBase, CefBaseRaw},
+};
 
 #[repr(transparent)]
 pub struct CefCommandLine(cef_command_line_t);

@@ -1,59 +1,54 @@
-use std::{marker::PhantomData, ops::Deref, ptr::NonNull, sync::atomic::AtomicUsize};
+use std::{ops::Deref, ptr::NonNull};
 
 use cef_sys::cef_base_scoped_t;
 
-use super::cef_base::{CefBase, CefPtrKind, CefBaseRaw};
+use super::cef_base::{CefBase, CefBaseRaw, CefPtrKind};
 
 /// A box for CEF types.
 ///
 /// These are only created by the crate, and not by the user.
 #[repr(transparent)]
-pub struct CefBox<T: CefBase<Kind=CefPtrKindBox>> {
-    ptr: NonNull<T>,
+pub struct CefBox<B: CefBase<Kind = CefPtrKindBox>, T = ()> {
+    ptr: NonNull<CefBoxInner<B, T>>,
 }
 
-unsafe impl<T: CefBase<Kind=CefPtrKindBox>> Send for CefBox<T> where T: Send {}
-unsafe impl<T: CefBase<Kind=CefPtrKindBox>> Sync for CefBox<T> where T: Sync {}
-
-fn wrap_boolean(b: bool) -> i32 {
-    if b {
-        1
-    } else {
-        0
-    }
+#[repr(C)]
+struct CefBoxInner<B: CefBase<Kind = CefPtrKindBox>, T> {
+    base: B,
+    data: T,
 }
 
-impl<T: CefBase<Kind=CefPtrKindBox>> CefBox<T> {
-    fn get_base(&self) -> &cef_base_scoped_t {
-        unsafe {
-            let base: NonNull<cef_base_scoped_t> = self.ptr.cast();
-            base.as_ref()
-        }
-    }
-
+impl<B: CefBase<Kind = CefPtrKindBox>, T> CefBox<B, T> {
     /// Call the delete method from the inner type.
     unsafe fn delete(&mut self) {
-        self.get_base().del.unwrap()(self.ptr.as_ptr() as *mut _);
+        let ptr = B::Kind::get_base(&mut self.ptr.as_mut().base);
+        ptr.as_mut().unwrap().del.unwrap()(self.ptr.as_ptr() as *mut _);
     }
 }
 
 pub struct CefPtrKindBox;
 
 unsafe impl CefPtrKind for CefPtrKindBox {
-    type Pointer<T: CefBase<Kind=Self>> = CefBox<T>;
+    type BaseType = cef_base_scoped_t;
 
-    fn rust_to_ptr<B: CefBase<Kind=Self>>(rust: Self::Pointer<B>) -> *mut B::CType {
+    type Pointer<B: CefBase<Kind = Self>, T> = CefBox<B, T>;
+
+    fn rust_to_ptr<B: CefBase<Kind = Self>, T>(rust: Self::Pointer<B, T>) -> *mut B::CType {
         rust.ptr.as_ptr().cast()
     }
 
-    fn ptr_to_rust<R: CefBaseRaw<Kind=Self>>(ptr: *mut R) -> Self::Pointer<R::RustType> {
-        let ptr = ptr.cast::<R::RustType>();
+    fn rust_ref_to_ptr<B: CefBase<Kind = Self>, T>(rust: &Self::Pointer<B, T>) -> *mut B::CType {
+        rust.ptr.as_ptr().cast()
+    }
+
+    fn ptr_to_rust<R: CefBaseRaw<Kind = Self>>(ptr: *mut R) -> Self::Pointer<R::RustType, ()> {
+        let ptr = ptr.cast::<CefBoxInner<R::RustType, ()>>();
         let non_null: NonNull<_> = unsafe { ptr.as_ref().unwrap().into() };
         CefBox { ptr: non_null }
     }
 }
 
-impl<T: CefBase<Kind=CefPtrKindBox>> Drop for CefBox<T> {
+impl<B: CefBase<Kind = CefPtrKindBox>, T> Drop for CefBox<B, T> {
     fn drop(&mut self) {
         unsafe {
             self.delete();
@@ -61,24 +56,24 @@ impl<T: CefBase<Kind=CefPtrKindBox>> Drop for CefBox<T> {
     }
 }
 
-impl<T: CefBase<Kind=CefPtrKindBox>> Deref for CefBox<T> {
+impl<B: CefBase<Kind = CefPtrKindBox>, T> Deref for CefBox<B, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        unsafe { &self.ptr.as_ref() }
+        unsafe { &self.ptr.as_ref().data }
     }
 }
 
-impl<T: CefBase<Kind=CefPtrKindBox>> CefBox<T> {
-    pub(crate) fn new(inner: T) -> Self {
-        let boxed = Box::new(inner);
+impl<B: CefBase<Kind = CefPtrKindBox>, T> CefBox<B, T> {
+    pub(crate) fn new(base: B, data: T) -> Self {
+        let boxed = Box::new(CefBoxInner { base, data });
         let ptr = NonNull::from(&*boxed);
         let mut base = ptr.cast::<cef_base_scoped_t>();
 
         unsafe {
             let base = base.as_mut();
-            base.size = std::mem::size_of::<T>();
-            base.del = Some(del_ptr::<T>);
+            base.size = std::mem::size_of::<CefBoxInner<B, T>>();
+            base.del = Some(del_ptr::<B, T>);
         }
 
         Self { ptr }
@@ -89,8 +84,8 @@ pub(crate) fn new_uninit_base() -> cef_base_scoped_t {
     cef_base_scoped_t { size: 0, del: None }
 }
 
-unsafe extern "C" fn del_ptr<T: CefBase<Kind=CefPtrKindBox>>(ptr: *mut cef_base_scoped_t) {
-    let ptr = ptr.cast::<T>();
+unsafe extern "C" fn del_ptr<B: CefBase<Kind = CefPtrKindBox>, T>(ptr: *mut cef_base_scoped_t) {
+    let ptr = ptr.cast::<CefBoxInner<B, T>>();
 
     let _ = Box::from_raw(ptr);
 }

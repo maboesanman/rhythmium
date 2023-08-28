@@ -1,6 +1,9 @@
 use cef_sys::cef_resource_bundle_handler_t;
 
-use crate::util::{cef_base::{CefBase, CefBaseRaw}, cef_arc::CefPtrKindArc};
+use crate::util::{
+    cef_arc::CefPtrKindArc,
+    cef_base::{CefBase, CefBaseRaw},
+};
 
 #[repr(transparent)]
 pub struct CefResourceBundleHandler(cef_resource_bundle_handler_t);
