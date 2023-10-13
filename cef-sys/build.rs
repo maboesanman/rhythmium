@@ -18,7 +18,7 @@ fn main() {
     let lib_path = libdir_path.join("Release");
     let lib_path_str = lib_path.to_str().unwrap();
 
-    println!("cargo:rustc-link-search={lib_path_str}");
+    println!("cargo:rustc-link-search=static={lib_path_str}");
 
     // Tell cargo to invalidate the built crate whenever the wrapper changes
     println!("cargo:rerun-if-changed=wrapper.h");

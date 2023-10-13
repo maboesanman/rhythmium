@@ -6,7 +6,7 @@
 pub mod util;
 
 // pub mod cef_app;
-pub mod cef_command_line;
-pub mod cef_resource_bundle_handler;
-pub mod cef_scheme_options;
-pub mod cef_scheme_registrar;
+pub mod command_line;
+// pub mod resource_bundle_handler;
+// pub mod scheme_options;
+// pub mod scheme_registrar;

@@ -3,16 +3,15 @@ use std::{ops::Deref, ptr::NonNull, sync::atomic::AtomicUsize};
 use cef_sys::cef_base_ref_counted_t;
 
 use super::{
-    cef_base::{CefBase, CefBaseRaw, CefPtrKind},
-    wrap_boolean::wrap_boolean,
+    wrap_boolean::wrap_boolean, cef_type::CefType,
 };
 
 /// A reference counted wrapper for CEF types.
 ///
 /// These are only created by the crate, and not by the user.
 #[repr(transparent)]
-pub struct CefArc<B: CefBase<Kind = CefPtrKindArc>, T = ()> {
-    ptr: NonNull<CefArcInner<B, T>>,
+pub struct CefArc<T: CefType<Kind = CefPtrKindArc>> {
+    ptr: NonNull<CefArcInner<T>>,
 }
 
 pub struct CefPtrKindArc;
@@ -20,34 +19,33 @@ pub struct CefPtrKindArc;
 unsafe impl CefPtrKind for CefPtrKindArc {
     type BaseType = cef_base_ref_counted_t;
 
-    type Pointer<B: CefBase<Kind = Self>, T> = CefArc<B, T>;
+    type Pointer<T: CefBase<Kind = Self>> = CefArc<T>;
 
-    fn rust_to_ptr<B: CefBase<Kind = Self>, T>(rust: Self::Pointer<B, T>) -> *mut B::CType {
+    fn rust_to_ptr<T: CefBase<Kind = Self>>(rust: Self::Pointer<T>) -> *mut T::CType {
         rust.ptr.as_ptr().cast()
     }
 
-    fn rust_ref_to_ptr<B: CefBase<Kind = Self>, T>(rust: &Self::Pointer<B, T>) -> *mut B::CType {
+    fn rust_ref_to_ptr<T: CefBase<Kind = Self>>(rust: &Self::Pointer<T>) -> *mut T::CType {
         rust.ptr.as_ptr().cast()
     }
 
-    fn ptr_to_rust<R: CefBaseRaw<Kind = Self>>(ptr: *mut R) -> Self::Pointer<R::RustType, ()> {
+    fn ptr_to_rust<R: CefBaseRaw<Kind = Self>>(ptr: *mut R) -> Self::Pointer<R::RustType> {
         let non_null: NonNull<_> = unsafe { ptr.as_ref().unwrap().into() };
-        let ptr = non_null.cast::<CefArcInner<R::RustType, ()>>();
+        let ptr = non_null.cast::<CefArcInner<R::RustType>>();
         CefArc { ptr }
     }
 }
 
 #[repr(C)]
-struct CefArcInner<B: CefBase<Kind = CefPtrKindArc>, T> {
-    base: B,
+struct CefArcInner<T: CefType<Kind = CefPtrKindArc>> {
+    inner: T,
     ref_count: AtomicUsize,
-    data: T,
 }
 
-impl<B: CefBase<Kind = CefPtrKindArc>, T> CefArcInner<B, T> {
+impl<T: CefType<Kind = CefPtrKindArc>> CefArcInner<T> {
     fn get_base(&self) -> &cef_base_ref_counted_t {
         unsafe {
-            B::Kind::get_base(&self.base as *const _ as *mut B)
+            T::Kind::get_base(&self.inner as *const _ as *mut T)
                 .as_ref()
                 .unwrap()
         }
@@ -64,7 +62,7 @@ impl<B: CefBase<Kind = CefPtrKindArc>, T> CefArcInner<B, T> {
     }
 }
 
-impl<B: CefBase<Kind = CefPtrKindArc>, T> Clone for CefArc<B, T> {
+impl<T: CefType<Kind = CefPtrKindArc>> Clone for CefArc<T> {
     fn clone(&self) -> Self {
         unsafe {
             self.ptr.as_ref().add_ref();
@@ -73,7 +71,7 @@ impl<B: CefBase<Kind = CefPtrKindArc>, T> Clone for CefArc<B, T> {
     }
 }
 
-impl<B: CefBase<Kind = CefPtrKindArc>, T> Drop for CefArc<B, T> {
+impl<T: CefType<Kind = CefPtrKindArc>> Drop for CefArc<T> {
     fn drop(&mut self) {
         unsafe {
             self.ptr.as_ref().release();
@@ -81,33 +79,48 @@ impl<B: CefBase<Kind = CefPtrKindArc>, T> Drop for CefArc<B, T> {
     }
 }
 
-impl<B: CefBase<Kind = CefPtrKindArc>, T> Deref for CefArc<B, T> {
-    type Target = T;
+// impl<T: CefType<Kind = CefPtrKindArc>> Deref for CefArc<T> {
+//     type Target = T;
+
+//     fn deref(&self) -> &Self::Target {
+//         unsafe { &self.ptr.as_ref().data }
+//     }
+// }
+
+impl<CType, RustImpl> Deref for CefArc<CefType<CType, RustImpl>> {
+    type Target = RustImpl;
 
     fn deref(&self) -> &Self::Target {
-        unsafe { &self.ptr.as_ref().data }
+        let inner = unsafe { self.ptr.as_ref() };
+
+        &inner.inner.rust_impl
     }
 }
 
-impl<Base: CefBase<Kind = CefPtrKindArc>, T> CefArc<Base, T> {
-    pub(crate) fn new(base: Base, inner: T) -> Self {
+impl<T: CefType<Kind = CefPtrKindArc>> CefArc<T> {
+    pub(crate) fn new(inner: T) -> Self {
         let inner = Box::leak(Box::new(CefArcInner {
-            base,
+            inner,
             ref_count: AtomicUsize::new(1),
-            data: inner,
         }));
 
-        let base = NonNull::from(&inner.data);
+        let base = NonNull::from(&inner.inner);
         let mut base: NonNull<cef_base_ref_counted_t> = base.cast();
         unsafe {
             base.as_mut().size = std::mem::size_of_val(inner);
-            base.as_mut().add_ref = Some(add_ref_ptr::<Base, T>);
-            base.as_mut().release = Some(release_ptr::<Base, T>);
-            base.as_mut().has_one_ref = Some(has_one_ref_ptr::<Base, T>);
-            base.as_mut().has_at_least_one_ref = Some(has_at_least_one_ref_ptr::<Base, T>);
+            base.as_mut().add_ref = Some(add_ref_ptr::<T>);
+            base.as_mut().release = Some(release_ptr::<T>);
+            base.as_mut().has_one_ref = Some(has_one_ref_ptr::<T>);
+            base.as_mut().has_at_least_one_ref = Some(has_at_least_one_ref_ptr::<T>);
         }
 
         Self { ptr: inner.into() }
+    }
+
+    pub(crate) fn get_base(&self) -> &T::CType {
+        let inner = unsafe { &self.ptr.as_ref() };
+
+        inner.inner.get_v_table()
     }
 
     fn has_one_ref(&self) -> bool {
@@ -135,20 +148,20 @@ pub(crate) fn new_uninit_base() -> cef_base_ref_counted_t {
     }
 }
 
-unsafe extern "C" fn add_ref_ptr<B: CefBase<Kind = CefPtrKindArc>, T>(
+unsafe extern "C" fn add_ref_ptr<T: CefType<Kind = CefPtrKindArc>>(
     ptr: *mut cef_base_ref_counted_t,
 ) {
-    let inner = ptr.cast::<CefArcInner<B, T>>();
+    let inner = ptr.cast::<CefArcInner<T>>();
     let inner = inner.as_ref().unwrap();
     inner
         .ref_count
         .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 }
 
-unsafe extern "C" fn release_ptr<B: CefBase<Kind = CefPtrKindArc>, T>(
+unsafe extern "C" fn release_ptr<T: CefType<Kind = CefPtrKindArc>>(
     ptr: *mut cef_base_ref_counted_t,
 ) -> i32 {
-    let inner = ptr.cast::<CefArcInner<B, T>>();
+    let inner = ptr.cast::<CefArcInner<T>>();
     let inner = inner.as_ref().unwrap();
     if inner
         .ref_count
@@ -166,23 +179,23 @@ unsafe extern "C" fn release_ptr<B: CefBase<Kind = CefPtrKindArc>, T>(
     inner.ref_count.load(std::sync::atomic::Ordering::Acquire);
 
     // we know this box came from rust_cef, so it is a CefArcInner.
-    let _ = Box::from_raw(inner as *const _ as *mut CefArcInner<B, T>);
+    let _ = Box::from_raw(inner as *const _ as *mut CefArcInner<T>);
 
     1
 }
 
-unsafe extern "C" fn has_one_ref_ptr<B: CefBase<Kind = CefPtrKindArc>, T>(
+unsafe extern "C" fn has_one_ref_ptr<T: CefType<Kind = CefPtrKindArc>>(
     ptr: *mut cef_base_ref_counted_t,
 ) -> i32 {
-    let inner = ptr.cast::<CefArcInner<B, T>>();
+    let inner = ptr.cast::<CefArcInner<T>>();
     let inner = inner.as_ref().unwrap();
     wrap_boolean(inner.ref_count.load(std::sync::atomic::Ordering::Acquire) == 1)
 }
 
-unsafe extern "C" fn has_at_least_one_ref_ptr<B: CefBase<Kind = CefPtrKindArc>, T>(
+unsafe extern "C" fn has_at_least_one_ref_ptr<T: CefType<Kind = CefPtrKindArc>>(
     ptr: *mut cef_base_ref_counted_t,
 ) -> i32 {
-    let inner = ptr.cast::<CefArcInner<B, T>>();
+    let inner = ptr.cast::<CefArcInner<T>>();
     let inner = inner.as_ref().unwrap();
     wrap_boolean(inner.ref_count.load(std::sync::atomic::Ordering::Acquire) >= 1)
 }

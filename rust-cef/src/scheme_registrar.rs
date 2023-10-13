@@ -3,7 +3,7 @@ use std::ffi::c_uint;
 use cef_sys::cef_scheme_registrar_t;
 
 use crate::{
-    cef_scheme_options::CefSchemeOptions,
+    scheme_options::CefSchemeOptions,
     util::{
         cef_base::{CefBase, CefBaseRaw},
         cef_box::{CefBox, CefPtrKindBox},
