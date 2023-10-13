@@ -18,4 +18,4 @@ Cargo.lock
 
 /target
 
-cef-sys/cef_binary_115.3.11+ga61da9b+chromium-115.0.5790.114_macosarm64_minimal
+cef-sys/cef-binary

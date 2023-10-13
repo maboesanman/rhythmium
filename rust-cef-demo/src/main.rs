@@ -84,5 +84,5 @@ fn main() {
         cookieable_schemes_exclude_defaults: 0,
     };
 
-    let code = unsafe { cef_initialize(&main_args, &settings, &mut app, std::ptr::null_mut()) };
+    // let code = unsafe { cef_initialize(&main_args, &settings, &mut app, std::ptr::null_mut()) };
 }
