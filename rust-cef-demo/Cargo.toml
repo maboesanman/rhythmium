@@ -15,5 +15,5 @@ argv = "0.1.9"
 name = "rust-cef-demo"
 version = "0.0.1"
 osx_frameworks = [
-  "../cef-sys/cef_binary_115.3.11+ga61da9b+chromium-115.0.5790.114_macosarm64_minimal/Release/Chromium Embedded Framework.framework",
+  "../cef-sys/cef-binary/Release/Chromium Embedded Framework.framework",
 ]

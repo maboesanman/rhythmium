@@ -2,6 +2,7 @@
 name = "cef-sys"
 version = "0.1.0"
 edition = "2021"
+links = "cef_sandbox"
 
 [lib]
 doctest = false

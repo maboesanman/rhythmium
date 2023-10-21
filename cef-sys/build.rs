@@ -20,7 +20,12 @@ fn main() {
 
     println!("cargo:rustc-link-search={lib_path_str}/");
     println!("cargo:rustc-link-lib=static:+verbatim=cef_sandbox.a");
-    println!("cargo:rustc-link-lib=framework=Chromium Embedded Framework");
+
+    #[cfg(target_os = "macos")]
+    {
+        println!("cargo:rustc-link-search=framework={lib_path_str}");
+        println!("cargo:rustc-link-lib=framework=Chromium Embedded Framework");
+    }
 
     // Tell cargo to invalidate the built crate whenever the wrapper changes
     println!("cargo:rerun-if-changed=wrapper.h");
