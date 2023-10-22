@@ -1,9 +1,10 @@
 #![feature(ptr_metadata)]
 use std::{env, mem::size_of};
 
-use cef_sys::{cef_main_args_t, cef_initialize, cef_base_ref_counted_t, cef_execute_process, _cef_settings_t};
+use cef_sys::{cef_main_args_t, cef_initialize, cef_base_ref_counted_t, cef_execute_process, _cef_settings_t, cef_log_severity_t_LOGSEVERITY_WARNING, cef_window_info_t, cef_browser_settings_t, cef_client_t, cef_browser_host_create_browser, cef_do_message_loop_work, cef_run_message_loop, _cef_app_t, _cef_string_utf16_t};
+use winit::{event_loop::EventLoop, window::WindowBuilder, event::{Event, WindowEvent}, platform::macos::WindowExtMacOS};
 
-use crate::{app::initialize_cef_app, strings::into_cef_str};
+use crate::{app::initialize_cef_app, strings::into_cef_str, client::initialize_cef_client};
 
 mod base;
 mod app;
@@ -45,12 +46,15 @@ fn main() {
     };
 
     initialize_cef_app(&mut app);
+    println!("initialize app");
 
     let code = unsafe { cef_execute_process(&main_args, &mut app as *mut _, std::ptr::null_mut()) };
+    println!("execute process");
 
-    if code >= 0 {
-        std::process::exit(code);
-    }
+    // if code >= 0 {
+    //     println!("cef_execute_process failed with error code {}", code);
+    //     std::process::exit(code);
+    // }
 
     let settings = _cef_settings_t {
         size: size_of::<_cef_settings_t>(),
@@ -71,7 +75,7 @@ fn main() {
         user_agent_product: into_cef_str(""),
         locale: into_cef_str(""),
         log_file: into_cef_str(""),
-        log_severity: 0,
+        log_severity: cef_log_severity_t_LOGSEVERITY_WARNING,
         javascript_flags: into_cef_str(""),
         resources_dir_path: into_cef_str(""),
         locales_dir_path: into_cef_str(""),
@@ -84,5 +88,139 @@ fn main() {
         cookieable_schemes_exclude_defaults: 0,
     };
 
-    // let code = unsafe { cef_initialize(&main_args, &settings, &mut app, std::ptr::null_mut()) };
+    let success = unsafe { cef_initialize(&main_args, &settings, &mut app, std::ptr::null_mut()) == 1 };
+    println!("initialize cef");
+
+    if !success {
+        println!("cef_initialize failed");
+
+        std::process::exit(code);
+    }
+
+    println!("initialize cef");
+
+    let event_loop = EventLoop::new();
+    let window = WindowBuilder::new().build(&event_loop).unwrap();
+
+    let window_info = cef_window_info_t {
+        window_name: into_cef_str(""),
+        bounds: cef_sys::_cef_rect_t { x: 0, y: 0, width: 600, height: 400 },
+        hidden: 0,
+        parent_view: window.ns_view(),
+        windowless_rendering_enabled: 0,
+        shared_texture_enabled: 0,
+        external_begin_frame_enabled: 0,
+        view: std::ptr::null_mut(),
+    };
+
+    let browser_settings = cef_browser_settings_t {
+        size: size_of::<cef_browser_settings_t>(),
+        windowless_frame_rate: 60,
+        standard_font_family: into_cef_str(""),
+        fixed_font_family: into_cef_str(""),
+        serif_font_family: into_cef_str(""),
+        sans_serif_font_family: into_cef_str(""),
+        cursive_font_family: into_cef_str(""),
+        fantasy_font_family: into_cef_str(""),
+        default_font_size: 0,
+        default_fixed_font_size: 0,
+        minimum_font_size: 0,
+        minimum_logical_font_size: 0,
+        default_encoding: into_cef_str(""),
+        remote_fonts: 0,
+        javascript: 0,
+        javascript_close_windows: 0,
+        javascript_access_clipboard: 0,
+        javascript_dom_paste: 0,
+        image_loading: 0,
+        image_shrink_standalone_to_fit: 0,
+        text_area_resize: 0,
+        tab_to_links: 0,
+        local_storage: 0,
+        databases: 0,
+        webgl: 1,
+        background_color: 0,
+        accept_language_list: into_cef_str(""),
+        chrome_status_bubble: 0,
+    };
+
+    let url = into_cef_str("https://www.google.com");
+
+    let mut client = cef_client_t {
+        base: cef_base_ref_counted_t {
+            size: 0,
+            add_ref: None,
+            release: None,
+            has_one_ref: None,
+            has_at_least_one_ref: None,
+        },
+        get_audio_handler: None,
+        get_command_handler: None,
+        get_context_menu_handler: None,
+        get_dialog_handler: None,
+        get_display_handler: None,
+        get_download_handler: None,
+        get_drag_handler: None,
+        get_find_handler: None,
+        get_focus_handler: None,
+        get_frame_handler: None,
+        get_permission_handler: None,
+        get_jsdialog_handler: None,
+        get_keyboard_handler: None,
+        get_life_span_handler: None,
+        get_load_handler: None,
+        get_print_handler: None,
+        get_render_handler: None,
+        get_request_handler: None,
+        on_process_message_received: None,
+    };
+
+    initialize_cef_client(&mut client);
+    println!("initialize client");
+
+    let code = unsafe { cef_browser_host_create_browser(&window_info, &mut client, &url, &browser_settings, std::ptr::null_mut(), std::ptr::null_mut()) };
+    println!("create browser");
+
+    // if code >= 0 {
+    //     println!("cef_browser_host_create_browser failed with error code {}", code);
+    //     std::process::exit(code);
+    // }
+
+    unsafe { cef_run_message_loop() };
+
+    // event_loop.run(move |event, _, control_flow| {
+    // // ControlFlow::Poll continuously runs the event loop, even if the OS hasn't
+    // // dispatched any events. This is ideal for games and similar applications.
+    // control_flow.set_poll();
+
+    // unsafe { cef_do_message_loop_work() };
+
+    // match event {
+    //     Event::WindowEvent {
+    //         event: WindowEvent::CloseRequested,
+    //         ..
+    //     } => {
+    //         println!("The close button was pressed; stopping");
+    //         control_flow.set_exit();
+    //     },
+    //     Event::MainEventsCleared => {
+    //         // Application update code.
+
+    //         // Queue a RedrawRequested event.
+    //         //
+    //         // You only need to call this if you've determined that you need to redraw, in
+    //         // applications which do not always need to. Applications that redraw continuously
+    //         // can just render here instead.
+    //         window.request_redraw();
+    //     },
+    //     Event::RedrawRequested(_) => {
+    //         // Redraw the application.
+    //         //
+    //         // It's preferable for applications that do not render continuously to render in
+    //         // this event rather than in MainEventsCleared, since rendering in here allows
+    //         // the program to gracefully handle redraws requested by the OS.
+    //     },
+    //     _ => ()
+    // }
+// });
 }

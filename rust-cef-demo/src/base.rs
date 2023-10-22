@@ -3,24 +3,17 @@ use cef_sys::cef_base_ref_counted_t;
 
 
 unsafe extern "C" fn add_ref(base: *mut cef_base_ref_counted_t) {
-    println!("+");
 }
 
 unsafe extern "C" fn release(base: *mut cef_base_ref_counted_t) -> std::os::raw::c_int {
-    println!("-");
-
     1
 }
 
 unsafe extern "C" fn has_one_ref(base: *mut cef_base_ref_counted_t) -> std::os::raw::c_int {
-    println!("=");
-
     1
 }
 
 unsafe extern "C" fn has_at_least_one_ref(base: *mut cef_base_ref_counted_t) -> std::os::raw::c_int {
-    println!(">=");
-
     1
 }
 
