@@ -86,6 +86,8 @@ fn main() {
         accept_language_list: into_cef_str(""),
         cookieable_schemes_list: into_cef_str(""),
         cookieable_schemes_exclude_defaults: 0,
+        chrome_policy_id: into_cef_str(""),
+        log_items: 0,
     };
 
     let success = unsafe { cef_initialize(&main_args, &settings, &mut app, std::ptr::null_mut()) == 1 };
@@ -140,8 +142,8 @@ fn main() {
         databases: 0,
         webgl: 1,
         background_color: 0,
-        accept_language_list: into_cef_str(""),
         chrome_status_bubble: 0,
+        chrome_zoom_bubble: 0,
     };
 
     let url = into_cef_str("https://www.google.com");

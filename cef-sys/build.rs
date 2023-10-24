@@ -1,21 +1,32 @@
 use std::env;
 use std::path::PathBuf;
+use glob::glob;
 
 fn main() {
     let cargo_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
-    let cef_version = "cef-binary";
-    // // Tell cargo to look for shared libraries in the specified directory
 
-    // This is the directory where the `c` library is located.
-    let libdir_path = PathBuf::from(cargo_dir).join(cef_version)
-        // Canonicalize the path as `rustc-link-search` requires an absolute
-        // path.
-        .canonicalize()
-        .expect("cannot canonicalize path");
-    let libdir_path_str = libdir_path.to_str().unwrap();
-    let libdir_path_arg = format!("--include-directory={libdir_path_str}");
+    let vendor_path = PathBuf::from(cargo_dir)
+        .parent().unwrap()
+        .join("vendor");
+    let vendor_path_str = vendor_path.to_str().unwrap();
 
-    let lib_path = libdir_path.join("Release");
+    let cef_path = {
+        let mut paths = glob(&format!("{vendor_path_str}/cef/cef_binary_*")).unwrap();
+
+        let out = match paths.next() {
+            Some(out) => out.unwrap(),
+            None => panic!("No cef binary found in {}", vendor_path_str),
+        };
+
+        // assert!(paths.next().is_none(), "Multiple cef binaries found in {}", vendor_path_str);
+
+        out
+    }.canonicalize().expect("Failed to canonicalize cef path");
+
+    let cef_path_str = cef_path.to_str().unwrap();
+    let cef_path_arg = format!("--include-directory={cef_path_str}");
+
+    let lib_path = cef_path.join("Release");
     let lib_path_str = lib_path.to_str().unwrap();
 
     println!("cargo:rustc-link-search={lib_path_str}/");
@@ -37,7 +48,7 @@ fn main() {
         // The input header we would like to generate
         // bindings for.
         .header("wrapper.h")
-        .clang_arg(libdir_path_arg)
+        .clang_arg(cef_path_arg)
         // Tell cargo to invalidate the built crate whenever any of the
         // included header files changed.
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))
