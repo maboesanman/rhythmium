@@ -10,10 +10,3 @@ description = "Rust CEF Demo"
 cef-sys = { path = "../cef-sys" }
 winit = "0.28.7"
 argv = "0.1.9"
-
-[package.metadata.bundle]
-name = "rust-cef-demo"
-version = "0.0.1"
-osx_frameworks = [
-  "../cef-sys/cef-binary/Release/Chromium Embedded Framework.framework",
-]
