@@ -11,6 +11,9 @@
 function(DownloadCEF platform version download_dir)
   # Specify the binary distribution type and download directory.
   set(CEF_DISTRIBUTION "cef_binary_${version}_${platform}_minimal")
+  set(ENV{CEF_DISTRIBUTION} "${CEF_DISTRIBUTION}")
+  corrosion_set_env_vars(rust-cef-demo "CEF_DISTRIBUTION=${CEF_DISTRIBUTION}")
+
   set(CEF_DOWNLOAD_DIR "${download_dir}")
 
   # The location where we expect the extracted binary distribution.

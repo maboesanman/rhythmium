@@ -22,10 +22,7 @@ FetchContent_Declare(
     GIT_TAG v0.4 # Optionally specify a commit hash, version tag or branch here
 )
 FetchContent_MakeAvailable(Corrosion)
-
 corrosion_import_crate(MANIFEST_PATH Cargo.toml)
-
-
 
 #
 # CEF configuration.
