@@ -1,4 +1,4 @@
-use cef_sys::{cef_app_t, _cef_string_utf16_t};
+use cef_sys::{_cef_string_utf16_t, cef_app_t};
 
 use crate::{base::initialize_cef_base_refcounted, strings::into_cef_str};
 

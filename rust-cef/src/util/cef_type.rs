@@ -10,8 +10,6 @@ pub struct CefType<VTable, RustImpl> {
     pub(crate) rust_impl: RustImpl,
 }
 
-
-
 unsafe impl<V: VTable> VTable for CefType<V, Unknown> {
     type Kind = V::Kind;
 }
@@ -55,6 +53,5 @@ pub unsafe trait VTableKind {
 
     type Pointer<T>;
 
-    fn into_rust<V: VTable<Kind=Self>>(vtable: *const V) -> Self::Pointer<CefType<V, Unknown>>;
+    fn into_rust<V: VTable<Kind = Self>>(vtable: *const V) -> Self::Pointer<CefType<V, Unknown>>;
 }
-

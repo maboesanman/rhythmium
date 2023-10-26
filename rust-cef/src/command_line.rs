@@ -1,11 +1,10 @@
-use std::ops::{DerefMut, Deref};
+use std::ops::{Deref, DerefMut};
 
 use cef_sys::cef_command_line_t;
 
 // use crate::util::{
 //     cef_arc::{CefPtrKindArc, CefArc}, cef_type::{CefType, Unknown},
 // };
-
 
 // pub type CommandLine<RustImpl> = CefType<cef_command_line_t, RustImpl>;
 // pub type DynCommandLine = CommandLine<Unknown>;
@@ -47,4 +46,3 @@ use cef_sys::cef_command_line_t;
 //     type RustType = DynCommandLine;
 //     type Kind = CefPtrKindArc;
 // }
-

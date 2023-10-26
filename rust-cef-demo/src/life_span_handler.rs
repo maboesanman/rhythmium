@@ -1,11 +1,10 @@
-use cef_sys::{cef_life_span_handler_t, cef_browser_t};
+use cef_sys::{cef_browser_t, cef_life_span_handler_t};
 
 use crate::base::initialize_cef_base_refcounted;
 
-
 unsafe extern "C" fn on_before_close(
     this: *mut cef_life_span_handler_t,
-    browser: *mut cef_browser_t
+    browser: *mut cef_browser_t,
 ) {
     println!("on_before_close");
 }

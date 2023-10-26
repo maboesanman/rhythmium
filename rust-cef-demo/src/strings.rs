@@ -1,8 +1,5 @@
 use cef_sys::cef_string_utf16_t;
 
-
-
-
 pub fn into_cef_str(string: &str) -> cef_string_utf16_t {
     let bytes = string.encode_utf16().collect::<Vec<_>>();
     let bytes = bytes.into_boxed_slice();

@@ -256,7 +256,6 @@ unsafe extern "C" fn on_process_message_received(
     0
 }
 
-
 pub fn initialize_cef_client(client: &mut cef_client_t) {
     client.base.size = std::mem::size_of::<cef_client_t>();
     initialize_cef_base_refcounted(client as *mut _ as *mut _);

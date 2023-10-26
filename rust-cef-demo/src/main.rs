@@ -1,15 +1,26 @@
 #![feature(ptr_metadata)]
 use std::{env, mem::size_of};
 
-use cef_sys::{cef_main_args_t, cef_initialize, cef_base_ref_counted_t, cef_execute_process, _cef_settings_t, cef_log_severity_t_LOGSEVERITY_WARNING, cef_window_info_t, cef_browser_settings_t, cef_client_t, cef_browser_host_create_browser, cef_do_message_loop_work, cef_run_message_loop, _cef_app_t, _cef_string_utf16_t};
-use winit::{event_loop::EventLoop, window::WindowBuilder, event::{Event, WindowEvent}, platform::macos::WindowExtMacOS};
+use cef_sys::{
+    _cef_app_t, _cef_settings_t, _cef_string_utf16_t, cef_base_ref_counted_t,
+    cef_browser_host_create_browser, cef_browser_settings_t, cef_client_t,
+    cef_do_message_loop_work, cef_execute_process, cef_initialize,
+    cef_log_severity_t_LOGSEVERITY_WARNING, cef_main_args_t, cef_run_message_loop,
+    cef_window_info_t,
+};
+use winit::{
+    event::{Event, WindowEvent},
+    event_loop::EventLoop,
+    platform::macos::WindowExtMacOS,
+    window::WindowBuilder,
+};
 
-use crate::{app::initialize_cef_app, strings::into_cef_str, client::initialize_cef_client};
+use crate::{app::initialize_cef_app, client::initialize_cef_client, strings::into_cef_str};
 
-mod base;
 mod app;
-mod life_span_handler;
+mod base;
 mod client;
+mod life_span_handler;
 mod strings;
 
 fn main() {
@@ -17,7 +28,8 @@ fn main() {
     println!("args: {:?}", args);
 
     let argc = args.len() as std::ffi::c_int;
-    let mut args_pointers = args.into_iter()
+    let mut args_pointers = args
+        .into_iter()
         .map(std::ffi::CString::new)
         .filter_map(Result::ok)
         .map(|arg| arg.as_ptr() as *mut std::ffi::c_char)
@@ -25,10 +37,7 @@ fn main() {
         .collect::<Vec<_>>();
     let argv = args_pointers.as_mut_ptr();
 
-    let main_args = cef_main_args_t {
-        argc,
-        argv,
-    };
+    let main_args = cef_main_args_t { argc, argv };
 
     let mut app = cef_sys::cef_app_t {
         base: cef_base_ref_counted_t {
@@ -90,7 +99,8 @@ fn main() {
         log_items: 0,
     };
 
-    let success = unsafe { cef_initialize(&main_args, &settings, &mut app, std::ptr::null_mut()) == 1 };
+    let success =
+        unsafe { cef_initialize(&main_args, &settings, &mut app, std::ptr::null_mut()) == 1 };
     println!("initialize cef");
 
     if !success {
@@ -106,7 +116,12 @@ fn main() {
 
     let window_info = cef_window_info_t {
         window_name: into_cef_str(""),
-        bounds: cef_sys::_cef_rect_t { x: 0, y: 0, width: 600, height: 400 },
+        bounds: cef_sys::_cef_rect_t {
+            x: 0,
+            y: 0,
+            width: 600,
+            height: 400,
+        },
         hidden: 0,
         parent_view: window.ns_view(),
         windowless_rendering_enabled: 0,
@@ -180,7 +195,16 @@ fn main() {
     initialize_cef_client(&mut client);
     println!("initialize client");
 
-    let code = unsafe { cef_browser_host_create_browser(&window_info, &mut client, &url, &browser_settings, std::ptr::null_mut(), std::ptr::null_mut()) };
+    let code = unsafe {
+        cef_browser_host_create_browser(
+            &window_info,
+            &mut client,
+            &url,
+            &browser_settings,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        )
+    };
     println!("create browser");
 
     // if code >= 0 {
@@ -224,5 +248,5 @@ fn main() {
     //     },
     //     _ => ()
     // }
-// });
+    // });
 }

@@ -10,11 +10,10 @@ fn main() {
     });
     let cef_distribution = env::var("CEF_DISTRIBUTION").unwrap();
     let cef_path = PathBuf::from(cargo_dir)
-        .parent().unwrap()
+        .parent()
+        .unwrap()
         .join("vendor/cef")
         .join(cef_distribution)
-        // Canonicalize the path as `rustc-link-search` requires an absolute
-        // path.
         .canonicalize()
         .expect("cannot canonicalize path");
 
