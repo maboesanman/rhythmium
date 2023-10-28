@@ -8,7 +8,7 @@ pub mod util;
 pub use cef_sys;
 
 // pub mod cef_app;
-pub mod command_line;
+// pub mod command_line;
 // pub mod resource_bundle_handler;
 // pub mod scheme_options;
 // pub mod scheme_registrar;

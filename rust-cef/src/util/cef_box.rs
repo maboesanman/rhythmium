@@ -1,74 +1,65 @@
-use std::{ops::Deref, ptr::NonNull};
+use std::{ops::{Deref, DerefMut}, ptr::NonNull};
 
 use cef_sys::cef_base_scoped_t;
+
+use super::cef_type::{VTableKind, VTable, VTableExt, CefType};
 
 /// A box for CEF types.
 ///
 /// These are only created by the crate, and not by the user.
 #[repr(transparent)]
-pub struct CefBox<T: CefBase<Kind = CefPtrKindBox>> {
+pub struct CefBox<T: VTable<Kind=VtableKindBox>> {
     ptr: NonNull<T>,
 }
 
-impl<T: CefBase<Kind = CefPtrKindBox>> CefBox<T> {
-    /// Call the delete method from the inner type.
-    unsafe fn delete(&mut self) {
-        let ptr = T::Kind::get_base(self.ptr.as_ptr());
-        ptr.as_mut().unwrap().del.unwrap()(self.ptr.as_ptr() as *mut _);
-    }
-}
+pub struct VtableKindBox;
 
-pub struct CefPtrKindBox;
+unsafe impl VTableKind for VtableKindBox {
+    type Base = cef_base_scoped_t;
 
-unsafe impl CefPtrKind for CefPtrKindBox {
-    type BaseType = cef_base_scoped_t;
+    type Pointer<T: VTable<Kind = Self>> = CefBox<T>;
 
-    type Pointer<T: CefBase<Kind = Self>> = CefBox<T>;
+    type ExtraData = ();
 
-    fn rust_to_ptr<T: CefBase<Kind = Self>>(rust: Self::Pointer<T>) -> *mut T::CType {
-        rust.ptr.as_ptr().cast()
-    }
-
-    fn rust_ref_to_ptr<T: CefBase<Kind = Self>>(rust: &Self::Pointer<T>) -> *mut T::CType {
-        rust.ptr.as_ptr().cast()
-    }
-
-    fn ptr_to_rust<R: CefBaseRaw<Kind = Self>>(ptr: *mut R) -> Self::Pointer<R::RustType> {
-        let ptr = ptr.cast::<R::RustType>();
-        let non_null: NonNull<_> = unsafe { ptr.as_ref().unwrap().into() };
+    fn into_rust<V: VTable<Kind = Self>>(vtable: *const V) -> Self::Pointer<V> {
+        let non_null: NonNull<V> = unsafe { vtable.as_ref().unwrap().into() };
         CefBox { ptr: non_null }
     }
 }
 
-impl<T: CefBase<Kind = CefPtrKindBox>> Drop for CefBox<T> {
+impl<V: VTable<Kind=VtableKindBox>> Drop for CefBox<V> {
     fn drop(&mut self) {
         unsafe {
-            self.delete();
+            let base = self.ptr.as_ref().get_base();
+            base.del.unwrap()(self.ptr.as_ptr() as *mut _);
         }
     }
 }
 
-impl<T: CefBase<Kind = CefPtrKindBox>> Deref for CefBox<T> {
-    type Target = T;
+// we can deref to the rust impl if we have a cef type.
+// we can't if we only have a vtable.
+// this only gets used when implementing traits for cef types.
+impl<V: VTable<Kind=VtableKindBox>, RustImpl> Deref for CefBox<CefType<V, RustImpl>> {
+    type Target = RustImpl;
 
     fn deref(&self) -> &Self::Target {
-        unsafe { &self.ptr.as_ref() }
+        unsafe { &self.ptr.as_ref().rust_impl }
     }
 }
 
-impl<T: CefBase<Kind = CefPtrKindBox>> CefBox<T> {
-    pub(crate) fn new(inner: T) -> Self {
-        let boxed = Box::new(inner);
-        let ptr = NonNull::from(&*boxed);
-        let mut base = ptr.cast::<cef_base_scoped_t>();
+impl<V: VTable<Kind=VtableKindBox>, RustImpl> DerefMut for CefBox<CefType<V, RustImpl>> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { &mut self.ptr.as_mut().rust_impl }
+    }
+}
 
-        unsafe {
-            let base = base.as_mut();
-            base.size = std::mem::size_of::<T>();
-            base.del = Some(del_ptr::<T>);
-        }
+impl<V: VTable<Kind=VtableKindBox>, RustImpl> CefBox<CefType<V, RustImpl>> {
+    pub(crate) fn new(mut inner: CefType<V, RustImpl>) -> Self {
+        let base = inner.v_table.get_base_mut();
+        base.size = std::mem::size_of::<CefType<V, RustImpl>>();
+        base.del = Some(del_ptr::<V, RustImpl>);
 
-        Self { ptr }
+        Self { ptr: NonNull::from(&*Box::new(inner)) }
     }
 }
 
@@ -76,8 +67,8 @@ pub(crate) fn new_uninit_base() -> cef_base_scoped_t {
     cef_base_scoped_t { size: 0, del: None }
 }
 
-unsafe extern "C" fn del_ptr<T: CefBase<Kind = CefPtrKindBox>>(ptr: *mut cef_base_scoped_t) {
-    let ptr = ptr.cast::<T>();
-
-    let _ = Box::from_raw(ptr);
+// this is only used for types created in rust.
+// the drop impl for CefBox calls this via the vtable.
+unsafe extern "C" fn del_ptr<V: VTable<Kind=VtableKindBox>, RustImpl>(ptr: *mut cef_base_scoped_t) {
+    _ = Box::from_raw(ptr.cast::<CefType<V, RustImpl>>());
 }

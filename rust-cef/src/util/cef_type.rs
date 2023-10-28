@@ -2,15 +2,15 @@ use cef_sys::cef_audio_parameters_t;
 
 // this is used as the rust impl for dyn variants of cef types.
 
-pub struct Unknown;
 
 #[repr(C)]
-pub struct CefType<VTable, RustImpl> {
-    pub(crate) v_table: VTable,
+pub struct CefType<V: VTable, RustImpl> {
+    pub(crate) v_table: V,
+    pub(crate) extra_data: <V::Kind as VTableKind>::ExtraData,
     pub(crate) rust_impl: RustImpl,
 }
 
-unsafe impl<V: VTable> VTable for CefType<V, Unknown> {
+unsafe impl<V: VTable, RustType> VTable for CefType<V, RustType> {
     type Kind = V::Kind;
 }
 
@@ -26,23 +26,25 @@ impl<V: VTable, RustImpl> CefType<V, RustImpl> {
 
 // impl<V: VTable>
 
-/// This trait marks a type as a vtable from CEF.
+/// This trait marks a type as a vtable compatible with CEF.
+/// it is implemented on the vtables from cef and on the user defined rust
+/// types that start with vtables.
 /// It can be either an arc based or box based vtable.
 pub unsafe trait VTable {
     type Kind: VTableKind;
 }
 
-trait VTableExt: VTable + Sized {
+pub trait VTableExt: VTable + Sized {
     fn get_base(&self) -> &<Self::Kind as VTableKind>::Base {
-        unsafe { &*Self::get_base_raw(self) }
+        let self_ptr = self as *const Self;
+        let base_ptr = self_ptr.cast::<<Self::Kind as VTableKind>::Base>();
+        unsafe { &*base_ptr }
     }
-
-    fn get_base_raw(self: *const Self) -> *const <Self::Kind as VTableKind>::Base {
-        self.cast()
-    }
-
-    fn into_rust(self: *const Self) -> <Self::Kind as VTableKind>::Pointer<CefType<Self, Unknown>> {
-        Self::Kind::into_rust(self)
+    
+    fn get_base_mut(&mut self) -> &mut <Self::Kind as VTableKind>::Base {
+        let self_ptr = self as *mut Self;
+        let base_ptr = self_ptr.cast::<<Self::Kind as VTableKind>::Base>();
+        unsafe { &mut *base_ptr }
     }
 }
 
@@ -51,7 +53,9 @@ impl<V: VTable> VTableExt for V {}
 pub unsafe trait VTableKind {
     type Base;
 
-    type Pointer<T>;
+    type Pointer<T: VTable<Kind = Self>>;
 
-    fn into_rust<V: VTable<Kind = Self>>(vtable: *const V) -> Self::Pointer<CefType<V, Unknown>>;
+    type ExtraData;
+
+    fn into_rust<V: VTable<Kind = Self>>(vtable: *const V) -> Self::Pointer<V>;
 }
