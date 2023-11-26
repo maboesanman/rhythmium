@@ -1,8 +1,3 @@
-use cef_sys::cef_audio_parameters_t;
-
-// this is used as the rust impl for dyn variants of cef types.
-
-
 #[repr(C)]
 pub struct CefType<V: VTable, RustImpl> {
     pub(crate) v_table: V,
@@ -19,12 +14,18 @@ impl<V: VTable, RustImpl> CefType<V, RustImpl> {
         &self.v_table
     }
 
+    pub fn get_v_table_mut(&mut self) -> &mut V {
+        &mut self.v_table
+    }
+
     pub fn get_v_table_base(&self) -> &<V::Kind as VTableKind>::Base {
         self.v_table.get_base()
     }
-}
 
-// impl<V: VTable>
+    pub fn get_v_table_base_mut(&mut self) -> &mut <V::Kind as VTableKind>::Base {
+        self.v_table.get_base_mut()
+    }
+}
 
 /// This trait marks a type as a vtable compatible with CEF.
 /// it is implemented on the vtables from cef and on the user defined rust
@@ -56,6 +57,4 @@ pub unsafe trait VTableKind {
     type Pointer<T: VTable<Kind = Self>>;
 
     type ExtraData;
-
-    fn into_rust<V: VTable<Kind = Self>>(vtable: *const V) -> Self::Pointer<V>;
 }
