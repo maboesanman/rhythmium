@@ -64,6 +64,12 @@ impl<V: VTable<Kind = VTableKindBox>, RustImpl> CefBox<CefType<V, RustImpl>> {
             ptr: NonNull::from(&*Box::new(inner)),
         }
     }
+
+    pub(crate) fn type_erase(self) -> CefBox<V> {
+        CefBox {
+            ptr: self.ptr.cast(),
+        }
+    }
 }
 
 #[allow(dead_code)]

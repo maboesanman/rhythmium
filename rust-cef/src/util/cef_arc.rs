@@ -203,11 +203,11 @@ impl<V: VTable<Kind = VTableKindArc>, RustImpl> CefArcMut<CefType<V, RustImpl>> 
         })
     }
 
-    // pub(crate) fn type_erase(self) -> CefArcMut<V> {
-    //     CefArcMut(CefArc {
-    //         ptr: self.0.ptr.cast(),
-    //     })
-    // }
+    pub(crate) fn type_erase(self) -> CefArcMut<V> {
+        CefArcMut(CefArc {
+            ptr: self.0.ptr.cast(),
+        })
+    }
 }
 
 impl<V: VTable<Kind = VTableKindArc>, RustImpl> CefArc<CefType<V, RustImpl>> {

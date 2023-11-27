@@ -17,21 +17,6 @@ impl<V: VTable, RustImpl> CefType<V, RustImpl> {
             rust_impl,
         }
     }
-    // pub(crate) fn get_v_table(&self) -> &V {
-    //     &self.v_table
-    // }
-
-    // pub(crate) fn get_v_table_mut(&mut self) -> &mut V {
-    //     &mut self.v_table
-    // }
-
-    // pub(crate) fn get_v_table_base(&self) -> &<V::Kind as VTableKindRaw>::Base {
-    //     self.v_table.get_base()
-    // }
-
-    // pub(crate) fn get_v_table_base_mut(&mut self) -> &mut <V::Kind as VTableKindRaw>::Base {
-    //     self.v_table.get_base_mut()
-    // }
 }
 
 /// This trait marks a type as a vtable compatible with CEF.
