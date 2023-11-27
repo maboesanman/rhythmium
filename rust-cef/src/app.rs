@@ -1,119 +1,89 @@
+use cef_sys::{cef_app_t, cef_command_line_t, cef_scheme_registrar_t, cef_string_utf16_t};
+
 use crate::{
-    cef_command_line::CefCommandLine,
-    cef_resource_bundle_handler::CefResourceBundleHandler,
-    cef_scheme_registrar::CefSchemeRegistrar,
+    command_line::CommandLine,
+    scheme_registrar::{self, SchemeRegistrar},
     util::{
-        cef_arc::{new_uninit_base, CefArc, CefPtrKindArc }, cef_base::{CefBase, CefBaseRaw, CefArcBase}, cef_box::CefBox, into_rust_arg::{IntoRustArg, IntoRustArgRef, IntoCArg},
+        cef_arc::{new_uninit_base, CefArc, CefArcMut, VTableKindArc},
+        cef_box::CefBox,
+        cef_type::{CefType, VTable},
     },
 };
-use cef_sys::{
-    cef_app_t, cef_command_line_t, cef_resource_bundle_handler_t, cef_scheme_registrar_t,
-    cef_string_utf16_t,
-};
 
-// #[repr(transparent)]
-// pub struct CefApp(cef_app_t);
+#[repr(transparent)]
+pub struct App(cef_app_t);
 
-// unsafe impl CefBase for CefApp {
-//     type Kind = CefPtrKindArc;
-
-//     type CType = cef_app_t;
-// }
-
-// unsafe impl CefBaseRaw for cef_app_t {
-//     type RustType = CefApp;
-
-//     type Kind = CefPtrKindArc;
-// }
-
-// pub trait CefAppConfig: Sized {
-//     fn on_before_command_line_processing(
-//         &self,
-//         _process_type: &str,
-//         _command_line: CefArc<CefCommandLine>,
-//     ) {
-//     }
-//     fn on_register_custom_schemes(&self, _registrar: CefBox<CefSchemeRegistrar>) {}
-//     fn get_resource_bundle_handler(&self) -> Option<CefArc<CefResourceBundleHandler>> {
-//         None
-//     }
-//     // fn get_browser_process_handler(app: &CefApp) -> CefArc<CefBrowserProcessHandler>;
-//     // fn get_render_process_handler(app: &CefApp) -> CefArc<CefRenderProcessHandler>;
-// }
-
-// trait RawCefAppConfig: CefAppConfig {
-//     unsafe extern "C" fn on_before_command_line_processing_raw(
-//         app: *mut cef_app_t,
-//         process_type: *const cef_string_utf16_t,
-//         command_line: *mut cef_command_line_t,
-//     ) {
-//         todo!()
-//     }
-
-//     unsafe extern "C" fn on_register_custom_schemes_raw(
-//         app: *mut cef_app_t,
-//         registrar: *mut cef_scheme_registrar_t,
-//     ) {
-//         todo!()
-//     }
-
-//     unsafe extern "C" fn get_resource_bundle_handler_raw(
-//         app: *mut cef_app_t,
-//     ) -> *mut cef_resource_bundle_handler_t {
-//         todo!()
-//     }
-// }
-
-// impl<C: CefAppConfig> RawCefAppConfig for C {}
-
-// impl CefApp {
-//     pub fn new<C: CefAppConfig>() -> CefArc<Self> {
-//         let app = cef_app_t {
-//             base: new_uninit_base(),
-//             on_before_command_line_processing: Some(C::on_before_command_line_processing_raw),
-//             on_register_custom_schemes: Some(C::on_register_custom_schemes_raw),
-//             get_resource_bundle_handler: None,
-//             get_browser_process_handler: None,
-//             get_render_process_handler: None,
-//         };
-
-//         let app = CefApp(app);
-
-//         CefArc::new(app)
-//     }
-// }
-
-pub struct CefApp;
-
-pub trait CustomCefApp {
-    fn on_before_command_line_processing(
-        self: &CefArc<Self>,
-        _process_type: &str,
-        _command_line: CefArc<CefCommandLine>,
-    ) {}
-    fn on_register_custom_schemes(self: &CefArc<Self>, _registrar: CefBox<CefSchemeRegistrar>) {}
-    fn get_resource_bundle_handler(self: &CefArc<Self>) -> Option<CefArc<impl CefApp>> {
-        None
-    }
-    fn get_browser_process_handler(self: &CefArc<Self>) -> CefArc<CefBrowserProcessHandler>;
-    fn get_render_process_handler(self: &CefArc<Self>) -> CefArc<CefRenderProcessHandler>;
+unsafe impl VTable for App {
+    type Kind = VTableKindArc;
 }
 
-impl<T: CefApp> CefArc<T> {
+pub trait CustomApp: Sized {
     fn on_before_command_line_processing(
-        &self,
-        _process_type: &str,
-        _command_line: CefArc<CefCommandLine>,
+        self: &CefArc<CefType<App, Self>>,
+        process_type: &str,
+        command_line: CefArc<CommandLine>,
+    ) {
+    }
+
+    fn on_register_custom_schemes(
+        self: &CefArc<CefType<App, Self>>,
+        scheme_registrar: CefBox<SchemeRegistrar>,
+    ) {
+    }
+    // fn get_resource_bundle_handler(self: &CefArc<CefType<CefApp, Self>>) -> Option<CefArc<impl CefApp>> {
+    //     None
+    // }
+    // fn get_browser_process_handler(self: &CefArc<CefType<CefApp, Self>>) -> CefArc<CefBrowserProcessHandler>;
+    // fn get_render_process_handler(self: &CefArc<CefType<CefApp, Self>>) -> CefArc<CefRenderProcessHandler>;
+}
+
+trait CustomAppRaw: CustomApp {
+    unsafe extern "C" fn on_before_command_line_processing_raw(
+        self_raw: *mut cef_app_t,
+        process_type: *const cef_string_utf16_t,
+        command_line: *mut cef_command_line_t,
     ) {
         todo!()
     }
-    fn on_register_custom_schemes(&self, _registrar: CefBox<CefSchemeRegistrar>) {
+
+    unsafe extern "C" fn on_register_custom_schemes_raw(
+        self_raw: *mut cef_app_t,
+        scheme_registrar: *mut cef_scheme_registrar_t,
+    ) {
         todo!()
     }
+}
+
+impl<C: CustomApp> CustomAppRaw for C {}
+
+impl App {
+    pub fn new<C: CustomApp>(custom: C) -> CefArc<App> {
+        let app = cef_app_t {
+            base: new_uninit_base(),
+            on_before_command_line_processing: Some(C::on_before_command_line_processing_raw),
+            on_register_custom_schemes: Some(C::on_register_custom_schemes_raw),
+            get_resource_bundle_handler: None,
+            get_browser_process_handler: None,
+            get_render_process_handler: None,
+        };
+
+        let cef_type = CefType::new(App(app), custom);
+
+        CefArc::new(cef_type).type_erase()
+    }
+}
+
+impl CefArc<App> {
+    // fn on_before_command_line_processing(
+    //     &self,
+    //     process_type: &str,
+    //     command_line: CefArc<CommandLine>,
+    // ) {
+    //     todo!()
+    // }
     // fn get_resource_bundle_handler(&self) -> Option<CefArc<impl CefApp>> {
     //     None
     // }
-        // fn get_browser_process_handler(app: &CefApp) -> CefArc<CefBrowserProcessHandler>;
-        // fn get_render_process_handler(app: &CefApp) -> CefArc<CefRenderProcessHandler>;
+    // fn get_browser_process_handler(app: &CefApp) -> CefArc<CefBrowserProcessHandler>;
+    // fn get_render_process_handler(app: &CefApp) -> CefArc<CefRenderProcessHandler>;
 }
-

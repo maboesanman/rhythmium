@@ -9,7 +9,8 @@ edition = "2021"
 name = "rust_cef"
 
 [[bin]]
-name = "cef_mac_helper_process"
+name = "mac_helper_process"
 
 [dependencies]
 cef-sys = { path = "../cef-sys" }
+flagset = "0.4.4"

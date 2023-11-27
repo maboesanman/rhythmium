@@ -1,23 +1,28 @@
-use std::{ops::{Deref, DerefMut}, ptr::NonNull, sync::atomic::AtomicUsize};
+use std::{
+    ops::{Deref, DerefMut},
+    ptr::NonNull,
+    sync::atomic::AtomicUsize,
+};
 
 use cef_sys::cef_base_ref_counted_t;
 
 use super::{
-    wrap_boolean::wrap_boolean, cef_type::{CefType, VTableKind, VTable, VTableExt},
+    cef_type::{CefType, VTable, VTableExt, VTableKind},
+    wrap_boolean::wrap_boolean,
 };
 
 /// A reference counted wrapper for CEF types.
 ///
 /// These are only created by the crate, and not by the user.
 #[repr(transparent)]
-pub struct CefArc<T: VTable<Kind=VTableKindArc>> {
+pub struct CefArc<T: VTable<Kind = VTableKindArc>> {
     pub(crate) ptr: NonNull<T>,
 }
 
-unsafe impl<T: VTable<Kind=VTableKindArc>> Send for CefArc<T> {}
-unsafe impl<T: VTable<Kind=VTableKindArc>> Sync for CefArc<T> {}
+unsafe impl<T: VTable<Kind = VTableKindArc>> Send for CefArc<T> {}
+unsafe impl<T: VTable<Kind = VTableKindArc>> Sync for CefArc<T> {}
 
-impl<T: VTable<Kind=VTableKindArc>> CefArc<T> {
+impl<T: VTable<Kind = VTableKindArc>> CefArc<T> {
     pub fn try_into_mut(self) -> Result<CefArcMut<T>, Self> {
         let base = unsafe { self.ptr.as_ref().get_base() };
         if unsafe { base.has_one_ref.unwrap()(base as *const _ as *mut _) } != 0 {
@@ -36,13 +41,19 @@ unsafe impl VTableKind for VTableKindArc {
     type Pointer<V: VTable<Kind = Self>> = CefArc<V>;
 
     type ExtraData = CefArcExtraData;
+
+    fn get_initial_extra_data() -> Self::ExtraData {
+        Self::ExtraData {
+            ref_count: AtomicUsize::new(1),
+        }
+    }
 }
 
 pub struct CefArcExtraData {
     ref_count: AtomicUsize,
 }
 
-impl<V: VTable<Kind=VTableKindArc>> Clone for CefArc<V> {
+impl<V: VTable<Kind = VTableKindArc>> Clone for CefArc<V> {
     fn clone(&self) -> Self {
         unsafe {
             let base = self.ptr.as_ref().get_base();
@@ -52,7 +63,7 @@ impl<V: VTable<Kind=VTableKindArc>> Clone for CefArc<V> {
     }
 }
 
-impl<V: VTable<Kind=VTableKindArc>> Drop for CefArc<V> {
+impl<V: VTable<Kind = VTableKindArc>> Drop for CefArc<V> {
     fn drop(&mut self) {
         unsafe {
             let base = self.ptr.as_ref().get_base();
@@ -64,7 +75,7 @@ impl<V: VTable<Kind=VTableKindArc>> Drop for CefArc<V> {
 // we can deref to the rust impl if we have a cef type.
 // we can't if we only have a vtable.
 // this only gets used when implementing traits for cef types.
-impl<V: VTable<Kind=VTableKindArc>, RustImpl> Deref for CefArc<CefType<V, RustImpl>> {
+impl<V: VTable<Kind = VTableKindArc>, RustImpl> Deref for CefArc<CefType<V, RustImpl>> {
     type Target = RustImpl;
 
     fn deref(&self) -> &Self::Target {
@@ -72,8 +83,8 @@ impl<V: VTable<Kind=VTableKindArc>, RustImpl> Deref for CefArc<CefType<V, RustIm
     }
 }
 
-impl<V: VTable<Kind=VTableKindArc>, RustImpl> From<CefArcMut<CefType<V, RustImpl>>> for CefArc<CefType<V, RustImpl>> {
-    fn from(value: CefArcMut<CefType<V, RustImpl>>) -> Self {
+impl<V: VTable<Kind = VTableKindArc>> From<CefArcMut<V>> for CefArc<V> {
+    fn from(value: CefArcMut<V>) -> Self {
         value.0
     }
 }
@@ -89,7 +100,7 @@ pub(crate) fn new_uninit_base() -> cef_base_ref_counted_t {
     }
 }
 
-unsafe extern "C" fn add_ref_ptr<V: VTable<Kind=VTableKindArc>, RustImpl> (
+unsafe extern "C" fn add_ref_ptr<V: VTable<Kind = VTableKindArc>, RustImpl>(
     ptr: *mut cef_base_ref_counted_t,
 ) {
     let inner = ptr.cast::<CefType<V, RustImpl>>();
@@ -100,7 +111,7 @@ unsafe extern "C" fn add_ref_ptr<V: VTable<Kind=VTableKindArc>, RustImpl> (
         .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 }
 
-unsafe extern "C" fn release_ptr<V: VTable<Kind=VTableKindArc>, RustImpl> (
+unsafe extern "C" fn release_ptr<V: VTable<Kind = VTableKindArc>, RustImpl>(
     ptr: *mut cef_base_ref_counted_t,
 ) -> i32 {
     let inner = ptr.cast::<CefType<V, RustImpl>>();
@@ -127,30 +138,41 @@ unsafe extern "C" fn release_ptr<V: VTable<Kind=VTableKindArc>, RustImpl> (
     1
 }
 
-unsafe extern "C" fn has_one_ref_ptr<V: VTable<Kind=VTableKindArc>, RustImpl>(
+unsafe extern "C" fn has_one_ref_ptr<V: VTable<Kind = VTableKindArc>, RustImpl>(
     ptr: *mut cef_base_ref_counted_t,
 ) -> i32 {
     let inner = ptr.cast::<CefType<V, RustImpl>>();
     let inner = inner.as_ref().unwrap();
-    wrap_boolean(inner.extra_data.ref_count.load(std::sync::atomic::Ordering::Acquire) == 1)
+    wrap_boolean(
+        inner
+            .extra_data
+            .ref_count
+            .load(std::sync::atomic::Ordering::Acquire)
+            == 1,
+    )
 }
 
-unsafe extern "C" fn has_at_least_one_ref_ptr<V: VTable<Kind=VTableKindArc>, RustImpl>(
+unsafe extern "C" fn has_at_least_one_ref_ptr<V: VTable<Kind = VTableKindArc>, RustImpl>(
     ptr: *mut cef_base_ref_counted_t,
 ) -> i32 {
     let inner = ptr.cast::<CefType<V, RustImpl>>();
     let inner = inner.as_ref().unwrap();
-    wrap_boolean(inner.extra_data.ref_count.load(std::sync::atomic::Ordering::Acquire) >= 1)
+    wrap_boolean(
+        inner
+            .extra_data
+            .ref_count
+            .load(std::sync::atomic::Ordering::Acquire)
+            >= 1,
+    )
 }
-
 
 #[repr(transparent)]
-pub struct CefArcMut<T: VTable<Kind=VTableKindArc>>(pub(crate) CefArc<T>);
+pub struct CefArcMut<T: VTable<Kind = VTableKindArc>>(pub(crate) CefArc<T>);
 
 // we can deref to the rust impl if we have a cef type.
 // we can't if we only have a vtable.
 // this only gets used when implementing traits for cef types.
-impl<V: VTable<Kind=VTableKindArc>, RustImpl> Deref for CefArcMut<CefType<V, RustImpl>> {
+impl<V: VTable<Kind = VTableKindArc>, RustImpl> Deref for CefArcMut<CefType<V, RustImpl>> {
     type Target = RustImpl;
 
     fn deref(&self) -> &Self::Target {
@@ -161,14 +183,13 @@ impl<V: VTable<Kind=VTableKindArc>, RustImpl> Deref for CefArcMut<CefType<V, Rus
 // we can deref to the rust impl if we have a cef type.
 // we can't if we only have a vtable.
 // this only gets used when implementing traits for cef types.
-impl<V: VTable<Kind=VTableKindArc>, RustImpl> DerefMut for CefArcMut<CefType<V, RustImpl>> {
+impl<V: VTable<Kind = VTableKindArc>, RustImpl> DerefMut for CefArcMut<CefType<V, RustImpl>> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         unsafe { &mut self.0.ptr.as_mut().rust_impl }
     }
 }
 
-impl<V: VTable<Kind=VTableKindArc>, RustImpl> CefArcMut<CefType<V, RustImpl>> {
-    #[allow(dead_code)]
+impl<V: VTable<Kind = VTableKindArc>, RustImpl> CefArcMut<CefType<V, RustImpl>> {
     pub(crate) fn new(mut inner: CefType<V, RustImpl>) -> Self {
         let base = inner.v_table.get_base_mut();
         base.size = std::mem::size_of::<CefType<V, RustImpl>>();
@@ -177,26 +198,48 @@ impl<V: VTable<Kind=VTableKindArc>, RustImpl> CefArcMut<CefType<V, RustImpl>> {
         base.has_one_ref = Some(has_one_ref_ptr::<V, RustImpl>);
         base.has_at_least_one_ref = Some(has_at_least_one_ref_ptr::<V, RustImpl>);
 
-        Self(CefArc { ptr: NonNull::from(&*Box::new(inner)) })
+        Self(CefArc {
+            ptr: NonNull::from(&*Box::new(inner)),
+        })
     }
 
-    // fn has_one_ref(&self) -> bool {
-    //     unsafe {
-    //         let mut base = self.ptr.cast::<cef_base_ref_counted_t>();
-    //         base.as_mut().has_one_ref.unwrap()(base.as_mut()) != 0
-    //     }
-    // }
-
-    // fn has_at_least_one_ref(&self) -> bool {
-    //     unsafe {
-    //         let mut base = self.ptr.cast::<cef_base_ref_counted_t>();
-    //         base.as_mut().has_at_least_one_ref.unwrap()(base.as_mut()) != 0
-    //     }
-    // }
+    pub(crate) fn type_erase(self) -> CefArcMut<V> {
+        CefArcMut(CefArc {
+            ptr: self.0.ptr.cast(),
+        })
+    }
 }
 
-impl<V: VTable<Kind=VTableKindArc>> CefArcMut<V> {
-    pub(crate) fn from_mut_ptr(ptr: *mut V) -> Self {
-        Self(CefArc { ptr: NonNull::new(ptr).unwrap() })
+impl<V: VTable<Kind = VTableKindArc>, RustImpl> CefArc<CefType<V, RustImpl>> {
+    pub(crate) fn new(mut inner: CefType<V, RustImpl>) -> Self {
+        CefArcMut::new(inner).into()
+    }
+
+    pub(crate) fn type_erase(self) -> CefArc<V> {
+        CefArc {
+            ptr: self.ptr.cast(),
+        }
+    }
+}
+
+impl<V: VTable<Kind = VTableKindArc>> CefArc<V> {
+    pub(crate) fn into_mut_ptr(self) -> *mut V {
+        self.ptr.as_ptr()
+    }
+
+    pub(crate) unsafe fn from_mut_ptr(ptr: *mut V) -> Self {
+        Self {
+            ptr: NonNull::new(ptr).unwrap(),
+        }
+    }
+
+    pub(crate) fn into_base_mut_ptr(self) -> *mut <V::Kind as VTableKind>::Base {
+        self.ptr.as_ptr().cast()
+    }
+
+    pub(crate) unsafe fn from_base_mut_ptr(ptr: *mut <V::Kind as VTableKind>::Base) -> Self {
+        Self {
+            ptr: NonNull::new(ptr.cast()).unwrap(),
+        }
     }
 }

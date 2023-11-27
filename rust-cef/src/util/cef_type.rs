@@ -10,6 +10,13 @@ unsafe impl<V: VTable, RustType> VTable for CefType<V, RustType> {
 }
 
 impl<V: VTable, RustImpl> CefType<V, RustImpl> {
+    pub(crate) fn new(v_table: V, rust_impl: RustImpl) -> Self {
+        Self {
+            v_table,
+            extra_data: <V::Kind as VTableKind>::get_initial_extra_data(),
+            rust_impl,
+        }
+    }
     pub fn get_v_table(&self) -> &V {
         &self.v_table
     }
@@ -41,7 +48,7 @@ pub trait VTableExt: VTable + Sized {
         let base_ptr = self_ptr.cast::<<Self::Kind as VTableKind>::Base>();
         unsafe { &*base_ptr }
     }
-    
+
     fn get_base_mut(&mut self) -> &mut <Self::Kind as VTableKind>::Base {
         let self_ptr = self as *mut Self;
         let base_ptr = self_ptr.cast::<<Self::Kind as VTableKind>::Base>();
@@ -57,4 +64,6 @@ pub unsafe trait VTableKind {
     type Pointer<T: VTable<Kind = Self>>;
 
     type ExtraData;
+
+    fn get_initial_extra_data() -> Self::ExtraData;
 }

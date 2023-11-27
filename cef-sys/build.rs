@@ -1,6 +1,6 @@
+use glob::glob;
 use std::env;
 use std::path::PathBuf;
-use glob::glob;
 
 fn main() {
     let cargo_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
@@ -21,17 +21,17 @@ fn main() {
             .join(cef_distribution)
             .canonicalize()
             .expect("cannot canonicalize path"),
-        
+
         // we want to appease rust analyzer by making this find something at least
         Err(_) => {
             let vendor_path_str = vendor_cef_folder.to_str().unwrap();
             let mut paths = glob(&format!("{vendor_path_str}/cef_binary_*")).unwrap();
-    
+
             let out = match paths.next() {
                 Some(out) => out.unwrap(),
                 None => panic!("No cef binary found in {}", vendor_path_str),
             };
-    
+
             out.canonicalize().expect("Failed to canonicalize cef path")
         }
     };

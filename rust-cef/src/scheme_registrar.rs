@@ -1,43 +1,37 @@
-use std::ffi::c_uint;
-
 use cef_sys::cef_scheme_registrar_t;
+use flagset::FlagSet;
 
 use crate::{
-    scheme_options::CefSchemeOptions,
+    scheme_options::{SchemeOption, SchemeOptions},
     util::{
-        cef_base::{CefBase, CefBaseRaw},
-        cef_box::{CefBox, CefPtrKindBox},
-        into_rust_arg::{IntoCArg, IntoCArgRef},
+        cef_box::{CefBox, VTableKindBox},
+        cef_string::into_cef_str_utf16,
+        cef_type::VTable,
     },
 };
 
 #[repr(transparent)]
-pub struct CefSchemeRegistrar(cef_scheme_registrar_t);
+pub struct SchemeRegistrar(cef_scheme_registrar_t);
 
-unsafe impl CefBase for CefSchemeRegistrar {
-    type CType = cef_scheme_registrar_t;
-    type Kind = CefPtrKindBox;
+unsafe impl VTable for SchemeRegistrar {
+    type Kind = VTableKindBox;
 }
 
-unsafe impl CefBaseRaw for cef_scheme_registrar_t {
-    type RustType = CefSchemeRegistrar;
-    type Kind = CefPtrKindBox;
-}
-
-impl CefBox<CefSchemeRegistrar> {
+impl CefBox<SchemeRegistrar> {
     pub fn add_custom_scheme(
         &self,
         scheme_names: &str,
-        options: CefSchemeOptions,
+        options: impl Into<SchemeOptions>,
     ) -> Result<(), ()> {
-        let this = self.into_c_arg_ref();
-        let scheme_names = scheme_names.into_c_arg();
-        let options: c_uint = options.into();
-        let options = options as i32;
+        let scheme_names = into_cef_str_utf16(scheme_names);
+        let options = options.into().bits() as std::os::raw::c_int;
 
-        match unsafe { (*this).add_custom_scheme.unwrap()(this, &scheme_names, options) == 1 } {
-            true => Ok(()),
-            false => Err(()),
+        let result = invoke_v_table!(self.add_custom_scheme(&scheme_names, options));
+
+        if result == 1 {
+            Ok(())
+        } else {
+            Err(())
         }
     }
 }
