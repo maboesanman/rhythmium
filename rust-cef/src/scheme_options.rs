@@ -1,5 +1,3 @@
-use std::os::raw::c_uint;
-
 use cef_sys::{
     cef_scheme_options_t, cef_scheme_options_t_CEF_SCHEME_OPTION_CORS_ENABLED,
     cef_scheme_options_t_CEF_SCHEME_OPTION_CSP_BYPASSING,

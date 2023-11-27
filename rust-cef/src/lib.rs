@@ -1,8 +1,6 @@
 #![feature(cfg_sanitize)]
-// #![feature(return_position_impl_trait_in_trait)]
 #![feature(arbitrary_self_types)]
 #![feature(ptr_metadata)]
-// #![feature(box_into_inner)]
 
 #[macro_use]
 pub mod macros;

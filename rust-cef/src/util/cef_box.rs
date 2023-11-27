@@ -5,7 +5,7 @@ use std::{
 
 use cef_sys::cef_base_scoped_t;
 
-use super::cef_type::{CefType, VTable, VTableExt, VTableKind};
+use super::cef_type::{CefType, VTable, VTableExt, VTableKindRaw};
 
 /// A box for CEF types.
 ///
@@ -17,7 +17,7 @@ pub struct CefBox<T: VTable<Kind = VTableKindBox>> {
 
 pub struct VTableKindBox;
 
-unsafe impl VTableKind for VTableKindBox {
+unsafe impl VTableKindRaw for VTableKindBox {
     type Base = cef_base_scoped_t;
 
     type Pointer<T: VTable<Kind = Self>> = CefBox<T>;

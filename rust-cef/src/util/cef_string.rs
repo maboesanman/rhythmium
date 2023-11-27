@@ -19,7 +19,10 @@ pub fn into_cef_str_utf16(string: &str) -> cef_string_utf16_t {
     }
 }
 
-pub fn into_string(cef_string: cef_string_userfree_t) -> Option<String> {
+/// # Safety
+/// 
+/// `cef_string` must be a valid pointer to a `cef_string_userfree_t`, and must live until the end of this function.
+pub unsafe fn into_string(cef_string: cef_string_userfree_t) -> Option<String> {
     let boxed = unsafe { Box::from_raw(cef_string) };
     if boxed.str_.is_null() {
         return None;
@@ -30,5 +33,5 @@ pub fn into_string(cef_string: cef_string_userfree_t) -> Option<String> {
 
     unsafe { boxed.dtor.unwrap()(boxed.str_) };
 
-    return Some(value);
+    Some(value)
 }

@@ -14,52 +14,52 @@ unsafe impl VTable for CommandLine {
 
 impl CommandLine {
     pub fn new() -> CefArc<Self> {
-        unsafe { CefArc::from_mut_ptr(unsafe { cef_command_line_create() }.cast()) }
+        unsafe { CefArc::from_mut_ptr(cef_command_line_create().cast()) }
     }
 }
 
 impl CefArc<CommandLine> {
     pub fn is_valid(&self) -> bool {
-        invoke_v_table!(self.is_valid()) == 1
+        unsafe { invoke_v_table!(self.is_valid()) == 1 }
     }
 
     pub fn is_read_only(&self) -> bool {
-        invoke_v_table!(self.is_read_only()) == 1
+        unsafe { invoke_v_table!(self.is_read_only()) == 1 }
     }
 
     pub fn copy(&self) -> Self {
-        let new = invoke_v_table!(self.copy()).cast();
+        let new = unsafe { invoke_v_table!(self.copy()) }.cast();
         unsafe { CefArc::from_mut_ptr(new) }
     }
 
     pub fn into_mut(self) -> CefArcMut<CommandLine> {
         match self.try_into_mut() {
-            Ok(arc_mut) => return arc_mut,
+            Ok(arc_mut) => arc_mut,
             Err(this) => {
-                let new = invoke_v_table!(this.copy()).cast::<CommandLine>();
+                let new = unsafe { invoke_v_table!(this.copy()) }.cast::<CommandLine>();
                 unsafe { CefArc::from_mut_ptr(new).into_mut() }
             }
         }
     }
 
     pub fn get_program(&self) -> String {
-        let result = invoke_v_table!(self.get_program());
-        into_string(result).unwrap()
+        let result = unsafe { invoke_v_table!(self.get_program()) };
+        unsafe { into_string(result) }.unwrap()
     }
 
     pub fn has_switches(&self) -> bool {
-        invoke_v_table!(self.has_switches()) == 1
+        unsafe { invoke_v_table!(self.has_switches()) == 1 }
     }
 
     pub fn has_switch(&self, name: &str) -> bool {
         let name = into_cef_str_utf16(name);
-        invoke_v_table!(self.has_switch(&name)) == 1
+        unsafe { invoke_v_table!(self.has_switch(&name)) == 1 }
     }
 
     pub fn get_switch_value(&self, name: &str) -> Option<String> {
         let name = into_cef_str_utf16(name);
-        let result = invoke_v_table!(self.get_switch_value(&name));
-        into_string(result)
+        let result = unsafe { invoke_v_table!(self.get_switch_value(&name)) };
+        unsafe { into_string(result) }
     }
 
     pub fn get_switches(&self) {
@@ -67,7 +67,7 @@ impl CefArc<CommandLine> {
     }
 
     pub fn has_arguments(&self) -> bool {
-        invoke_v_table!(self.has_arguments()) == 1
+        unsafe { invoke_v_table!(self.has_arguments()) == 1 }
     }
 
     pub fn get_arguments(&self) {
@@ -77,7 +77,7 @@ impl CefArc<CommandLine> {
 
 impl CefArcMut<CommandLine> {
     pub fn reset(&self) {
-        invoke_mut_v_table!(self.reset())
+        unsafe { invoke_mut_v_table!(self.reset()) }
     }
 
     pub fn set_program(&self) {
@@ -86,34 +86,37 @@ impl CefArcMut<CommandLine> {
 
     pub fn append_switch(&self, name: &str) {
         let name = into_cef_str_utf16(name);
-        invoke_mut_v_table!(self.append_switch(&name))
+        unsafe { invoke_mut_v_table!(self.append_switch(&name)) }
     }
 
     pub fn append_switch_with_value(&self, name: &str, value: &str) {
         let name = into_cef_str_utf16(name);
         let value = into_cef_str_utf16(value);
-        invoke_mut_v_table!(self.append_switch_with_value(&name, &value))
+        unsafe { invoke_mut_v_table!(self.append_switch_with_value(&name, &value)) }
     }
 
     pub fn append_argument(&self, argument: &str) {
         let argument = into_cef_str_utf16(argument);
-        invoke_mut_v_table!(self.append_argument(&argument))
+        unsafe { invoke_mut_v_table!(self.append_argument(&argument)) }
     }
 
     pub fn prepend_wrapper(&self, wrapper: &str) {
         let wrapper = into_cef_str_utf16(wrapper);
-        invoke_mut_v_table!(self.prepend_wrapper(&wrapper))
+        unsafe { invoke_mut_v_table!(self.prepend_wrapper(&wrapper)) }
     }
 }
 
 #[cfg(not(target_os = "windows"))]
 impl CefArc<CommandLine> {
-    pub fn init_from_argv(
+    /// # Safety
+    /// 
+    /// argc and argv must be valid for the static lifetime.
+    pub unsafe fn init_from_argv(
         &self,
         argc: std::os::raw::c_int,
         argv: *const *const std::os::raw::c_char,
     ) {
-        invoke_v_table!(self.init_from_argv(argc, argv))
+        unsafe { invoke_v_table!(self.init_from_argv(argc, argv)) }
     }
 
     pub fn get_argv(&self) -> Vec<String> {

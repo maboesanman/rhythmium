@@ -18,7 +18,7 @@ unsafe extern "C" fn has_at_least_one_ref(
 
 pub fn initialize_cef_base_refcounted(base: *mut cef_base_ref_counted_t) {
     unsafe {
-        if (*base).size <= 0 {
+        if (*base).size == 0 {
             panic!("size not set");
         }
         (*base).add_ref = Some(add_ref);

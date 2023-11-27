@@ -2,9 +2,9 @@ use cef_sys::{cef_app_t, cef_command_line_t, cef_scheme_registrar_t, cef_string_
 
 use crate::{
     command_line::CommandLine,
-    scheme_registrar::{self, SchemeRegistrar},
+    scheme_registrar::SchemeRegistrar,
     util::{
-        cef_arc::{new_uninit_base, CefArc, CefArcMut, VTableKindArc},
+        cef_arc::{new_uninit_base, CefArc, VTableKindArc},
         cef_box::CefBox,
         cef_type::{CefType, VTable},
     },
@@ -20,14 +20,14 @@ unsafe impl VTable for App {
 pub trait CustomApp: Sized {
     fn on_before_command_line_processing(
         self: &CefArc<CefType<App, Self>>,
-        process_type: &str,
-        command_line: CefArc<CommandLine>,
+        _process_type: &str,
+        _command_line: CefArc<CommandLine>,
     ) {
     }
 
     fn on_register_custom_schemes(
         self: &CefArc<CefType<App, Self>>,
-        scheme_registrar: CefBox<SchemeRegistrar>,
+        _scheme_registrar: CefBox<SchemeRegistrar>,
     ) {
     }
     // fn get_resource_bundle_handler(self: &CefArc<CefType<CefApp, Self>>) -> Option<CefArc<impl CefApp>> {

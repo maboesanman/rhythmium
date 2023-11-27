@@ -1,4 +1,5 @@
 #![feature(arbitrary_self_types)]
+// #![allow(private_in_public)]
 
 use rust_cef::{
     app::{App, CustomApp},
@@ -22,16 +23,10 @@ fn main() {
     };
 
     println!("execute process");
-    match execute_process(main_args, app) {
-        Ok(exit_code) => {
-            println!("exiting code: {}", exit_code);
-            std::process::exit(exit_code);
-        }
-        Err(_) => {
-            println!("error");
-            std::process::exit(1);
-        }
-    }
+    let exit_code = execute_process(main_args, app);
+
+    println!("exiting code: {}", exit_code);
+    std::process::exit(exit_code);
 }
 
 enum ProcessType {

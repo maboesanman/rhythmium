@@ -7,7 +7,7 @@ use std::{
 use cef_sys::cef_base_ref_counted_t;
 
 use super::{
-    cef_type::{CefType, VTable, VTableExt, VTableKind},
+    cef_type::{CefType, VTable, VTableExt, VTableKindRaw},
     wrap_boolean::wrap_boolean,
 };
 
@@ -35,7 +35,7 @@ impl<T: VTable<Kind = VTableKindArc>> CefArc<T> {
 
 pub struct VTableKindArc;
 
-unsafe impl VTableKind for VTableKindArc {
+unsafe impl VTableKindRaw for VTableKindArc {
     type Base = cef_base_ref_counted_t;
 
     type Pointer<V: VTable<Kind = Self>> = CefArc<V>;
@@ -203,15 +203,15 @@ impl<V: VTable<Kind = VTableKindArc>, RustImpl> CefArcMut<CefType<V, RustImpl>> 
         })
     }
 
-    pub(crate) fn type_erase(self) -> CefArcMut<V> {
-        CefArcMut(CefArc {
-            ptr: self.0.ptr.cast(),
-        })
-    }
+    // pub(crate) fn type_erase(self) -> CefArcMut<V> {
+    //     CefArcMut(CefArc {
+    //         ptr: self.0.ptr.cast(),
+    //     })
+    // }
 }
 
 impl<V: VTable<Kind = VTableKindArc>, RustImpl> CefArc<CefType<V, RustImpl>> {
-    pub(crate) fn new(mut inner: CefType<V, RustImpl>) -> Self {
+    pub(crate) fn new(inner: CefType<V, RustImpl>) -> Self {
         CefArcMut::new(inner).into()
     }
 
@@ -233,13 +233,13 @@ impl<V: VTable<Kind = VTableKindArc>> CefArc<V> {
         }
     }
 
-    pub(crate) fn into_base_mut_ptr(self) -> *mut <V::Kind as VTableKind>::Base {
-        self.ptr.as_ptr().cast()
-    }
+    // pub(crate) fn into_base_mut_ptr(self) -> *mut <V::Kind as VTableKindRaw>::Base {
+    //     self.ptr.as_ptr().cast()
+    // }
 
-    pub(crate) unsafe fn from_base_mut_ptr(ptr: *mut <V::Kind as VTableKind>::Base) -> Self {
-        Self {
-            ptr: NonNull::new(ptr.cast()).unwrap(),
-        }
-    }
+    // pub(crate) unsafe fn from_base_mut_ptr(ptr: *mut <V::Kind as VTableKindRaw>::Base) -> Self {
+    //     Self {
+    //         ptr: NonNull::new(ptr.cast()).unwrap(),
+    //     }
+    // }
 }
