@@ -3,7 +3,7 @@
 use rust_cef::{
     app::{App, CustomApp},
     command_line::CommandLine,
-    execute_process::execute_process,
+    execute_process::execute_process_with_env_args,
     scheme_options::SchemeOption,
     scheme_registrar::SchemeRegistrar,
     util::{cef_arc::CefArc, cef_box::CefBox, cef_type::CefType},
@@ -15,7 +15,7 @@ fn main() {
         _ => None,
     };
 
-    std::process::exit(execute_process(std::env::args().collect(), app))
+    std::process::exit(execute_process_with_env_args(app))
 }
 
 pub struct SubProcessApp;

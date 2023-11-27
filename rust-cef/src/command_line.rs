@@ -109,7 +109,7 @@ impl CefArcMut<CommandLine> {
 #[cfg(not(target_os = "windows"))]
 impl CefArc<CommandLine> {
     /// # Safety
-    /// 
+    ///
     /// argc and argv must be valid for the static lifetime.
     pub unsafe fn init_from_argv(
         &self,

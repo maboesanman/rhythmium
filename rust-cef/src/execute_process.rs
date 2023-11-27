@@ -23,3 +23,8 @@ pub fn execute_process(args: Vec<String>, app: Option<CefArc<App>>) -> i32 {
 
     unsafe { cef_execute_process(&c_args, app, std::ptr::null_mut()) }
 }
+
+pub fn execute_process_with_env_args(app: Option<CefArc<App>>) -> i32 {
+    let args = std::env::args().collect();
+    execute_process(args, app)
+}

@@ -46,7 +46,8 @@ trait CustomAppRaw: CustomApp {
         command_line: *mut cef_command_line_t,
     ) {
         let self_arc = CefArc::from_raw(self_raw.cast::<CefType<App, Self>>());
-        let process_type = &crate::util::cef_string::cef_string_utf16_into_string(process_type).unwrap();
+        let process_type =
+            &crate::util::cef_string::cef_string_utf16_into_string(process_type).unwrap();
         let command_line = CefArc::from_raw(command_line.cast::<CommandLine>());
 
         self_arc.on_before_command_line_processing(process_type, command_line);

@@ -2,7 +2,6 @@ use std::mem::ManuallyDrop;
 
 use cef_sys::{cef_string_userfree_t, cef_string_utf16_t};
 
-
 const HEADER_BYTES: usize = std::mem::size_of::<usize>() >> 1;
 const HEADER_LENGTH: usize = HEADER_BYTES >> 1;
 
@@ -13,7 +12,7 @@ struct CefStr {
     data: [u16],
 }
 
-impl<T: IntoIterator<Item=u16>> From<T> for Box<CefStr> {
+impl<T: IntoIterator<Item = u16>> From<T> for Box<CefStr> {
     fn from(value: T) -> Self {
         let header_data = (0..HEADER_LENGTH).map(|_| 0);
         let all_data = Box::into_raw(header_data.chain(value).collect());
@@ -64,7 +63,7 @@ pub fn str_into_cef_string_utf16(string: &str) -> cef_string_utf16_t {
 }
 
 /// # Safety
-/// 
+///
 /// `cef_string` must be a valid pointer, and must not be dropped by anything else.
 pub unsafe fn cef_string_userfree_into_string(cef_string: cef_string_userfree_t) -> Option<String> {
     let boxed = unsafe { Box::from_raw(cef_string) };
@@ -81,12 +80,14 @@ pub unsafe fn cef_string_userfree_into_string(cef_string: cef_string_userfree_t)
 }
 
 /// # Safety
-/// 
+///
 /// `cef_string` must be a valid pointer to a `cef_string_userfree_t`, and must live until the end of this function.
-pub unsafe fn cef_string_utf16_into_string(cef_string: *const cef_string_utf16_t) -> Option<String> {
+pub unsafe fn cef_string_utf16_into_string(
+    cef_string: *const cef_string_utf16_t,
+) -> Option<String> {
     let cef_string = unsafe { cef_string.as_ref() }.unwrap();
     let bytes = unsafe { std::slice::from_raw_parts(cef_string.str_, cef_string.length) };
-    
+
     let value = String::from_utf16_lossy(bytes);
 
     Some(value)

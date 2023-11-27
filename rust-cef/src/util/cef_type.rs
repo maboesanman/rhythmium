@@ -23,9 +23,9 @@ impl<V: VTable, RustImpl> CefType<V, RustImpl> {
 /// it is implemented on the vtables from cef and on the user defined rust
 /// types that start with vtables.
 /// It can be either an arc based or box based vtable.
-/// 
+///
 /// # Safety
-/// 
+///
 /// This trait must only be implemented on properly constructed cef vtables.
 pub unsafe trait VTable: Sized {
     type Kind: VTableKind;
@@ -52,7 +52,7 @@ impl<V: VTable> VTableExt for V {}
 pub trait VTableKind: VTableKindRaw {}
 
 /// # Safety
-/// 
+///
 /// This trait must only be implemented on properly constructed cef vtables.
 pub(crate) unsafe trait VTableKindRaw {
     type Base;
