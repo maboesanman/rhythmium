@@ -17,7 +17,7 @@ pub fn execute_process(args: Vec<String>, app: Option<CefArc<App>>) -> i32 {
     let c_args = cef_main_args_t { argc, argv };
 
     let app = match app {
-        Some(app) => app.into_mut_ptr().cast(),
+        Some(app) => app.into_raw().cast(),
         None => std::ptr::null_mut(),
     };
 

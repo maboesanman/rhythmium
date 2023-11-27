@@ -223,23 +223,13 @@ impl<V: VTable<Kind = VTableKindArc>, RustImpl> CefArc<CefType<V, RustImpl>> {
 }
 
 impl<V: VTable<Kind = VTableKindArc>> CefArc<V> {
-    pub(crate) fn into_mut_ptr(self) -> *mut V {
-        self.ptr.as_ptr()
+    pub(crate) fn into_raw(self) -> *mut V {
+        std::mem::ManuallyDrop::new(self).ptr.as_ptr()
     }
 
-    pub(crate) unsafe fn from_mut_ptr(ptr: *mut V) -> Self {
+    pub(crate) unsafe fn from_raw(ptr: *mut V) -> Self {
         Self {
             ptr: NonNull::new(ptr).unwrap(),
         }
     }
-
-    // pub(crate) fn into_base_mut_ptr(self) -> *mut <V::Kind as VTableKindRaw>::Base {
-    //     self.ptr.as_ptr().cast()
-    // }
-
-    // pub(crate) unsafe fn from_base_mut_ptr(ptr: *mut <V::Kind as VTableKindRaw>::Base) -> Self {
-    //     Self {
-    //         ptr: NonNull::new(ptr.cast()).unwrap(),
-    //     }
-    // }
 }

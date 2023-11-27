@@ -78,3 +78,15 @@ unsafe extern "C" fn del_ptr<V: VTable<Kind = VTableKindBox>, RustImpl>(
 ) {
     _ = Box::from_raw(ptr.cast::<CefType<V, RustImpl>>());
 }
+
+impl<V: VTable<Kind = VTableKindBox>> CefBox<V> {
+    pub(crate) fn into_raw(self) -> *mut V {
+        std::mem::ManuallyDrop::new(self).ptr.as_ptr()
+    }
+
+    pub(crate) unsafe fn from_raw(ptr: *mut V) -> Self {
+        Self {
+            ptr: NonNull::new(ptr).unwrap(),
+        }
+    }
+}

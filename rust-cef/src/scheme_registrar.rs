@@ -4,7 +4,7 @@ use crate::{
     scheme_options::SchemeOptions,
     util::{
         cef_box::{CefBox, VTableKindBox},
-        cef_string::into_cef_str_utf16,
+        cef_string::str_into_cef_string_utf16,
         cef_type::VTable,
     },
 };
@@ -22,7 +22,7 @@ impl CefBox<SchemeRegistrar> {
         scheme_names: &str,
         options: impl Into<SchemeOptions>,
     ) -> Result<(), CustomSchemeRegistrationError> {
-        let scheme_names = into_cef_str_utf16(scheme_names);
+        let scheme_names = str_into_cef_string_utf16(scheme_names);
         let options = options.into().bits() as std::os::raw::c_int;
 
         let result = unsafe { invoke_v_table!(self.add_custom_scheme(&scheme_names, options)) };

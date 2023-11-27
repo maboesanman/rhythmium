@@ -20,15 +20,17 @@ unsafe impl VTable for App {
 pub trait CustomApp: Sized {
     fn on_before_command_line_processing(
         self: &CefArc<CefType<App, Self>>,
-        _process_type: &str,
-        _command_line: CefArc<CommandLine>,
+        process_type: &str,
+        command_line: CefArc<CommandLine>,
     ) {
+        let _ = (self, process_type, command_line);
     }
 
     fn on_register_custom_schemes(
         self: &CefArc<CefType<App, Self>>,
-        _scheme_registrar: CefBox<SchemeRegistrar>,
+        scheme_registrar: CefBox<SchemeRegistrar>,
     ) {
+        let _ = (self, scheme_registrar);
     }
     // fn get_resource_bundle_handler(self: &CefArc<CefType<CefApp, Self>>) -> Option<CefArc<impl CefApp>> {
     //     None
@@ -43,14 +45,25 @@ trait CustomAppRaw: CustomApp {
         process_type: *const cef_string_utf16_t,
         command_line: *mut cef_command_line_t,
     ) {
-        todo!()
+        let self_arc = CefArc::from_raw(self_raw.cast::<CefType<App, Self>>());
+        let process_type = &crate::util::cef_string::cef_string_utf16_into_string(process_type).unwrap();
+        let command_line = CefArc::from_raw(command_line.cast::<CommandLine>());
+
+        self_arc.on_before_command_line_processing(process_type, command_line);
+
+        self_arc.into_raw();
     }
 
     unsafe extern "C" fn on_register_custom_schemes_raw(
         self_raw: *mut cef_app_t,
         scheme_registrar: *mut cef_scheme_registrar_t,
     ) {
-        todo!()
+        let self_arc = CefArc::from_raw(self_raw.cast::<CefType<App, Self>>());
+        let scheme_registrar = CefBox::from_raw(scheme_registrar.cast::<SchemeRegistrar>());
+
+        self_arc.on_register_custom_schemes(scheme_registrar);
+
+        self_arc.into_raw();
     }
 }
 

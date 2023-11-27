@@ -1,6 +1,6 @@
 use cef_sys::{cef_command_line_create, cef_command_line_t};
 
-use crate::util::cef_string::{into_cef_str_utf16, into_string};
+use crate::util::cef_string::{cef_string_userfree_into_string, str_into_cef_string_utf16};
 use crate::util::cef_type::VTable;
 
 use crate::util::cef_arc::{CefArc, CefArcMut, VTableKindArc};
@@ -14,7 +14,7 @@ unsafe impl VTable for CommandLine {
 
 impl CommandLine {
     pub fn new() -> CefArc<Self> {
-        unsafe { CefArc::from_mut_ptr(cef_command_line_create().cast()) }
+        unsafe { CefArc::from_raw(cef_command_line_create().cast()) }
     }
 }
 
@@ -29,7 +29,7 @@ impl CefArc<CommandLine> {
 
     pub fn copy(&self) -> Self {
         let new = unsafe { invoke_v_table!(self.copy()) }.cast();
-        unsafe { CefArc::from_mut_ptr(new) }
+        unsafe { CefArc::from_raw(new) }
     }
 
     pub fn into_mut(self) -> CefArcMut<CommandLine> {
@@ -37,14 +37,14 @@ impl CefArc<CommandLine> {
             Ok(arc_mut) => arc_mut,
             Err(this) => {
                 let new = unsafe { invoke_v_table!(this.copy()) }.cast::<CommandLine>();
-                unsafe { CefArc::from_mut_ptr(new).into_mut() }
+                unsafe { CefArc::from_raw(new).into_mut() }
             }
         }
     }
 
     pub fn get_program(&self) -> String {
         let result = unsafe { invoke_v_table!(self.get_program()) };
-        unsafe { into_string(result) }.unwrap()
+        unsafe { cef_string_userfree_into_string(result) }.unwrap()
     }
 
     pub fn has_switches(&self) -> bool {
@@ -52,14 +52,14 @@ impl CefArc<CommandLine> {
     }
 
     pub fn has_switch(&self, name: &str) -> bool {
-        let name = into_cef_str_utf16(name);
+        let name = str_into_cef_string_utf16(name);
         unsafe { invoke_v_table!(self.has_switch(&name)) == 1 }
     }
 
     pub fn get_switch_value(&self, name: &str) -> Option<String> {
-        let name = into_cef_str_utf16(name);
+        let name = str_into_cef_string_utf16(name);
         let result = unsafe { invoke_v_table!(self.get_switch_value(&name)) };
-        unsafe { into_string(result) }
+        unsafe { cef_string_userfree_into_string(result) }
     }
 
     pub fn get_switches(&self) {
@@ -85,23 +85,23 @@ impl CefArcMut<CommandLine> {
     }
 
     pub fn append_switch(&self, name: &str) {
-        let name = into_cef_str_utf16(name);
+        let name = str_into_cef_string_utf16(name);
         unsafe { invoke_mut_v_table!(self.append_switch(&name)) }
     }
 
     pub fn append_switch_with_value(&self, name: &str, value: &str) {
-        let name = into_cef_str_utf16(name);
-        let value = into_cef_str_utf16(value);
+        let name = str_into_cef_string_utf16(name);
+        let value = str_into_cef_string_utf16(value);
         unsafe { invoke_mut_v_table!(self.append_switch_with_value(&name, &value)) }
     }
 
     pub fn append_argument(&self, argument: &str) {
-        let argument = into_cef_str_utf16(argument);
+        let argument = str_into_cef_string_utf16(argument);
         unsafe { invoke_mut_v_table!(self.append_argument(&argument)) }
     }
 
     pub fn prepend_wrapper(&self, wrapper: &str) {
-        let wrapper = into_cef_str_utf16(wrapper);
+        let wrapper = str_into_cef_string_utf16(wrapper);
         unsafe { invoke_mut_v_table!(self.prepend_wrapper(&wrapper)) }
     }
 }
