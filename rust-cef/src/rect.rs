@@ -1,6 +1,5 @@
 use cef_sys::cef_rect_t;
 
-
 #[derive(Debug, Clone, Default)]
 pub struct Rect {
     pub x: u32,

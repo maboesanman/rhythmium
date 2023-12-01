@@ -1,8 +1,19 @@
-use std::{path::{Path, PathBuf}, os::raw::c_int};
+use std::{
+    os::raw::c_int,
+    path::{Path, PathBuf},
+};
 
 use cef_sys::cef_settings_t;
 
-use crate::{log_severity::LogSeverity, log_items::LogItems, color::Color, util::{wrap_boolean::wrap_boolean, cef_string::{path_into_cef_string_utf16, str_into_cef_string_utf16}}};
+use crate::{
+    color::Color,
+    log_items::LogItems,
+    log_severity::LogSeverity,
+    util::{
+        cef_string::{path_into_cef_string_utf16, str_into_cef_string_utf16},
+        wrap_boolean::wrap_boolean,
+    },
+};
 
 #[derive(Debug, Clone, Default)]
 pub struct Settings {
@@ -85,7 +96,9 @@ impl Settings {
             background_color: self.background_color,
             accept_language_list: string_vec_into_cef_str(&self.accept_language_list),
             cookieable_schemes_list: string_vec_into_cef_str(&self.cookieable_schemes_list),
-            cookieable_schemes_exclude_defaults: wrap_boolean(self.cookieable_schemes_exclude_defaults),
+            cookieable_schemes_exclude_defaults: wrap_boolean(
+                self.cookieable_schemes_exclude_defaults,
+            ),
             chrome_policy_id: string_into_cef_str(self.chrome_policy_id.as_deref()),
         }
     }
