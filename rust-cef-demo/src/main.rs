@@ -1,22 +1,12 @@
 #![feature(ptr_metadata)]
-use std::{env, mem::size_of};
 
 use rust_cef::{
-    app::App,
-    browser_host_create_browser::browser_host_create_browser,
-    browser_settings::{self, BrowserSettings},
-    client::Client,
-    initialize::initialize,
-    rect::Rect,
-    settings::Settings,
-    window_info::WindowInfo, cef_sys::cef_run_message_loop, message_loop::run_message_loop,
+    app::App, browser_host_create_browser::browser_host_create_browser,
+    browser_settings::BrowserSettings, client::Client, initialize::initialize,
+    message_loop::run_message_loop, rect::Rect, settings::Settings, window_info::WindowInfo,
 };
-use winit::{
-    event::{Event, WindowEvent},
-    event_loop::EventLoop,
-    platform::macos::WindowExtMacOS,
-    window::WindowBuilder,
-};
+
+use winit::{event_loop::EventLoop, platform::macos::WindowExtMacOS, window::WindowBuilder};
 
 struct MyApp;
 impl rust_cef::app::CustomApp for MyApp {}
@@ -67,7 +57,10 @@ fn main() {
     let result = browser_host_create_browser(&window_info, client, url, &browser_settings);
 
     if let Err(code) = result {
-        println!("cef_browser_host_create_browser failed with error code {}", code);
+        println!(
+            "cef_browser_host_create_browser failed with error code {}",
+            code
+        );
         std::process::exit(code);
     }
 
