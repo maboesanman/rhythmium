@@ -7,6 +7,6 @@ description = "Rust CEF Demo"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-cef-sys = { path = "../cef-sys" }
 winit = "0.28.7"
 argv = "0.1.9"
+rust-cef = { path = "../rust-cef" }

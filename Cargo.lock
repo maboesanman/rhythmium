@@ -759,7 +759,7 @@ name = "rust-cef-demo"
 version = "0.1.0"
 dependencies = [
  "argv",
- "cef-sys",
+ "rust-cef",
  "winit",
 ]
 
