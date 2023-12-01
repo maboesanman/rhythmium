@@ -10,12 +10,16 @@ use rust_cef::{
 };
 
 fn main() {
-    let app = match CommandLine::new().get_switch_value("type").as_deref() {
+    let process_type = CommandLine::new().get_switch_value("type");
+
+    let app = match process_type.as_deref() {
         None | Some("renderer") => Some(App::new(SubProcessApp)),
         _ => None,
     };
 
-    std::process::exit(execute_process_with_env_args(app))
+    let exit_code = execute_process_with_env_args(app);
+
+    std::process::exit(exit_code)
 }
 
 pub struct SubProcessApp;

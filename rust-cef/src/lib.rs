@@ -15,3 +15,7 @@ pub mod command_line;
 pub mod execute_process;
 pub mod scheme_options;
 pub mod scheme_registrar;
+pub mod settings;
+pub mod log_severity;
+pub mod log_items;
+pub mod color;

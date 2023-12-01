@@ -62,6 +62,13 @@ pub fn str_into_cef_string_utf16(string: &str) -> cef_string_utf16_t {
     string.into()
 }
 
+pub fn path_into_cef_string_utf16(path: &std::path::Path) -> cef_string_utf16_t {
+    let string = path.to_string_lossy();
+    let string = string.encode_utf16();
+    let string: Box<CefStr> = string.into();
+    string.into()
+}
+
 /// # Safety
 ///
 /// `cef_string` must be a valid pointer, and must not be dropped by anything else.
