@@ -12,6 +12,7 @@ pub use cef_sys;
 // pub mod resource_bundle_handler;
 pub mod app;
 pub mod browser_settings;
+pub mod client;
 pub mod color;
 pub mod command_line;
 pub mod execute_process;

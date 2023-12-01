@@ -86,18 +86,3 @@ impl App {
         CefArc::new(cef_type).type_erase()
     }
 }
-
-impl CefArc<App> {
-    // fn on_before_command_line_processing(
-    //     &self,
-    //     process_type: &str,
-    //     command_line: CefArc<CommandLine>,
-    // ) {
-    //     todo!()
-    // }
-    // fn get_resource_bundle_handler(&self) -> Option<CefArc<impl CefApp>> {
-    //     None
-    // }
-    // fn get_browser_process_handler(app: &CefApp) -> CefArc<CefBrowserProcessHandler>;
-    // fn get_render_process_handler(app: &CefApp) -> CefArc<CefRenderProcessHandler>;
-}
