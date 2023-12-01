@@ -19,3 +19,5 @@ pub mod settings;
 pub mod log_severity;
 pub mod log_items;
 pub mod color;
+pub mod window_info;
+pub mod rect;
