@@ -122,7 +122,7 @@ if(OS_MAC)
       TARGET "${TARGET}-bundle"
       POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${PROJECT_BINARY_DIR}/${_helper_output_name}.app"
+        "${PROJECT_BINARY_DIR}/Release/${_helper_output_name}.app"
         "${APP_BUNDLE_DIR}/Contents/Frameworks/${_helper_output_name}.app"
       VERBATIM
       )
