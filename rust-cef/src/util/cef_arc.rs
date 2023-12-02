@@ -6,10 +6,7 @@ use std::{
 
 use cef_sys::cef_base_ref_counted_t;
 
-use super::{
-    cef_type::{CefType, VTable, VTableExt, VTableKindRaw},
-    wrap_boolean::wrap_boolean,
-};
+use super::cef_type::{CefType, VTable, VTableExt, VTableKindRaw};
 
 /// A reference counted wrapper for CEF types.
 ///
@@ -143,13 +140,12 @@ unsafe extern "C" fn has_one_ref_ptr<V: VTable<Kind = VTableKindArc>, RustImpl>(
 ) -> i32 {
     let inner = ptr.cast::<CefType<V, RustImpl>>();
     let inner = inner.as_ref().unwrap();
-    wrap_boolean(
-        inner
-            .extra_data
-            .ref_count
-            .load(std::sync::atomic::Ordering::Acquire)
-            == 1,
-    )
+    (inner
+        .extra_data
+        .ref_count
+        .load(std::sync::atomic::Ordering::Acquire)
+        == 1)
+        .into()
 }
 
 unsafe extern "C" fn has_at_least_one_ref_ptr<V: VTable<Kind = VTableKindArc>, RustImpl>(
@@ -157,13 +153,12 @@ unsafe extern "C" fn has_at_least_one_ref_ptr<V: VTable<Kind = VTableKindArc>, R
 ) -> i32 {
     let inner = ptr.cast::<CefType<V, RustImpl>>();
     let inner = inner.as_ref().unwrap();
-    wrap_boolean(
-        inner
-            .extra_data
-            .ref_count
-            .load(std::sync::atomic::Ordering::Acquire)
-            >= 1,
-    )
+    (inner
+        .extra_data
+        .ref_count
+        .load(std::sync::atomic::Ordering::Acquire)
+        >= 1)
+        .into()
 }
 
 #[repr(transparent)]
@@ -200,12 +195,6 @@ impl<V: VTable<Kind = VTableKindArc>, RustImpl> CefArcMut<CefType<V, RustImpl>> 
 
         Self(CefArc {
             ptr: NonNull::from(&*Box::new(inner)),
-        })
-    }
-
-    pub(crate) fn type_erase(self) -> CefArcMut<V> {
-        CefArcMut(CefArc {
-            ptr: self.0.ptr.cast(),
         })
     }
 }

@@ -8,7 +8,7 @@ pub fn initialize(args: Vec<String>, settings: &Settings, app: Option<CefArc<App
         .into_iter()
         .map(std::ffi::CString::new)
         .filter_map(Result::ok)
-        .map(|arg| arg.as_ptr() as *mut std::ffi::c_char)
+        .map(|arg| arg.as_ptr().cast_mut())
         .chain([std::ptr::null_mut()])
         .collect::<Vec<_>>();
 

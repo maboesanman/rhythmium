@@ -57,10 +57,7 @@ fn main() {
     let result = browser_host_create_browser(&window_info, client, url, &browser_settings);
 
     if let Err(code) = result {
-        println!(
-            "cef_browser_host_create_browser failed with error code {}",
-            code
-        );
+        println!("cef_browser_host_create_browser failed with error code {code}");
         std::process::exit(code);
     }
 

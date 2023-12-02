@@ -44,6 +44,7 @@ fn opt_bool_to_cef_state(b: Option<bool>) -> cef_state_t {
 }
 
 impl BrowserSettings {
+    #[must_use]
     pub fn get_cef_browser_settings(&self) -> cef_browser_settings_t {
         cef_browser_settings_t {
             size: std::mem::size_of::<cef_browser_settings_t>(),

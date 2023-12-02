@@ -8,7 +8,7 @@ pub fn execute_process(args: Vec<String>, app: Option<CefArc<App>>) -> i32 {
         .into_iter()
         .map(std::ffi::CString::new)
         .filter_map(Result::ok)
-        .map(|arg| arg.as_ptr() as *mut std::ffi::c_char)
+        .map(|arg| arg.as_ptr().cast_mut())
         .chain([std::ptr::null_mut()])
         .collect::<Vec<_>>();
 
@@ -24,6 +24,7 @@ pub fn execute_process(args: Vec<String>, app: Option<CefArc<App>>) -> i32 {
     unsafe { cef_execute_process(&c_args, app, std::ptr::null_mut()) }
 }
 
+#[must_use]
 pub fn execute_process_with_env_args(app: Option<CefArc<App>>) -> i32 {
     let args = std::env::args().collect();
     execute_process(args, app)

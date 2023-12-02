@@ -31,7 +31,7 @@ impl<V: VTable<Kind = VTableKindBox>> Drop for CefBox<V> {
     fn drop(&mut self) {
         unsafe {
             let base = self.ptr.as_ref().get_base();
-            base.del.unwrap()(self.ptr.as_ptr() as *mut _);
+            base.del.unwrap()(self.ptr.as_ptr().cast());
         }
     }
 }
@@ -64,12 +64,6 @@ impl<V: VTable<Kind = VTableKindBox>, RustImpl> CefBox<CefType<V, RustImpl>> {
             ptr: NonNull::from(&*Box::new(inner)),
         }
     }
-
-    pub(crate) fn type_erase(self) -> CefBox<V> {
-        CefBox {
-            ptr: self.ptr.cast(),
-        }
-    }
 }
 
 #[allow(dead_code)]
@@ -86,10 +80,6 @@ unsafe extern "C" fn del_ptr<V: VTable<Kind = VTableKindBox>, RustImpl>(
 }
 
 impl<V: VTable<Kind = VTableKindBox>> CefBox<V> {
-    pub(crate) fn into_raw(self) -> *mut V {
-        std::mem::ManuallyDrop::new(self).ptr.as_ptr()
-    }
-
     pub(crate) unsafe fn from_raw(ptr: *mut V) -> Self {
         Self {
             ptr: NonNull::new(ptr).unwrap(),

@@ -1,6 +1,8 @@
 #![feature(cfg_sanitize)]
 #![feature(arbitrary_self_types)]
 #![feature(ptr_metadata)]
+#![feature(iter_array_chunks)]
+#![feature(iter_collect_into)]
 
 #[macro_use]
 pub mod macros;

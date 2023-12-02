@@ -9,6 +9,7 @@ pub struct Rect {
 }
 
 impl Rect {
+    #[must_use]
     pub fn get_cef_rect(&self) -> cef_rect_t {
         cef_rect_t {
             x: self.x as i32,

@@ -9,10 +9,7 @@ use crate::{
     color::Color,
     log_items::LogItems,
     log_severity::LogSeverity,
-    util::{
-        cef_string::{path_into_cef_string_utf16, str_into_cef_string_utf16},
-        wrap_boolean::wrap_boolean,
-    },
+    util::cef_string::{path_into_cef_string_utf16, str_into_cef_string_utf16},
 };
 
 #[derive(Debug, Clone, Default)]
@@ -59,28 +56,29 @@ fn string_into_cef_str(s: Option<&str>) -> cef_sys::cef_string_t {
     str_into_cef_string_utf16(s)
 }
 
-fn string_vec_into_cef_str(s: &Vec<String>) -> cef_sys::cef_string_t {
+fn string_vec_into_cef_str(s: &[String]) -> cef_sys::cef_string_t {
     let s = s.join(",");
     str_into_cef_string_utf16(s.as_str())
 }
 
 impl Settings {
+    #[must_use]
     pub fn get_cef_settings(&self) -> cef_settings_t {
         cef_settings_t {
             size: core::mem::size_of::<cef_settings_t>(),
-            no_sandbox: wrap_boolean(self.no_sandbox),
+            no_sandbox: self.no_sandbox.into(),
             browser_subprocess_path: path_into_cef_str(self.browser_subprocess_path.as_deref()),
             framework_dir_path: path_into_cef_str(self.framework_dir_path.as_deref()),
             main_bundle_path: path_into_cef_str(self.main_bundle_path.as_deref()),
-            chrome_runtime: wrap_boolean(self.chrome_runtime),
-            multi_threaded_message_loop: wrap_boolean(self.multi_threaded_message_loop),
-            external_message_pump: wrap_boolean(self.external_message_pump),
-            windowless_rendering_enabled: wrap_boolean(self.windowless_rendering_enabled),
-            command_line_args_disabled: wrap_boolean(self.command_line_args_disabled),
+            chrome_runtime: self.chrome_runtime.into(),
+            multi_threaded_message_loop: self.multi_threaded_message_loop.into(),
+            external_message_pump: self.external_message_pump.into(),
+            windowless_rendering_enabled: self.windowless_rendering_enabled.into(),
+            command_line_args_disabled: self.command_line_args_disabled.into(),
             cache_path: path_into_cef_str(self.cache_path.as_deref()),
             root_cache_path: path_into_cef_str(self.root_cache_path.as_deref()),
-            persist_session_cookies: wrap_boolean(self.persist_session_cookies),
-            persist_user_preferences: wrap_boolean(self.persist_user_preferences),
+            persist_session_cookies: self.persist_session_cookies.into(),
+            persist_user_preferences: self.persist_user_preferences.into(),
             user_agent: string_into_cef_str(self.user_agent.as_deref()),
             user_agent_product: string_into_cef_str(self.user_agent_product.as_deref()),
             locale: string_into_cef_str(self.locale.as_deref()),
@@ -90,15 +88,13 @@ impl Settings {
             javascript_flags: string_into_cef_str(self.javascript_flags.as_deref()),
             resources_dir_path: path_into_cef_str(self.resources_dir_path.as_deref()),
             locales_dir_path: path_into_cef_str(self.locales_dir_path.as_deref()),
-            pack_loading_disabled: wrap_boolean(self.pack_loading_disabled),
-            remote_debugging_port: self.remote_debugging_port.unwrap_or(0) as c_int,
-            uncaught_exception_stack_size: wrap_boolean(self.uncaught_exception_stack_size),
+            pack_loading_disabled: self.pack_loading_disabled.into(),
+            remote_debugging_port: c_int::from(self.remote_debugging_port.unwrap_or(0)),
+            uncaught_exception_stack_size: self.uncaught_exception_stack_size.into(),
             background_color: self.background_color,
             accept_language_list: string_vec_into_cef_str(&self.accept_language_list),
             cookieable_schemes_list: string_vec_into_cef_str(&self.cookieable_schemes_list),
-            cookieable_schemes_exclude_defaults: wrap_boolean(
-                self.cookieable_schemes_exclude_defaults,
-            ),
+            cookieable_schemes_exclude_defaults: self.cookieable_schemes_exclude_defaults.into(),
             chrome_policy_id: string_into_cef_str(self.chrome_policy_id.as_deref()),
         }
     }
