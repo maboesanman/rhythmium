@@ -9,7 +9,7 @@ edition = "2021"
 name = "rust_cef"
 
 [[bin]]
-name = "mac_helper_process"
+name = "helper_process"
 
 [dependencies]
 cef-sys = { path = "../cef-sys" }

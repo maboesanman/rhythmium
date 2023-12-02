@@ -76,3 +76,5 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CEF_ROOT}/cmake")
 
 # Load the CEF configuration (executes FindCEF.cmake).
 find_package(CEF REQUIRED)
+
+add_subdirectory(rust-cef-demo)
