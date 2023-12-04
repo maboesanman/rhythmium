@@ -193,8 +193,10 @@ impl<V: VTable<Kind = VTableKindArc>, RustImpl> CefArcMut<CefType<V, RustImpl>> 
         base.has_one_ref = Some(has_one_ref_ptr::<V, RustImpl>);
         base.has_at_least_one_ref = Some(has_at_least_one_ref_ptr::<V, RustImpl>);
 
+        let ptr = NonNull::new(Box::into_raw(Box::new(inner))).unwrap();
+
         Self(CefArc {
-            ptr: NonNull::from(&*Box::new(inner)),
+            ptr,
         })
     }
 }

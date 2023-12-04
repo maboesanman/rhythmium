@@ -60,8 +60,10 @@ impl<V: VTable<Kind = VTableKindBox>, RustImpl> CefBox<CefType<V, RustImpl>> {
         base.size = std::mem::size_of::<CefType<V, RustImpl>>();
         base.del = Some(del_ptr::<V, RustImpl>);
 
+        let ptr = NonNull::new(Box::into_raw(Box::new(inner))).unwrap();
+
         Self {
-            ptr: NonNull::from(&*Box::new(inner)),
+            ptr,
         }
     }
 }
