@@ -4,7 +4,7 @@ mkdir build
 
 cd build
 
-cmake -G "Ninja" -DPROJECT_ARCH="arm64" ..
+cmake -DCMAKE_BUILD_TYPE=Debug -G "Ninja" -DPROJECT_ARCH="arm64" ..
 
 ninja rust-cef-demo-bundle
 # ninja helper_process-bundle

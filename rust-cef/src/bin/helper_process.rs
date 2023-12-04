@@ -13,7 +13,7 @@ fn main() {
     let process_type = CommandLine::new().get_switch_value("type");
 
     let app = match process_type.as_deref() {
-        None | Some("renderer") => Some(App::new(SubProcessApp)),
+        Some("renderer") | Some(_) => Some(App::new(SubProcessApp)),
         _ => None,
     };
 
