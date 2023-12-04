@@ -206,14 +206,18 @@ impl<V: VTable<Kind = VTableKindArc>, RustImpl> CefArc<CefType<V, RustImpl>> {
 
     pub(crate) fn type_erase(self) -> CefArc<V> {
         CefArc {
-            ptr: self.ptr.cast(),
+            ptr: self.into_non_null().cast(),
         }
     }
 }
 
 impl<V: VTable<Kind = VTableKindArc>> CefArc<V> {
+    pub(crate) fn into_non_null(self) -> NonNull<V> {
+        std::mem::ManuallyDrop::new(self).ptr
+    }
+
     pub(crate) fn into_raw(self) -> *mut V {
-        std::mem::ManuallyDrop::new(self).ptr.as_ptr()
+        self.into_non_null().as_ptr()
     }
 
     pub(crate) unsafe fn from_raw(ptr: *mut V) -> Self {
