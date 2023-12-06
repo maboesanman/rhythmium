@@ -31,7 +31,10 @@ impl<V: VTable<Kind = VTableKindBox>> Drop for CefBox<V> {
     fn drop(&mut self) {
         unsafe {
             let base = self.ptr.as_ref().get_base();
-            base.del.unwrap()(self.ptr.as_ptr().cast());
+            match base.del {
+                Some(del) => del(self.ptr.as_ptr().cast()),
+                None => {}
+            }
         }
     }
 }
