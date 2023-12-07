@@ -20,7 +20,7 @@ unsafe impl VTable for App {
 pub trait CustomApp: Sized {
     fn on_before_command_line_processing(
         self: &CefArc<CefType<App, Self>>,
-        process_type: &str,
+        process_type: Option<&str>,
         command_line: CefArc<CommandLine>,
     ) {
         let _ = (self, process_type, command_line);
@@ -47,10 +47,10 @@ trait CustomAppRaw: CustomApp {
     ) {
         let self_arc = CefArc::from_raw(self_raw.cast::<CefType<App, Self>>());
         let process_type =
-            &crate::util::cef_string::cef_string_utf16_into_string(process_type).unwrap();
+            crate::util::cef_string::cef_string_utf16_into_string(process_type);
         let command_line = CefArc::from_raw(command_line.cast::<CommandLine>());
 
-        self_arc.on_before_command_line_processing(process_type, command_line);
+        self_arc.on_before_command_line_processing(process_type.as_deref(), command_line);
 
         self_arc.into_raw();
     }
