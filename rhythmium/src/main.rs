@@ -35,17 +35,17 @@ pub async fn main() {
     let root_node = taffy
         .new_with_children(
             Style {
-                flex_direction: FlexDirection::Column,
-                gap: points(11.0),
+                flex_direction: FlexDirection::Row,
+                gap: points(16.0),
                 size: Size {
                     width: percent(1.0),
                     height: percent(1.0),
                 },
                 padding: Rect {
-                    top: points(10.0),
-                    bottom: points(10.0),
-                    left: points(10.0),
-                    right: points(10.0),
+                    top: points(16.0),
+                    bottom: points(16.0),
+                    left: points(16.0),
+                    right: points(16.0),
                 },
                 ..Default::default()
             },
@@ -53,51 +53,12 @@ pub async fn main() {
         )
         .unwrap();
 
-    let root_again = taffy
-        .new_with_children(
-            Style {
-                size: Size {
-                    width: percent(1.0),
-                    height: percent(1.0),
-                },
-                padding: Rect {
-                    top: points(10.0),
-                    bottom: points(10.0),
-                    left: points(10.0),
-                    right: points(10.0),
-                },
-                ..Default::default()
-            },
-            &[root_node],
-        )
-        .unwrap();
-
-    let root_another_time = taffy
-        .new_with_children(
-            Style {
-                size: Size {
-                    width: percent(1.0),
-                    height: percent(1.0),
-                },
-                padding: Rect {
-                    top: points(10.0),
-                    bottom: points(10.0),
-                    left: points(10.0),
-                    right: points(10.0),
-                },
-                ..Default::default()
-            },
-            &[root_again],
-        )
-        .unwrap();
-
-    let mut scene = scene::Scene {
-        root: root_another_time,
+    let scene = scene::Scene {
+        root: root_node,
         view_tree: taffy,
         views: {
             let mut views: HashMap<_, Box<dyn View>> = HashMap::new();
 
-            views.insert(root_another_time, Box::new(DummyView::new("root_node")));
             views.insert(node_a, Box::new(DummyView::new("node_a")));
             views.insert(node_b, Box::new(DummyView::new("node_b")));
 
@@ -105,10 +66,7 @@ pub async fn main() {
         },
     };
 
-    scene.set_size(Size {
-        width: points(800.0),
-        height: points(600.0),
-    });
+    
 
     scene_renderer::run(scene).await;
 }

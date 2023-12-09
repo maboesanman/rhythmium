@@ -1,3 +1,4 @@
+use wgpu::Device;
 use wgpu::util::DeviceExt;
 use winit::window::Window;
 
@@ -23,6 +24,8 @@ struct SceneRenderer {
     render_pipeline: wgpu::RenderPipeline,
 
     vertex_buffer: wgpu::Buffer,
+    index_buffer: wgpu::Buffer,
+    num_indices: u32,
 
     window: Window,
 }
@@ -137,11 +140,13 @@ impl SceneRenderer {
 
         let vertex_buffer = device.create_buffer_init(
             &wgpu::util::BufferInitDescriptor {
-                label: Some("Vertex Buffer"),
-                contents: bytemuck::cast_slice(VERTICES),
+                label: Some("Scene Vertex Buffer"),
+                contents: &[],
                 usage: wgpu::BufferUsages::VERTEX,
             }
         );
+
+        let (index_buffer, num_indices) = Self::get_index_buffer_from_scene(&scene, &device);
 
         Self {
             scene,
@@ -152,6 +157,8 @@ impl SceneRenderer {
             size,
             render_pipeline,
             vertex_buffer,
+            index_buffer,
+            num_indices,
             window,
         }
     }
@@ -174,12 +181,14 @@ impl SceneRenderer {
         self.surface.configure(&self.device, &self.config);
         
         // reflow the scene
-        let scale_factor = self.window.scale_factor(); // not sure how to use this...
+        let scale_factor_inv = (1.0 / self.window.scale_factor()) as f32; // not sure how to use this...
         // self.scene.view_tree.
         self.scene.set_size(taffy::geometry::Size {
-            width: new_size.width as f32,
-            height: new_size.height as f32,
+            width: new_size.width as f32 * scale_factor_inv,
+            height: new_size.height as f32 * scale_factor_inv,
         });
+
+        self.vertex_buffer = self.get_vertex_buffer_from_scene();
     }
 
     fn update(&mut self) {}
@@ -219,8 +228,11 @@ impl SceneRenderer {
             });
 
             render_pass.set_pipeline(&self.render_pipeline);
+
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.draw(0..NUM_VERTICES, 0..1);
+            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
+            // render_pass.draw(0..NUM_VERTICES, 0..1);
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
@@ -228,7 +240,85 @@ impl SceneRenderer {
 
         Ok(())
     }
+
+    fn get_index_buffer_from_scene(scene: &Scene, device: &Device) -> (wgpu::Buffer, u32) {
+        let mut indices = vec![];
+        for i in 0..scene.views.len() as u16 {
+            let mut new_indices = [i * 4; 6];
+            let offsets = [0, 1, 2, 0, 2, 3];
+
+            for i in 0..6 {
+                new_indices[i] += offsets[i];
+            }
+
+            indices.push(new_indices);
+        }
+
+        let index_buffer = device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Scene Index Buffer"),
+                contents: bytemuck::cast_slice(&indices),
+                usage: wgpu::BufferUsages::INDEX,
+            }
+        );
+
+        let num_indices = indices.len() as u32 * 6;
+
+        (index_buffer, num_indices)
+    }
+
+    fn get_vertex_buffer_from_scene(&self) -> wgpu::Buffer {
+        let mut height = 0.0f32;
+        let mut vertices = vec![];
+        let window_size = self.scene.get_size();
+        for (size, position, _key) in self.scene.get_layout() {
+            let x = position.x * 2.0 / window_size.width - 1.0;
+            let y = position.y * 2.0 / window_size.height - 1.0;
+            let w = size.width * 2.0 / window_size.width;
+            let h = size.height * 2.0 / window_size.height;
+
+            let (a, b, c, d) = (
+                x,
+                y,
+                x + w,
+                y + h,
+            );
+
+            vertices.push([
+                Vertex {
+                    position: [a, b, height],
+                    color: [1.0, 0.0, 0.0],
+                },
+                Vertex {
+                    position: [c, b, height],
+                    color: [1.0, 1.0, 1.0],
+                },
+                Vertex {
+                    position: [c, d, height],
+                    color: [0.0, 0.0, 1.0],
+                },
+                Vertex {
+                    position: [a, d, height],
+                    color: [0.0, 1.0, 0.0],
+                },
+            ]);
+
+            height += 1.0 / self.scene.views.len() as f32;
+        }
+
+        let vertex_buffer = self.device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Scene Vertex Buffer"),
+                contents: bytemuck::cast_slice(&vertices),
+                usage: wgpu::BufferUsages::VERTEX,
+            }
+        );
+
+        vertex_buffer
+    }
 }
+
+
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -236,14 +326,6 @@ struct Vertex {
     position: [f32; 3],
     color: [f32; 3],
 }
-
-const VERTICES: &[Vertex] = &[
-    Vertex { position: [0.0, 0.5, 0.0], color: [1.0, 0.0, 0.0] },
-    Vertex { position: [-0.5, -0.5, 0.0], color: [0.0, 1.0, 0.0] },
-    Vertex { position: [0.5, -0.5, 0.0], color: [0.0, 0.0, 1.0] },
-];
-
-const NUM_VERTICES: u32 = VERTICES.len() as u32;
 
 impl Vertex {
     const ATTRIBS: [wgpu::VertexAttribute; 2] =
@@ -286,9 +368,12 @@ pub async fn run(scene: Scene) {
                 } => {
                     window_target.exit();
                 }
-                WindowEvent::Resized(..) | WindowEvent::ScaleFactorChanged { .. } => {
+                WindowEvent::Resized(..) => {
                     scene_renderer.resize();
                     scene_renderer.window().request_redraw();
+                }
+                WindowEvent::ScaleFactorChanged { .. } => {
+
                 }
                 _ => {}
             },
