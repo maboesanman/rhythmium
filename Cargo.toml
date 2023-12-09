@@ -11,6 +11,7 @@ authors = ["Mason Boeman <masonboeman@gmail.com"]
 
 
 [workspace.dependencies]
+bytemuck = { version = "1.14.0", features = ["derive"] }
 env_logger = "0.10.1"
 futures = "0.3.29"
 image = { version = "0.24.7", features = ["jpeg"] }
