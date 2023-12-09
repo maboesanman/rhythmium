@@ -146,20 +146,22 @@ impl SceneRenderer {
         &self.window
     }
 
-    fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
+    fn resize(&mut self) {
+        let new_size = self.window.inner_size();
+        
         if new_size.width == 0 || new_size.height == 0 {
             return;
         }
-
-        println!("Resizing to {:?}", new_size);
-
+        
         // set the surface size
         self.size = new_size;
         self.config.width = new_size.width;
         self.config.height = new_size.height;
         self.surface.configure(&self.device, &self.config);
-
+        
         // reflow the scene
+        let scale_factor = self.window.scale_factor(); // not sure how to use this...
+        // self.scene.view_tree.
         self.scene.set_size(taffy::geometry::Size {
             width: new_size.width as f32,
             height: new_size.height as f32,
@@ -241,10 +243,9 @@ pub async fn run(scene: Scene) {
                 } => {
                     window_target.exit();
                 }
-                WindowEvent::Resized(size) => {
-                    scene_renderer.resize(*size);
-                } WindowEvent::ScaleFactorChanged { .. } => {
-                    
+                WindowEvent::Resized(..) | WindowEvent::ScaleFactorChanged { .. } => {
+                    scene_renderer.resize();
+                    scene_renderer.window().request_redraw();
                 }
                 _ => {}
             },
