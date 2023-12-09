@@ -1,8 +1,16 @@
 [workspace]
 resolver = "2"
-
 members = [
-  "cef-sys",
-  "rust-cef",
-  "rust-cef-demo"
+  "rhythmium",
 ]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Mason Boeman <masonboeman@gmail.com"]
+
+
+[workspace.dependencies]
+wgpu = "0.18.0"
+winit = "0.29.4"
+serde = "1.0.193"

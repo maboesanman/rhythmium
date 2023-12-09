@@ -1,0 +1,36 @@
+{
+  "name": "example scene",
+  "description": "example scene",
+  // scene inputs, with cids for the schemas
+  "inputs": [],
+
+  // internal pipeline steps
+  "pipelineSteps": [],
+
+  // associations between inputs, pipeline steps, and views
+  "pipelineSequence": [],
+
+  "sceneLayout": {
+    // optional
+    "name": "root",
+  
+    // optional
+    "view": {
+      "name": "View 1",
+      "description": "View 1",
+      "type": "webview"
+      
+      // cid of the webview component
+    },
+
+    // optional, taffy style
+    "style": {
+      "width": "100%",
+      "height": "100%"
+    },
+    // optional
+    "children": [
+
+    ]
+  }
+}
