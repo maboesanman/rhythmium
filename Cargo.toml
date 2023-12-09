@@ -11,6 +11,11 @@ authors = ["Mason Boeman <masonboeman@gmail.com"]
 
 
 [workspace.dependencies]
+env_logger = "0.10.1"
+futures = "0.3.29"
+image = { version = "0.24.7", features = ["jpeg"] }
+log = "0.4.20"
+serde = { version = "1.0.193", features = ["derive"] }
+tokio = { version = "1.35.0", features = ["macros", "rt-multi-thread"] }
 wgpu = "0.18.0"
-winit = "0.29.4"
-serde = "1.0.193"
+winit = { version = "0.29.4", features = ["rwh_05"] }

@@ -1,5 +1,5 @@
-use std::collections::{HashMap, VecDeque};
 use core::fmt::Debug;
+use std::collections::{HashMap, VecDeque};
 
 use serde::Deserialize;
 use slotmap::DefaultKey;
@@ -21,10 +21,15 @@ impl Debug for Scene {
 
 impl View for Scene {
     fn set_size(&mut self, size: Size<f32>) {
-        self.view_tree.compute_layout(self.root, Size {
-            width: AvailableSpace::Definite(size.width),
-            height: AvailableSpace::Definite(size.height),
-        }).unwrap();
+        self.view_tree
+            .compute_layout(
+                self.root,
+                Size {
+                    width: AvailableSpace::Definite(size.width),
+                    height: AvailableSpace::Definite(size.height),
+                },
+            )
+            .unwrap();
 
         for (key, view) in self.views.iter_mut() {
             let layout = self.view_tree.layout(*key).unwrap();
@@ -106,13 +111,9 @@ impl SceneBuilder {
 
         let mut taffy = Taffy::new();
 
-
-
         todo!()
     }
-
 }
-
 
 #[derive(Deserialize, Debug)]
 pub struct SceneLayout {
@@ -123,7 +124,7 @@ pub struct SceneLayout {
 }
 
 impl SceneLayout {
-    pub fn build_tree(self, &mut ) -> (DefaultKey,  {
-        todo!()
-    }
+    // pub fn build_tree(self, &mut ) -> (DefaultKey,  {
+    //     todo!()
+    // }
 }

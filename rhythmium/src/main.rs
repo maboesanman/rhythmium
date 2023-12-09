@@ -6,12 +6,16 @@ use taffy::{
     style_helpers::{percent, points},
     Taffy,
 };
-use view::{View, DummyView};
+use view::{DummyView, View};
 
 pub mod scene;
+pub mod scene_renderer;
 pub mod view;
 
-pub fn main() {
+#[tokio::main]
+pub async fn main() {
+    env_logger::init();
+
     let mut taffy = Taffy::new();
 
     let node_a = taffy
@@ -106,27 +110,5 @@ pub fn main() {
         height: points(600.0),
     });
 
-    for (size, location, key) in scene.get_layout() {
-        println!(
-            "{:?} {:?} {:?}",
-            scene.views.get(&key).unwrap(),
-            size,
-            location
-        );
-    }
-
-    // println!("{:#?}", taffy.layout(root_another_time).unwrap());
-    // println!("{:#?}", taffy.layout(root_again).unwrap());
-    // println!("{:#?}", taffy.layout(root_node).unwrap());
-    // println!("{:#?}", taffy.layout(node_a).unwrap());
-    // println!("{:#?}", taffy.layout(node_b).unwrap());
-
-    // assert_eq!(taffy.layout(root_node).unwrap().size.width, 800.0);
-    // assert_eq!(taffy.layout(root_node).unwrap().size.height, 600.0);
-    // assert_eq!(taffy.layout(header_node).unwrap().size.width, 800.0);
-    // assert_eq!(taffy.layout(header_node).unwrap().size.height, 100.0);
-    // assert_eq!(taffy.layout(body_node).unwrap().size.width, 800.0);
-    // assert_eq!(taffy.layout(body_node).unwrap().size.height, 500.0);
-
-    // assert_eq!(taffy.layout(root_node).unwrap().location.x, 0.0);
+    scene_renderer::run(scene).await;
 }

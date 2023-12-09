@@ -7,8 +7,11 @@ edition.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-serde = { workspace = true, features = ["derive"] }
+env_logger.workspace = true
+log.workspace = true
+serde.workspace = true
 slotmap = "1.0.7"
 taffy = { version = "0.3.18", features = ["serde"] }
+tokio.workspace = true
 wgpu.workspace = true
 winit.workspace = true
