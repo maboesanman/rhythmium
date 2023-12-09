@@ -19,6 +19,8 @@ struct SceneRenderer {
     config: wgpu::SurfaceConfiguration,
     size: winit::dpi::PhysicalSize<u32>,
 
+    render_pipeline: wgpu::RenderPipeline,
+
     window: Window,
 }
 
@@ -84,6 +86,50 @@ impl SceneRenderer {
 
         surface.configure(&device, &config);
 
+        let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
+
+        let render_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Render Pipeline Layout"),
+                bind_group_layouts: &[],
+                push_constant_ranges: &[],
+            });
+
+        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Render Pipeline"),
+            layout: Some(&render_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: "vs_main",
+                buffers: &[],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: "fs_main",
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: config.format,
+                    blend: Some(wgpu::BlendState::REPLACE),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: Some(wgpu::Face::Back),
+                unclipped_depth: false,
+                polygon_mode: wgpu::PolygonMode::Fill,
+                conservative: false, 
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            multiview: None,
+        });
+
         Self {
             scene,
             surface,
@@ -91,6 +137,7 @@ impl SceneRenderer {
             queue,
             config,
             size,
+            render_pipeline,
             window,
         }
     }
@@ -99,12 +146,12 @@ impl SceneRenderer {
         &self.window
     }
 
-    fn resize(&mut self) {
-        let new_size = self.window.inner_size();
-
+    fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         if new_size.width == 0 || new_size.height == 0 {
             return;
         }
+
+        println!("Resizing to {:?}", new_size);
 
         // set the surface size
         self.size = new_size;
@@ -135,7 +182,7 @@ impl SceneRenderer {
             });
 
         {
-            let _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &view,
@@ -154,6 +201,9 @@ impl SceneRenderer {
                 timestamp_writes: None,
                 occlusion_query_set: None,
             });
+
+            render_pass.set_pipeline(&self.render_pipeline);
+            render_pass.draw(0..3, 0..1);
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
@@ -191,8 +241,10 @@ pub async fn run(scene: Scene) {
                 } => {
                     window_target.exit();
                 }
-                WindowEvent::Resized(..) | WindowEvent::ScaleFactorChanged { .. } => {
-                    scene_renderer.resize();
+                WindowEvent::Resized(size) => {
+                    scene_renderer.resize(*size);
+                } WindowEvent::ScaleFactorChanged { .. } => {
+                    
                 }
                 _ => {}
             },
