@@ -9,6 +9,7 @@ edition.workspace = true
 [dependencies]
 bytemuck.workspace = true
 env_logger.workspace = true
+image.workspace = true
 log.workspace = true
 serde.workspace = true
 slotmap = "1.0.7"
