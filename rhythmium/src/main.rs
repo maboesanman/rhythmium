@@ -1,16 +1,17 @@
 use std::collections::HashMap;
 
+use scene::{
+    image_view::ImageView,
+    view::{DummyView, View},
+};
 use taffy::{
     geometry::{Rect, Size},
     style::{FlexDirection, Style},
     style_helpers::{percent, points},
     Taffy,
 };
-use view::{DummyView, View};
 
 pub mod scene;
-pub mod scene_renderer;
-pub mod view;
 
 #[tokio::main]
 pub async fn main() {
@@ -57,7 +58,7 @@ pub async fn main() {
         root: root_node,
         view_tree: taffy,
         views: {
-            let mut views: HashMap<_, Box<dyn View>> = HashMap::new();
+            let mut views = HashMap::new();
 
             views.insert(node_a, Box::new(DummyView::new("node_a")));
             views.insert(node_b, Box::new(DummyView::new("node_b")));
@@ -66,7 +67,5 @@ pub async fn main() {
         },
     };
 
-    
-
-    scene_renderer::run(scene).await;
+    scene::view::run(Box::new(DummyView::new("root"))).await;
 }

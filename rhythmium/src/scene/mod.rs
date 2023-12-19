@@ -4,13 +4,23 @@ use std::collections::{HashMap, VecDeque};
 use serde::Deserialize;
 use slotmap::DefaultKey;
 use taffy::{geometry::Point, prelude::*};
+use wgpu::RenderPass;
 
-use crate::view::{View, ViewBuilder};
+use self::{
+    image_view::ImageView,
+    view::{DummyView, View, ViewBuilder},
+};
+
+pub mod image_view;
+// pub mod root_renderer;
+pub mod shared_wgpu_state;
+pub mod view;
+// pub mod scene_renderer;
 
 pub struct Scene {
     pub view_tree: Taffy,
     pub root: DefaultKey,
-    pub views: HashMap<DefaultKey, Box<dyn View>>,
+    pub views: HashMap<DefaultKey, Box<DummyView>>,
 }
 
 impl Debug for Scene {
@@ -19,28 +29,32 @@ impl Debug for Scene {
     }
 }
 
-impl View for Scene {
-    fn set_size(&mut self, size: Size<f32>) {
-        self.view_tree
-            .compute_layout(
-                self.root,
-                Size {
-                    width: AvailableSpace::Definite(size.width),
-                    height: AvailableSpace::Definite(size.height),
-                },
-            )
-            .unwrap();
+// impl View for Scene {
+//     fn set_size(&mut self, size: Size<f32>) {
+//         self.view_tree
+//             .compute_layout(
+//                 self.root,
+//                 Size {
+//                     width: AvailableSpace::Definite(size.width),
+//                     height: AvailableSpace::Definite(size.height),
+//                 },
+//             )
+//             .unwrap();
 
-        for (key, view) in self.views.iter_mut() {
-            let layout = self.view_tree.layout(*key).unwrap();
-            view.set_size(layout.size);
-        }
-    }
+//         for (key, view) in self.views.iter_mut() {
+//             let layout = self.view_tree.layout(*key).unwrap();
+//             view.set_size(layout.size);
+//         }
+//     }
 
-    fn get_size(&self) -> Size<f32> {
-        self.view_tree.layout(self.root).unwrap().size
-    }
-}
+//     fn render<'pass, 'out>(
+//         &'pass mut self,
+//         command_encoder: wgpu::CommandEncoder,
+//         output_view: &'out wgpu::TextureView,
+//     ) -> wgpu::CommandBuffer {
+//         todo!()
+//     }
+// }
 
 impl Scene {
     pub fn get_layout(&self) -> impl IntoIterator<Item = (Size<f32>, Point<f32>, DefaultKey)> {

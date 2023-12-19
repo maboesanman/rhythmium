@@ -1,4 +1,8 @@
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use image::GenericImageView as _;
+use slotmap::DefaultKey;
 use wgpu::Device;
 use wgpu::util::DeviceExt;
 use winit::window::Window;
@@ -13,13 +17,20 @@ use winit::{
 use crate::scene::Scene;
 use crate::view::View;
 
-struct SceneRenderer {
-    scene: Scene,
+use super::shared_wgpu_state::SharedWgpuState;
 
+struct SceneView {
     surface: wgpu::Surface,
-    device: wgpu::Device,
-    queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
+    view: Box<dyn View>,
+}
+
+struct SceneRenderer {
+    shared_wgpu_state: Arc<SharedWgpuState>,
+
+    scene: Scene,
+    views: HashMap<DefaultKey, SceneView>,
+
     size: winit::dpi::PhysicalSize<u32>,
 
     render_pipeline: wgpu::RenderPipeline,
@@ -34,7 +45,7 @@ struct SceneRenderer {
 }
 
 impl SceneRenderer {
-    async fn new(mut scene: Scene, window: Window) -> Self {
+    async fn new(shared_wgpu_state: Arc<SharedWgpuState>, mut scene: Scene) -> Self {
         let size = window.inner_size();
 
         scene.set_size(taffy::geometry::Size {
