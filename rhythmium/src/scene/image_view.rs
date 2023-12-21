@@ -1,7 +1,8 @@
 use std::{borrow::Cow, sync::Arc};
 
 use image::GenericImageView;
-use wgpu::{util::DeviceExt, Queue, SurfaceTexture};
+use serde::de;
+use wgpu::{util::DeviceExt, Queue, SurfaceTexture, CommandEncoder, TextureView, vertex_attr_array};
 use winit::{dpi::PhysicalSize, window::Window};
 
 use super::{
@@ -24,16 +25,61 @@ pub struct ImageView {
     diffuse_bind_group: wgpu::BindGroup,
 }
 
+impl View for ImageView {
+    fn set_size(&mut self, size: PhysicalSize<u32>) {
+        self.size = size;
+
+        self.vertex_buffer = get_vertex_buffer(
+            &self.shared_wgpu_state.device,
+            ImageFit::Stretch,
+            size.height as f32 / size.width as f32,
+            self.texture.texture.size().height as f32 / self.texture.texture.size().width as f32,
+        );
+    }
+
+    fn render<'pass, 'out>(
+        &'pass mut self,
+        command_encoder: &'pass mut CommandEncoder,
+        output_view: &'out TextureView,
+    ) {
+        {
+            let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Render Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &output_view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 0.1,
+                            g: 0.2,
+                            b: 0.3,
+                            a: 1.0,
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+
+            render_pass.set_pipeline(&self.render_pipeline);
+            render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
+            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            render_pass.draw_indexed(0..6, 0, 0..1);
+        }
+    }
+}
+
 impl ImageView {
     pub fn new(
         shared_wgpu_state: Arc<SharedWgpuState>,
         size: PhysicalSize<u32>,
-        surface_format: wgpu::TextureFormat,
         image_bytes: &[u8],
     ) -> Self {
         let texture = Texture::from_bytes(
-            &shared_wgpu_state.device,
-            &shared_wgpu_state.queue,
+            &shared_wgpu_state,
             image_bytes,
             None,
         )
@@ -85,7 +131,7 @@ impl ImageView {
                 module: &shader,
                 entry_point: "fs_main",
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: surface_format,
+                    format: wgpu::TextureFormat::Bgra8UnormSrgb,
                     blend: Some(wgpu::BlendState::REPLACE),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
@@ -94,7 +140,7 @@ impl ImageView {
                 topology: wgpu::PrimitiveTopology::TriangleList,
                 strip_index_format: None,
                 front_face: wgpu::FrontFace::Ccw,
-                cull_mode: Some(wgpu::Face::Back),
+                cull_mode: None,
                 unclipped_depth: false,
                 polygon_mode: wgpu::PolygonMode::Fill,
                 conservative: false,
@@ -108,74 +154,47 @@ impl ImageView {
             multiview: None,
         });
 
+        let vertex_buffer = get_vertex_buffer(
+            &shared_wgpu_state.device,
+            ImageFit::Stretch,
+            size.height as f32 / size.width as f32,
+            texture.texture.size().height as f32 / texture.texture.size().width as f32,
+        );
+
+        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Scene Vertex Buffer"),
+            contents: bytemuck::cast_slice(&INDEXES),
+            usage: wgpu::BufferUsages::INDEX,
+        });
+
+
+
+        let diffuse_bind_group = device.create_bind_group(
+            &wgpu::BindGroupDescriptor {
+                label: Some("Diffuse Bind Group"),
+                layout: &texture_bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&texture.view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&texture.sampler),
+                    },
+                ],
+            }
+        );
+
         Self {
             shared_wgpu_state,
             texture: Arc::new(texture),
             size,
             render_pipeline,
-            vertex_buffer: todo!(),
-            index_buffer: todo!(),
-            diffuse_bind_group: todo!(),
+            vertex_buffer,
+            index_buffer,
+            diffuse_bind_group,
         }
-    }
-    pub fn set_size(&mut self, size: PhysicalSize<u32>) {
-        self.size = size;
-
-        self.vertex_buffer = get_vertex_buffer(
-            &self.shared_wgpu_state.device,
-            ImageFit::Stretch,
-            size.height as f32 / size.width as f32,
-            self.texture.texture.size().height as f32 / self.texture.texture.size().width as f32,
-        );
-    }
-    pub fn get_size(&self) -> PhysicalSize<u32> {
-        self.size
-    }
-
-    pub fn render(&self, output: &SurfaceTexture) {
-        let view = output
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
-
-        let mut encoder =
-            self.shared_wgpu_state
-                .device
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("Render Encoder"),
-                });
-
-        {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Render Pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.1,
-                            g: 0.2,
-                            b: 0.3,
-                            a: 1.0,
-                        }),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            });
-
-            render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
-            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-            render_pass.draw_indexed(0..4, 0, 0..1);
-        }
-
-        self.shared_wgpu_state
-            .queue
-            .submit(std::iter::once(encoder.finish()));
-        // output.present();
     }
 }
 // impl View for ImageView {
@@ -193,23 +212,23 @@ pub struct Texture {
 
 impl Texture {
     pub fn from_bytes(
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        shared_wgpu_state: &SharedWgpuState,
         bytes: &[u8],
         label: Option<&str>,
     ) -> Result<Self> {
         let image = image::load_from_memory(bytes)?;
-        Self::from_image(device, queue, &image, label)
+        Self::from_image(shared_wgpu_state, &image, label)
     }
 
     pub fn from_image(
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        shared_wgpu_state: &SharedWgpuState,
         image: &image::DynamicImage,
         label: Option<&str>,
     ) -> Result<Self> {
-        let rgba = image.to_rgba8();
         let dimensions = image.dimensions();
+
+        let device = &shared_wgpu_state.device;
+        let queue = &shared_wgpu_state.queue;
 
         let size = wgpu::Extent3d {
             width: dimensions.0,
@@ -234,7 +253,7 @@ impl Texture {
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
             },
-            &rgba,
+            &image.to_rgba8(),
             wgpu::ImageDataLayout {
                 offset: 0,
                 bytes_per_row: Some(4 * dimensions.0),
@@ -271,24 +290,24 @@ struct Vertex {
 
 const VERTICES_FULL: &[Vertex] = &[
     Vertex {
-        position: [0.0, 0.0],
-        tex_coords: [0.0, 0.0],
-    },
-    Vertex {
-        position: [0.0, 1.0],
+        position: [-1.0, -1.0],
         tex_coords: [0.0, 1.0],
     },
     Vertex {
-        position: [1.0, 0.0],
-        tex_coords: [1.0, 0.0],
+        position: [-1.0, 1.0],
+        tex_coords: [0.0, 0.0],
+    },
+    Vertex {
+        position: [1.0, -1.0],
+        tex_coords: [1.0, 1.0],
     },
     Vertex {
         position: [1.0, 1.0],
-        tex_coords: [1.0, 1.0],
+        tex_coords: [1.0, 0.0],
     },
 ];
 
-const INDEX_BUFFER: &[u16] = &[0, 1, 2, 2, 1, 3];
+const INDEXES: &[u16] = &[0, 1, 2, 1, 3, 2];
 
 impl Vertex {
     const ATTRIBS: [wgpu::VertexAttribute; 2] =

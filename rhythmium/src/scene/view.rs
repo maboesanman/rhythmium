@@ -6,7 +6,7 @@ use taffy::prelude::*;
 use wgpu::{CommandBuffer, CommandEncoder, RenderPass, TextureView};
 use winit::{event_loop::EventLoop, window::WindowBuilder, event::{Event, WindowEvent, KeyEvent, ElementState}, keyboard::NamedKey, dpi::PhysicalSize};
 
-use super::shared_wgpu_state::{self, SharedWgpuState};
+use super::{shared_wgpu_state::{self, SharedWgpuState}, view_surface::ViewSurface};
 
 pub trait View: Debug {
     fn set_size(&mut self, size: PhysicalSize<u32>);
@@ -17,114 +17,16 @@ pub trait View: Debug {
     );
 }
 
-pub struct ViewSurface {
-    view: Box<dyn View>,
-    surface: wgpu::Surface,
-    config: wgpu::SurfaceConfiguration,
-    shared_wgpu_state: Arc<SharedWgpuState>,
-}
 
-impl ViewSurface {
-    pub fn new_root(
-        view: Box<dyn View>,
-        shared_wgpu_state: Arc<SharedWgpuState>,
-    ) -> Self {
-        Self::new(view, shared_wgpu_state.window.inner_size(), wgpu::TextureUsages::RENDER_ATTACHMENT, shared_wgpu_state)
-    }
-    pub fn new(
-        view: Box<dyn View>,
-        size: PhysicalSize<u32>,
-        usage: wgpu::TextureUsages,
-        shared_wgpu_state: Arc<SharedWgpuState>,
-    ) -> Self {
-        let instance = &shared_wgpu_state.instance;
-        let window = &shared_wgpu_state.window;
-        let adapter = &shared_wgpu_state.adapter;
-
-        let surface = unsafe { instance.create_surface(&window) }.unwrap();
-
-        let surface_capabilities = surface.get_capabilities(&adapter);
-
-        let surface_format = surface_capabilities
-            .formats
-            .iter()
-            .copied()
-            .filter(|f| f.is_srgb())
-            .next()
-            .unwrap_or(surface_capabilities.formats[0]);
-
-        let config = wgpu::SurfaceConfiguration {
-            usage,
-            format: surface_format,
-            width: size.width,
-            height: size.height,
-            present_mode: surface_capabilities.present_modes[0],
-            alpha_mode: surface_capabilities.alpha_modes[0],
-            view_formats: vec![],
-        };
-
-        Self {
-            surface,
-            config,
-            view,
-            shared_wgpu_state,
-        }
-    }
-
-    pub fn resize(&mut self, size: PhysicalSize<u32>) {
-        if size.width == 0 || size.height == 0 {
-            return;
-        }
-        
-        // set the surface size
-        self.config.width = size.width;
-        self.config.height = size.height;
-        self.surface
-            .configure(&self.shared_wgpu_state.device, &self.config);
-
-        // set the view size
-        self.view.set_size(size);
-    }
-
-    pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
-        let output = self.surface.get_current_texture()?;
-
-        let output_view = output
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
-
-        let mut encoder =
-            self.shared_wgpu_state
-                .device
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("Render Encoder"),
-                });
-
-        self.view.render(&mut encoder, &output_view);
-
-        let command_buffer = encoder.finish();
-        
-        self.shared_wgpu_state.queue.submit([command_buffer]);
-        output.present();
-        Ok(())
-    }
-}
 
 #[derive(Debug, Clone)]
-pub struct DummyView {
-    pub name: String,
-    pub size: Size<f32>,
+pub struct SolidColorView {
     color: wgpu::Color,
 }
 
-impl DummyView {
-    pub fn new(name: &str) -> Self {
+impl SolidColorView {
+    pub fn new() -> Self {
         Self {
-            name: name.to_string(),
-            size: Size {
-                width: 0.0f32,
-                height: 0.0f32,
-            },
             color: wgpu::Color {
                 r: rand::random(),
                 g: rand::random(),
@@ -135,7 +37,7 @@ impl DummyView {
     }
 }
 
-impl View for DummyView {
+impl View for SolidColorView {
     fn set_size(&mut self, _: PhysicalSize<u32>) {}
 
     fn render<'pass, 'out>(
@@ -162,24 +64,12 @@ impl View for DummyView {
     }
 }
 
-#[derive(Deserialize, Debug)]
-pub struct ViewBuilder {
-    pub name: String,
-    pub description: String,
-    pub id: String,
-}
-
-impl ViewBuilder {
-    pub fn build(self) -> Box<dyn View> {
-        Box::new(DummyView::new(&self.name))
-    }
-}
-
-pub async fn run(view: Box<dyn View>) {
+pub async fn run<F>(view_callback: F)
+where F: FnOnce(Arc<SharedWgpuState>) -> Box<dyn View> {
     let event_loop = EventLoop::new().unwrap();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
-
     let shared_wgpu_state = shared_wgpu_state::SharedWgpuState::new(window).await;
+    let view = view_callback(shared_wgpu_state.clone());
 
     let mut view_surface = ViewSurface::new_root(
         view,

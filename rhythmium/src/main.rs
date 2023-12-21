@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use scene::{
     image_view::ImageView,
-    view::{DummyView, View},
+    view::{SolidColorView, View},
 };
 use taffy::{
     geometry::{Rect, Size},
@@ -10,6 +10,7 @@ use taffy::{
     style_helpers::{percent, points},
     Taffy,
 };
+use winit::event_loop::EventLoopWindowTarget;
 
 pub mod scene;
 
@@ -60,12 +61,20 @@ pub async fn main() {
         views: {
             let mut views = HashMap::new();
 
-            views.insert(node_a, Box::new(DummyView::new("node_a")));
-            views.insert(node_b, Box::new(DummyView::new("node_b")));
+            views.insert(node_a, Box::new(SolidColorView::new()));
+            views.insert(node_b, Box::new(SolidColorView::new()));
 
             views
         },
     };
 
-    scene::view::run(Box::new(DummyView::new("root"))).await;
+    scene::view::run(|wgpu_shared| {
+        let size = wgpu_shared.window.inner_size();
+        Box::new(ImageView::new(
+            wgpu_shared,
+            size,
+            include_bytes!("../assets/bold-and-brash.jpg")
+        ))
+    }).await;
+    // scene::view::run(Box::new(SolidColorView::new())).await;
 }

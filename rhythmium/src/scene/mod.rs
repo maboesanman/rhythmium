@@ -4,23 +4,20 @@ use std::collections::{HashMap, VecDeque};
 use serde::Deserialize;
 use slotmap::DefaultKey;
 use taffy::{geometry::Point, prelude::*};
-use wgpu::RenderPass;
 
-use self::{
-    image_view::ImageView,
-    view::{DummyView, View, ViewBuilder},
-};
+use self::view::SolidColorView;
 
 pub mod image_view;
 // pub mod root_renderer;
 pub mod shared_wgpu_state;
 pub mod view;
 // pub mod scene_renderer;
+pub mod view_surface;
 
 pub struct Scene {
     pub view_tree: Taffy,
     pub root: DefaultKey,
-    pub views: HashMap<DefaultKey, Box<DummyView>>,
+    pub views: HashMap<DefaultKey, Box<SolidColorView>>,
 }
 
 impl Debug for Scene {
@@ -101,31 +98,6 @@ impl Scene {
         }
 
         out
-    }
-}
-
-#[derive(Deserialize, Debug)]
-pub struct SceneBuilder {
-    name: String,
-    description: String,
-    views: Vec<ViewBuilder>,
-    view_layout: SceneLayout,
-    // inputs: Vec<InputBuilder>,
-    // pipeline_steps: Vec<PipelineStepBuilder>,
-    // pipeline_sequence: Vec<PipelineSequenceBuilder>,
-}
-
-impl SceneBuilder {
-    pub fn build(self) -> Scene {
-        let views = self
-            .views
-            .into_iter()
-            .map(|view| (view.id.clone(), Box::new(view.build())))
-            .collect::<HashMap<_, _>>();
-
-        let mut taffy = Taffy::new();
-
-        todo!()
     }
 }
 
