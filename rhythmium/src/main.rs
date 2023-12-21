@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use scene::{
     image_view::{ImageFit, ImageView},
-    view::{SolidColorView, View},
+    view::SolidColorView,
 };
 use taffy::{
     geometry::{Rect, Size},
@@ -54,14 +54,14 @@ pub async fn main() {
         )
         .unwrap();
 
-    let scene = scene::Scene {
+    let _scene = scene::Scene {
         root: root_node,
         view_tree: taffy,
         views: {
             let mut views = HashMap::new();
 
-            views.insert(node_a, Box::new(SolidColorView::new()));
-            views.insert(node_b, Box::new(SolidColorView::new()));
+            views.insert(node_a, Box::new(SolidColorView::random()));
+            views.insert(node_b, Box::new(SolidColorView::random()));
 
             views
         },

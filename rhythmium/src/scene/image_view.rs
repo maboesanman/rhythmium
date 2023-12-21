@@ -1,16 +1,10 @@
 use std::{borrow::Cow, sync::Arc};
 
 use image::GenericImageView;
-use serde::de;
-use wgpu::{
-    util::DeviceExt, vertex_attr_array, CommandEncoder, Queue, SurfaceTexture, TextureView,
-};
-use winit::{dpi::PhysicalSize, window::Window};
+use wgpu::{util::DeviceExt, CommandEncoder, TextureView};
+use winit::dpi::PhysicalSize;
 
-use super::{
-    shared_wgpu_state::{self, SharedWgpuState},
-    view::View,
-};
+use super::{shared_wgpu_state::SharedWgpuState, view::View};
 use anyhow::*;
 
 #[derive(Debug)]
@@ -40,16 +34,16 @@ impl View for ImageView {
         );
     }
 
-    fn render<'pass, 'out>(
+    fn render<'pass>(
         &'pass mut self,
         command_encoder: &'pass mut CommandEncoder,
-        output_view: &'out TextureView,
+        output_view: &TextureView,
     ) {
         {
             let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &output_view,
+                    view: output_view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
@@ -162,7 +156,7 @@ impl ImageView {
 
         let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Scene Vertex Buffer"),
-            contents: bytemuck::cast_slice(&INDEXES),
+            contents: bytemuck::cast_slice(INDEXES),
             usage: wgpu::BufferUsages::INDEX,
         });
 

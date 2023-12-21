@@ -1,7 +1,6 @@
 use core::fmt::Debug;
 use std::collections::{HashMap, VecDeque};
 
-use serde::Deserialize;
 use slotmap::DefaultKey;
 use taffy::{geometry::Point, prelude::*};
 
@@ -68,12 +67,7 @@ impl Scene {
 
         let mut out: Vec<(Size<f32>, Point<f32>, DefaultKey)> = vec![];
 
-        loop {
-            let (key, location) = match queue.pop_front() {
-                Some(x) => x,
-                None => break,
-            };
-
+        while let Some((key, location)) = queue.pop_front() {
             let layout = self.view_tree.layout(key).unwrap();
             let key_loc = layout.location;
             let location = Point {
@@ -99,18 +93,4 @@ impl Scene {
 
         out
     }
-}
-
-#[derive(Deserialize, Debug)]
-pub struct SceneLayout {
-    name: String,
-    view_id: String,
-    style: Style,
-    children: Vec<SceneLayout>,
-}
-
-impl SceneLayout {
-    // pub fn build_tree(self, &mut ) -> (DefaultKey,  {
-    //     todo!()
-    // }
 }

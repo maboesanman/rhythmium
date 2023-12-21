@@ -1,9 +1,7 @@
 pub use core::fmt::Debug;
-use std::{borrow::Cow, sync::Arc};
+use std::sync::Arc;
 
-use serde::Deserialize;
-use taffy::prelude::*;
-use wgpu::{CommandBuffer, CommandEncoder, RenderPass, TextureView};
+use wgpu::{CommandEncoder, TextureView};
 use winit::{
     dpi::PhysicalSize,
     event::{ElementState, Event, KeyEvent, WindowEvent},
@@ -19,11 +17,7 @@ use super::{
 
 pub trait View: Debug {
     fn set_size(&mut self, size: PhysicalSize<u32>);
-    fn render<'a, 'out>(
-        &'a mut self,
-        command_encoder: &'a mut CommandEncoder,
-        output_view: &'out TextureView,
-    );
+    fn render<'a>(&'a mut self, command_encoder: &'a mut CommandEncoder, output_view: &TextureView);
 }
 
 #[derive(Debug, Clone)]
@@ -32,12 +26,18 @@ pub struct SolidColorView {
 }
 
 impl SolidColorView {
-    pub fn new() -> Self {
+    pub fn new(color: wgpu::Color) -> Self {
+        Self { color }
+    }
+
+    pub fn random() -> Self {
+        use rand::Rng;
+        let mut rng = rand::thread_rng();
         Self {
             color: wgpu::Color {
-                r: rand::random(),
-                g: rand::random(),
-                b: rand::random(),
+                r: rng.gen(),
+                g: rng.gen(),
+                b: rng.gen(),
                 a: 1.0,
             },
         }
@@ -47,13 +47,13 @@ impl SolidColorView {
 impl View for SolidColorView {
     fn set_size(&mut self, _: PhysicalSize<u32>) {}
 
-    fn render<'pass, 'out>(
+    fn render<'pass>(
         &'pass mut self,
         command_encoder: &'pass mut CommandEncoder,
-        output_view: &'out TextureView,
+        output_view: &TextureView,
     ) {
         {
-            let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: output_view,
