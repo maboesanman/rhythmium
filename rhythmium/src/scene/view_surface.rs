@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use winit::dpi::PhysicalSize;
 
-use super::{view::View, shared_wgpu_state::SharedWgpuState};
+use super::{shared_wgpu_state::SharedWgpuState, view::View};
 
 pub struct ViewSurface {
     view: Box<dyn View>,
@@ -12,11 +12,13 @@ pub struct ViewSurface {
 }
 
 impl ViewSurface {
-    pub fn new_root(
-        view: Box<dyn View>,
-        shared_wgpu_state: Arc<SharedWgpuState>,
-    ) -> Self {
-        Self::new(view, shared_wgpu_state.window.inner_size(), wgpu::TextureUsages::RENDER_ATTACHMENT, shared_wgpu_state)
+    pub fn new_root(view: Box<dyn View>, shared_wgpu_state: Arc<SharedWgpuState>) -> Self {
+        Self::new(
+            view,
+            shared_wgpu_state.window.inner_size(),
+            wgpu::TextureUsages::RENDER_ATTACHMENT,
+            shared_wgpu_state,
+        )
     }
     pub fn new(
         view: Box<dyn View>,
@@ -62,7 +64,7 @@ impl ViewSurface {
         if size.width == 0 || size.height == 0 {
             return;
         }
-        
+
         // set the surface size
         self.config.width = size.width;
         self.config.height = size.height;
@@ -90,7 +92,7 @@ impl ViewSurface {
         self.view.render(&mut encoder, &output_view);
 
         let command_buffer = encoder.finish();
-        
+
         self.shared_wgpu_state.queue.submit([command_buffer]);
         output.present();
         Ok(())

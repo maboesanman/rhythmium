@@ -4,9 +4,18 @@ use std::{borrow::Cow, sync::Arc};
 use serde::Deserialize;
 use taffy::prelude::*;
 use wgpu::{CommandBuffer, CommandEncoder, RenderPass, TextureView};
-use winit::{event_loop::EventLoop, window::WindowBuilder, event::{Event, WindowEvent, KeyEvent, ElementState}, keyboard::NamedKey, dpi::PhysicalSize};
+use winit::{
+    dpi::PhysicalSize,
+    event::{ElementState, Event, KeyEvent, WindowEvent},
+    event_loop::EventLoop,
+    keyboard::NamedKey,
+    window::WindowBuilder,
+};
 
-use super::{shared_wgpu_state::{self, SharedWgpuState}, view_surface::ViewSurface};
+use super::{
+    shared_wgpu_state::{self, SharedWgpuState},
+    view_surface::ViewSurface,
+};
 
 pub trait View: Debug {
     fn set_size(&mut self, size: PhysicalSize<u32>);
@@ -16,8 +25,6 @@ pub trait View: Debug {
         output_view: &'out TextureView,
     );
 }
-
-
 
 #[derive(Debug, Clone)]
 pub struct SolidColorView {
@@ -65,16 +72,15 @@ impl View for SolidColorView {
 }
 
 pub async fn run<F>(view_callback: F)
-where F: FnOnce(Arc<SharedWgpuState>) -> Box<dyn View> {
+where
+    F: FnOnce(Arc<SharedWgpuState>) -> Box<dyn View>,
+{
     let event_loop = EventLoop::new().unwrap();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
     let shared_wgpu_state = shared_wgpu_state::SharedWgpuState::new(window).await;
     let view = view_callback(shared_wgpu_state.clone());
 
-    let mut view_surface = ViewSurface::new_root(
-        view,
-        shared_wgpu_state.clone(),
-    );
+    let mut view_surface = ViewSurface::new_root(view, shared_wgpu_state.clone());
 
     event_loop
         .run(move |event, window_target| match event {
@@ -84,7 +90,7 @@ where F: FnOnce(Arc<SharedWgpuState>) -> Box<dyn View> {
             } if window_id == shared_wgpu_state.window.id() => match event {
                 WindowEvent::RedrawRequested => {
                     view_surface.render().unwrap();
-                },
+                }
                 WindowEvent::CloseRequested
                 | WindowEvent::KeyboardInput {
                     event:
@@ -102,9 +108,7 @@ where F: FnOnce(Arc<SharedWgpuState>) -> Box<dyn View> {
                     view_surface.resize(size);
                     shared_wgpu_state.window.request_redraw();
                 }
-                WindowEvent::ScaleFactorChanged { .. } => {
-
-                }
+                WindowEvent::ScaleFactorChanged { .. } => {}
                 _ => {}
             },
             _ => {}

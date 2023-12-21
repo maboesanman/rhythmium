@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use scene::{
-    image_view::ImageView,
+    image_view::{ImageFit, ImageView},
     view::{SolidColorView, View},
 };
 use taffy::{
@@ -10,7 +10,6 @@ use taffy::{
     style_helpers::{percent, points},
     Taffy,
 };
-use winit::event_loop::EventLoopWindowTarget;
 
 pub mod scene;
 
@@ -73,8 +72,10 @@ pub async fn main() {
         Box::new(ImageView::new(
             wgpu_shared,
             size,
-            include_bytes!("../assets/bold-and-brash.jpg")
+            include_bytes!("../assets/bold-and-brash.jpg"),
+            ImageFit::Cover,
         ))
-    }).await;
+    })
+    .await;
     // scene::view::run(Box::new(SolidColorView::new())).await;
 }

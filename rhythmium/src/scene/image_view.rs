@@ -2,7 +2,9 @@ use std::{borrow::Cow, sync::Arc};
 
 use image::GenericImageView;
 use serde::de;
-use wgpu::{util::DeviceExt, Queue, SurfaceTexture, CommandEncoder, TextureView, vertex_attr_array};
+use wgpu::{
+    util::DeviceExt, vertex_attr_array, CommandEncoder, Queue, SurfaceTexture, TextureView,
+};
 use winit::{dpi::PhysicalSize, window::Window};
 
 use super::{
@@ -16,6 +18,7 @@ pub struct ImageView {
     shared_wgpu_state: Arc<SharedWgpuState>,
     texture: Arc<Texture>,
     size: PhysicalSize<u32>,
+    fit: ImageFit,
 
     render_pipeline: wgpu::RenderPipeline,
 
@@ -31,7 +34,7 @@ impl View for ImageView {
 
         self.vertex_buffer = get_vertex_buffer(
             &self.shared_wgpu_state.device,
-            ImageFit::Stretch,
+            self.fit,
             size.height as f32 / size.width as f32,
             self.texture.texture.size().height as f32 / self.texture.texture.size().width as f32,
         );
@@ -77,13 +80,9 @@ impl ImageView {
         shared_wgpu_state: Arc<SharedWgpuState>,
         size: PhysicalSize<u32>,
         image_bytes: &[u8],
+        fit: ImageFit,
     ) -> Self {
-        let texture = Texture::from_bytes(
-            &shared_wgpu_state,
-            image_bytes,
-            None,
-        )
-        .unwrap();
+        let texture = Texture::from_bytes(&shared_wgpu_state, image_bytes, None).unwrap();
 
         let device = &shared_wgpu_state.device;
 
@@ -156,7 +155,7 @@ impl ImageView {
 
         let vertex_buffer = get_vertex_buffer(
             &shared_wgpu_state.device,
-            ImageFit::Stretch,
+            fit,
             size.height as f32 / size.width as f32,
             texture.texture.size().height as f32 / texture.texture.size().width as f32,
         );
@@ -167,24 +166,20 @@ impl ImageView {
             usage: wgpu::BufferUsages::INDEX,
         });
 
-
-
-        let diffuse_bind_group = device.create_bind_group(
-            &wgpu::BindGroupDescriptor {
-                label: Some("Diffuse Bind Group"),
-                layout: &texture_bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&texture.view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&texture.sampler),
-                    },
-                ],
-            }
-        );
+        let diffuse_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Diffuse Bind Group"),
+            layout: &texture_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&texture.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&texture.sampler),
+                },
+            ],
+        });
 
         Self {
             shared_wgpu_state,
@@ -194,6 +189,7 @@ impl ImageView {
             vertex_buffer,
             index_buffer,
             diffuse_bind_group,
+            fit,
         }
     }
 }
@@ -325,15 +321,67 @@ impl Vertex {
 pub fn get_vertex_buffer(
     device: &wgpu::Device,
     fit: ImageFit,
-    container_ratio: f32,
-    content_ratio: f32,
+    container_ratio: f32, // height / width
+    content_ratio: f32,   // height / width
 ) -> wgpu::Buffer {
+    let fit = match fit {
+        ImageFit::Contain => {
+            if container_ratio > content_ratio {
+                ImageFit::SetWidth(ImageJustification::Center)
+            } else {
+                ImageFit::SetHeight(ImageJustification::Center)
+            }
+        }
+        ImageFit::Cover => {
+            if container_ratio < content_ratio {
+                ImageFit::SetWidth(ImageJustification::Center)
+            } else {
+                ImageFit::SetHeight(ImageJustification::Center)
+            }
+        }
+        fit => fit,
+    };
+
     let vertices = match fit {
         ImageFit::Stretch => Cow::Borrowed(VERTICES_FULL),
         ImageFit::Contain => todo!(),
         ImageFit::Cover => todo!(),
-        ImageFit::SetWidth => todo!(),
-        ImageFit::SetHeight => todo!(),
+        ImageFit::SetWidth(just) => {
+            let new_y = content_ratio / container_ratio;
+            let mut vertices = VERTICES_FULL.to_owned();
+            for Vertex {
+                position: [_, y], ..
+            } in vertices.iter_mut()
+            {
+                let adjust = match just {
+                    ImageJustification::Start => 1.0 - new_y,
+                    ImageJustification::Center => 0.0,
+                    ImageJustification::End => new_y - 1.0,
+                };
+
+                *y = *y * new_y + adjust;
+            }
+
+            Cow::Owned(vertices)
+        }
+        ImageFit::SetHeight(just) => {
+            let new_x = container_ratio / content_ratio;
+            let mut vertices = VERTICES_FULL.to_owned();
+            for Vertex {
+                position: [x, _], ..
+            } in vertices.iter_mut()
+            {
+                let adjust = match just {
+                    ImageJustification::Start => new_x - 1.0,
+                    ImageJustification::Center => 0.0,
+                    ImageJustification::End => 1.0 - new_x,
+                };
+
+                *x = *x * new_x + adjust;
+            }
+
+            Cow::Owned(vertices)
+        }
     };
 
     device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -343,10 +391,18 @@ pub fn get_vertex_buffer(
     })
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ImageFit {
     Stretch,
     Contain,
     Cover,
-    SetWidth,
-    SetHeight,
+    SetWidth(ImageJustification),
+    SetHeight(ImageJustification),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ImageJustification {
+    Start,
+    Center,
+    End,
 }
