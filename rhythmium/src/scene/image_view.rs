@@ -140,7 +140,7 @@ impl ImageView {
                 topology: wgpu::PrimitiveTopology::TriangleList,
                 strip_index_format: None,
                 front_face: wgpu::FrontFace::Ccw,
-                cull_mode: None,
+                cull_mode: Some(wgpu::Face::Back),
                 unclipped_depth: false,
                 polygon_mode: wgpu::PolygonMode::Fill,
                 conservative: false,
@@ -294,12 +294,12 @@ const VERTICES_FULL: &[Vertex] = &[
         tex_coords: [0.0, 1.0],
     },
     Vertex {
-        position: [-1.0, 1.0],
-        tex_coords: [0.0, 0.0],
-    },
-    Vertex {
         position: [1.0, -1.0],
         tex_coords: [1.0, 1.0],
+    },
+    Vertex {
+        position: [-1.0, 1.0],
+        tex_coords: [0.0, 0.0],
     },
     Vertex {
         position: [1.0, 1.0],
