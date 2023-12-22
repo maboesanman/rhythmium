@@ -65,8 +65,6 @@ impl Scene {
                 y: location.y + key_loc.y,
             };
 
-            out.push((layout.size, location, key));
-
             let new_entries = self
                 .view_tree
                 .children(key)
@@ -77,6 +75,8 @@ impl Scene {
             for (_, child) in new_entries {
                 queue.push_front((child, location));
             }
+
+            out.push((layout.size, location, key));
         }
 
         out

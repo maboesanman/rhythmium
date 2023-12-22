@@ -24,7 +24,6 @@ pub struct SceneView {
 #[derive(Debug)]
 struct SceneSubView {
     view: Box<dyn View>,
-    texture: wgpu::Texture,
     texture_view: wgpu::TextureView,
     bind_group: wgpu::BindGroup,
     shared_wgpu_state: Arc<SharedWgpuState>,
@@ -39,7 +38,10 @@ impl SceneSubView {
     ) -> Self {
         let texture = Self::get_texture(size, &shared_wgpu_state);
         let sampler = shared_wgpu_state.device.create_sampler(&Default::default());
-        let texture_view = texture.create_view(&Default::default());
+        let texture_view = texture.create_view(&wgpu::TextureViewDescriptor {
+            format: Some(wgpu::TextureFormat::Bgra8UnormSrgb),
+            ..Default::default()
+        });
         let bind_group = shared_wgpu_state.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Texture Bind Group"),
             layout: &bind_group_layout,
@@ -57,7 +59,6 @@ impl SceneSubView {
 
         Self {
             view,
-            texture,
             texture_view,
             bind_group,
             shared_wgpu_state,
@@ -65,7 +66,6 @@ impl SceneSubView {
     }
 
     pub fn resize(&mut self, size: PhysicalSize<u32>) {
-        self.texture = Self::get_texture(size, &self.shared_wgpu_state);
         self.view.set_size(size);
     }
 
@@ -113,13 +113,12 @@ impl View for SceneView {
         output_view: &TextureView,
     ) {
         {
-            let mut vertex_buffers: HashMap<DefaultKey, wgpu::Buffer> = HashMap::new();
-
-            for (size, position, key) in self.scene.get_layout() {
+            let layout: Vec<_> = self.scene.get_layout().into_iter().filter_map(|(size, position, key)| {
                 let sub_view = match self.views.get_mut(&key) {
-                    Some(sub_view) => sub_view,
-                    None => continue,
+                    Some(view) => view,
+                    None => return None,
                 };
+                
                 sub_view.view.render(command_encoder, &sub_view.texture_view);
                 let x = position.x;
                 let y = position.y;
@@ -145,8 +144,8 @@ impl View for SceneView {
                         usage: wgpu::BufferUsages::VERTEX,
                     });
                 
-                vertex_buffers.insert(key, vertex_buffer);
-            }
+                Some((key, vertex_buffer))
+            }).collect();
 
             let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
@@ -154,12 +153,7 @@ impl View for SceneView {
                     view: output_view,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.1,
-                            g: 0.2,
-                            b: 0.3,
-                            a: 1.0,
-                        }),
+                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
                         store: wgpu::StoreOp::Store,
                     },
                 })],
@@ -171,8 +165,8 @@ impl View for SceneView {
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
             
-            for (key, sub_view) in self.views.iter() {
-                let vertex_buffer = vertex_buffers.get(key).unwrap();
+            for (key, vertex_buffer) in layout.iter() {
+                let sub_view = self.views.get(&key).unwrap();
                 render_pass.set_bind_group(0, &sub_view.bind_group, &[]);
                 render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
                 render_pass.draw_indexed(0..6, 0, 0..1);
@@ -188,8 +182,6 @@ impl SceneView {
         size: PhysicalSize<u32>,
         shared_wgpu_state: Arc<SharedWgpuState>,
     ) -> Self {
-
-
         let device = &shared_wgpu_state.device;
 
         let shader = device.create_shader_module(wgpu::include_wgsl!("scene_view.wgsl"));
@@ -204,14 +196,14 @@ impl SceneView {
                         ty: wgpu::BindingType::Texture {
                             multisampled: false,
                             view_dimension: wgpu::TextureViewDimension::D2,
-                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            sample_type: wgpu::TextureSampleType::Float { filterable: false },
                         },
                         count: None,
                     },
                     wgpu::BindGroupLayoutEntry {
                         binding: 1,
                         visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
                         count: None,
                     },
                 ],
@@ -247,7 +239,7 @@ impl SceneView {
                 entry_point: "fs_main",
                 targets: &[Some(wgpu::ColorTargetState {
                     format: wgpu::TextureFormat::Bgra8UnormSrgb,
-                    blend: Some(wgpu::BlendState::REPLACE),
+                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
             }),
