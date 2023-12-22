@@ -12,41 +12,6 @@ pub async fn main() {
 
     let mut taffy = Taffy::new();
 
-    // let node_a = taffy
-    //     .new_leaf(Style {
-    //         flex_grow: 1.0,
-    //         ..Default::default()
-    //     })
-    //     .unwrap();
-
-    // let node_b = taffy
-    //     .new_leaf(Style {
-    //         flex_grow: 1.0,
-    //         ..Default::default()
-    //     })
-    //     .unwrap();
-
-    // let root_node = taffy
-    //     .new_with_children(
-    //         Style {
-    //             flex_direction: FlexDirection::Row,
-    //             gap: points(16.0),
-    //             size: Size {
-    //                 width: percent(1.0),
-    //                 height: percent(1.0),
-    //             },
-    //             padding: Rect {
-    //                 top: points(16.0),
-    //                 bottom: points(16.0),
-    //                 left: points(16.0),
-    //                 right: points(16.0),
-    //             },
-    //             ..Default::default()
-    //         },
-    //         &[node_a, node_b],
-    //     )
-    //     .unwrap();
-
     let front = taffy
         .new_leaf(Style {
             size: Size {
@@ -70,8 +35,27 @@ pub async fn main() {
         )
         .unwrap();
 
+    let root = taffy
+        .new_with_children(
+            Style {
+                size: Size {
+                    width: percent(1.0),
+                    height: percent(1.0),
+                },
+                padding: Rect {
+                    top: points(16.0),
+                    bottom: points(16.0),
+                    left: points(16.0),
+                    right: points(16.0),
+                },
+                ..Default::default()
+            },
+            &[back],
+        )
+        .unwrap();
+
     let scene = scene::Scene {
-        root: back,
+        root,
         view_tree: taffy,
     };
 
@@ -81,7 +65,7 @@ pub async fn main() {
         back,
         Box::new(ImageViewBuilder::new(
             include_bytes!("../assets/bold-and-brash.jpg"),
-            ImageFit::Contain,
+            ImageFit::Cover,
         )),
     );
 
