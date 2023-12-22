@@ -39,42 +39,43 @@ impl Scene {
             .unwrap();
     }
 
-    pub fn get_layout(&self) -> impl IntoIterator<Item = (Size<f32>, Point<f32>, DefaultKey)> {
-        let root = self.root;
-        // (node, global_location of parent)
-        let mut queue = VecDeque::new();
-        queue.push_back((
-            root,
-            Point {
-                x: 0.0f32,
-                y: 0.0f32,
-            },
-        ));
+    pub fn get_layout(&self) -> impl '_ + IntoIterator<Item = (Size<f32>, Point<f32>, DefaultKey)> {
+        LayoutIter {
+            scene: self,
+            queue: VecDeque::from(vec![(self.root, Point { x: 0.0, y: 0.0 })]),
+        }
+    }
+}
 
-        let mut out: Vec<(Size<f32>, Point<f32>, DefaultKey)> = vec![];
+struct LayoutIter<'a> {
+    scene: &'a Scene,
+    queue: VecDeque<(DefaultKey, Point<f32>)>,
+}
 
-        while let Some((key, location)) = queue.pop_front() {
-            let layout = self.view_tree.layout(key).unwrap();
-            let key_loc = layout.location;
-            let location = Point {
-                x: location.x + key_loc.x,
-                y: location.y + key_loc.y,
-            };
+impl Iterator for LayoutIter<'_> {
+    type Item = (Size<f32>, Point<f32>, DefaultKey);
 
-            let new_entries = self
-                .view_tree
-                .children(key)
-                .unwrap()
-                .into_iter()
-                .map(|child| (self.view_tree.layout(child).unwrap().order, child));
+    fn next(&mut self) -> Option<Self::Item> {
+        let (key, location) = self.queue.pop_front()?;
+        let layout = self.scene.view_tree.layout(key).unwrap();
+        let key_loc = layout.location;
+        let location = Point {
+            x: location.x + key_loc.x,
+            y: location.y + key_loc.y,
+        };
 
-            for (_, child) in new_entries {
-                queue.push_front((child, location));
-            }
+        let new_entries = self
+            .scene
+            .view_tree
+            .children(key)
+            .unwrap()
+            .into_iter()
+            .map(|child| (self.scene.view_tree.layout(child).unwrap().order, child));
 
-            out.push((layout.size, location, key));
+        for (_, child) in new_entries {
+            self.queue.push_front((child, location));
         }
 
-        out
+        Some((layout.size, location, key))
     }
 }
