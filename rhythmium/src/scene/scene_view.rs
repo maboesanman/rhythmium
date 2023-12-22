@@ -1,8 +1,6 @@
-use std::{borrow::Cow, collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
-use image::GenericImageView;
 use slotmap::DefaultKey;
-use taffy::Taffy;
 use wgpu::{util::DeviceExt, CommandEncoder, TextureView};
 use winit::dpi::PhysicalSize;
 
@@ -86,7 +84,7 @@ impl SceneSubView {
             .device
             .create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("Texture Bind Group"),
-                layout: &bind_group_layout,
+                layout: bind_group_layout,
                 entries: &[
                     wgpu::BindGroupEntry {
                         binding: 0,
@@ -180,7 +178,7 @@ impl View for SceneView {
                     let y = y * 2.0 / self.size.height as f32 - 1.0;
                     let w = w * 2.0 / self.size.width as f32;
                     let h = h * 2.0 / self.size.height as f32;
-                    let mut vertices = SET_TEX_COORDS.clone();
+                    let mut vertices = *SET_TEX_COORDS;
                     vertices[0].position = [x, y];
                     vertices[1].position = [x + w, y];
                     vertices[2].position = [x, y + h];
@@ -217,7 +215,7 @@ impl View for SceneView {
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
 
             for (key, vertex_buffer) in layout.iter() {
-                let sub_view = self.views.get(&key).unwrap();
+                let sub_view = self.views.get(key).unwrap();
                 render_pass.set_bind_group(0, &sub_view.bind_group, &[]);
                 render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
                 render_pass.draw_indexed(0..6, 0, 0..1);

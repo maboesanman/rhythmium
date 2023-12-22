@@ -1,16 +1,8 @@
-use std::collections::HashMap;
-
 use scene::{
-    image_view::{ImageFit, ImageView, ImageViewBuilder},
-    scene_view::{SceneView, SceneViewBuilder},
-    view::View,
+    image_view::{ImageFit, ImageViewBuilder},
+    scene_view::SceneViewBuilder,
 };
-use taffy::{
-    geometry::{Rect, Size},
-    style::{FlexDirection, Style},
-    style_helpers::{percent, points},
-    Taffy,
-};
+use taffy::prelude::*;
 
 pub mod scene;
 

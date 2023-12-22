@@ -11,8 +11,8 @@ pub struct SolidColorView {
 impl ViewBuilder for SolidColorView {
     fn build(
         self: Box<Self>,
-        shared_wgpu_state: std::sync::Arc<super::shared_wgpu_state::SharedWgpuState>,
-        size: PhysicalSize<u32>,
+        _shared_wgpu_state: std::sync::Arc<super::shared_wgpu_state::SharedWgpuState>,
+        _size: PhysicalSize<u32>,
     ) -> Box<dyn View> {
         self
     }
