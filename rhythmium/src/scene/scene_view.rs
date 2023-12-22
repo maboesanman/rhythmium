@@ -161,10 +161,7 @@ impl View for SceneView {
                 .get_layout()
                 .into_iter()
                 .filter_map(|(size, position, key)| {
-                    let sub_view = match self.views.get_mut(&key) {
-                        Some(view) => view,
-                        None => return None,
-                    };
+                    let sub_view = self.views.get_mut(&key)?;
 
                     sub_view
                         .view

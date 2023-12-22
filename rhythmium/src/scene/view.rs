@@ -65,7 +65,6 @@ pub async fn run(view_builder: Box<dyn ViewBuilder>) {
                     view_surface.resize(size);
                     shared_wgpu_state.window.request_redraw();
                 }
-                WindowEvent::ScaleFactorChanged { .. } => {}
                 _ => {}
             },
             _ => {}

@@ -23,6 +23,7 @@ impl Debug for Scene {
 }
 
 impl Scene {
+    #[must_use]
     pub fn new(view_tree: Taffy, root: DefaultKey) -> Self {
         Self { view_tree, root }
     }
@@ -39,6 +40,7 @@ impl Scene {
             .unwrap();
     }
 
+    #[must_use]
     pub fn get_layout(&self) -> impl '_ + IntoIterator<Item = (Size<f32>, Point<f32>, DefaultKey)> {
         LayoutIter {
             scene: self,
