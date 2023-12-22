@@ -72,7 +72,6 @@ impl View for ImageView {
 impl ImageView {
     pub fn new(
         shared_wgpu_state: Arc<SharedWgpuState>,
-        size: PhysicalSize<u32>,
         image_bytes: &[u8],
         fit: ImageFit,
     ) -> Self {
@@ -150,7 +149,7 @@ impl ImageView {
         let vertex_buffer = get_vertex_buffer(
             &shared_wgpu_state.device,
             fit,
-            size.height as f32 / size.width as f32,
+            1.0,
             texture.texture.size().height as f32 / texture.texture.size().width as f32,
         );
 
@@ -178,7 +177,7 @@ impl ImageView {
         Self {
             shared_wgpu_state,
             texture: Arc::new(texture),
-            size,
+            size: PhysicalSize::new(1, 1),
             render_pipeline,
             vertex_buffer,
             index_buffer,
@@ -338,8 +337,6 @@ pub fn get_vertex_buffer(
 
     let vertices = match fit {
         ImageFit::Stretch => Cow::Borrowed(VERTICES_FULL),
-        ImageFit::Contain => todo!(),
-        ImageFit::Cover => todo!(),
         ImageFit::SetWidth(just) => {
             let new_y = content_ratio / container_ratio;
             let mut vertices = VERTICES_FULL.to_owned();
@@ -375,7 +372,8 @@ pub fn get_vertex_buffer(
             }
 
             Cow::Owned(vertices)
-        }
+        },
+        _ => unreachable!()
     };
 
     device.create_buffer_init(&wgpu::util::BufferInitDescriptor {

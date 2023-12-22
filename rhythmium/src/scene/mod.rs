@@ -4,7 +4,7 @@ use std::collections::{HashMap, VecDeque};
 use slotmap::DefaultKey;
 use taffy::{geometry::Point, prelude::*};
 
-use self::view::SolidColorView;
+use self::view::{SolidColorView, View};
 
 pub mod image_view;
 // pub mod root_renderer;
@@ -12,11 +12,11 @@ pub mod shared_wgpu_state;
 pub mod view;
 // pub mod scene_renderer;
 pub mod view_surface;
+pub mod scene_view;
 
 pub struct Scene {
     pub view_tree: Taffy,
     pub root: DefaultKey,
-    pub views: HashMap<DefaultKey, Box<SolidColorView>>,
 }
 
 impl Debug for Scene {
@@ -25,34 +25,24 @@ impl Debug for Scene {
     }
 }
 
-// impl View for Scene {
-//     fn set_size(&mut self, size: Size<f32>) {
-//         self.view_tree
-//             .compute_layout(
-//                 self.root,
-//                 Size {
-//                     width: AvailableSpace::Definite(size.width),
-//                     height: AvailableSpace::Definite(size.height),
-//                 },
-//             )
-//             .unwrap();
-
-//         for (key, view) in self.views.iter_mut() {
-//             let layout = self.view_tree.layout(*key).unwrap();
-//             view.set_size(layout.size);
-//         }
-//     }
-
-//     fn render<'pass, 'out>(
-//         &'pass mut self,
-//         command_encoder: wgpu::CommandEncoder,
-//         output_view: &'out wgpu::TextureView,
-//     ) -> wgpu::CommandBuffer {
-//         todo!()
-//     }
-// }
-
 impl Scene {
+    pub fn new(
+        view_tree: Taffy,
+        root: DefaultKey,
+    ) -> Self {
+        Self {
+            view_tree,
+            root,
+        }
+    }
+
+    pub fn resize(&mut self, size: Size<f32>) {
+        self.view_tree.compute_layout(self.root, Size {
+            width: AvailableSpace::Definite(size.width),
+            height: AvailableSpace::Definite(size.height),
+        }).unwrap();
+    }
+
     pub fn get_layout(&self) -> impl IntoIterator<Item = (Size<f32>, Point<f32>, DefaultKey)> {
         let root = self.root;
         // (node, global_location of parent)
@@ -75,9 +65,7 @@ impl Scene {
                 y: location.y + key_loc.y,
             };
 
-            if self.views.contains_key(&key) {
-                out.push((layout.size, location, key));
-            }
+            out.push((layout.size, location, key));
 
             let new_entries = self
                 .view_tree

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use scene::{
     image_view::{ImageFit, ImageView},
-    view::SolidColorView,
+    view::{SolidColorView, View}, scene_view::SceneView,
 };
 use taffy::{
     geometry::{Rect, Size},
@@ -54,26 +54,33 @@ pub async fn main() {
         )
         .unwrap();
 
-    let _scene = scene::Scene {
+    let scene = scene::Scene {
         root: root_node,
         view_tree: taffy,
-        views: {
-            let mut views = HashMap::new();
-
-            views.insert(node_a, Box::new(SolidColorView::random()));
-            views.insert(node_b, Box::new(SolidColorView::random()));
-
-            views
-        },
     };
 
+    
+
     scene::view::run(|wgpu_shared| {
+        let views = {
+            let mut views = HashMap::<_, Box<dyn View>>::new();
+    
+            views.insert(node_a, Box::new(SolidColorView::random()));
+            views.insert(node_b, Box::new(ImageView::new(
+                wgpu_shared.clone(),
+                include_bytes!("../assets/bold-and-brash.jpg"),
+                ImageFit::Cover,
+            )));
+    
+            views
+        };
+
         let size = wgpu_shared.window.inner_size();
-        Box::new(ImageView::new(
-            wgpu_shared,
+        Box::new(SceneView::new(
+            scene,
+            views,
             size,
-            include_bytes!("../assets/bold-and-brash.jpg"),
-            ImageFit::Cover,
+            wgpu_shared.clone(),
         ))
     })
     .await;
