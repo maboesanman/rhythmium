@@ -153,10 +153,7 @@ impl View for SceneView {
         output_view: &TextureView,
     ) {
         {
-            let self_size: PhysicalSize<f32> = PhysicalSize {
-                width: self.size.width as f32,
-                height: self.size.height as f32,
-            };
+            let self_size: PhysicalSize<f32> = self.size.cast();
             let layout: Vec<_> = self
                 .scene
                 .get_layout()
@@ -168,18 +165,13 @@ impl View for SceneView {
                         .view
                         .render(command_encoder, &sub_view.texture_view);
 
-                    let physical_size = Self::taffy_to_physical_size(&self.shared_wgpu_state, size);
-                    let physical_position = Self::taffy_to_physical_position(&self.shared_wgpu_state, position);
+                    let physical_size: PhysicalSize<f32> = Self::taffy_to_physical_size(&self.shared_wgpu_state, size).cast();
+                    let physical_position: PhysicalPosition<f32> = Self::taffy_to_physical_position(&self.shared_wgpu_state, position).cast();
 
-                    let x = physical_position.x as f32;
-                    let y = physical_position.y as f32;
-                    let w = physical_size.width as f32;
-                    let h = physical_size.height as f32;
-
-                    let x = x * 2.0 / self_size.width - 1.0;
-                    let y = y * 2.0 / self_size.height - 1.0;
-                    let w = w * 2.0 / self_size.width;
-                    let h = h * 2.0 / self_size.height;
+                    let x = physical_position.x * 2.0 / self_size.width - 1.0;
+                    let y = physical_position.y * 2.0 / self_size.height - 1.0;
+                    let w = physical_size.width * 2.0 / self_size.width;
+                    let h = physical_size.height * 2.0 / self_size.height;
                     let mut vertices = *SET_TEX_COORDS;
                     vertices[0].position = [x, y];
                     vertices[1].position = [x + w, y];

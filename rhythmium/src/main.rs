@@ -14,43 +14,39 @@ pub async fn main() {
 
     let front = taffy
         .new_leaf(Style {
-            size: Size {
-                width: percent(1.0),
-                height: percent(1.0),
-            },
+            grid_row: line(1),
+            grid_column: line(1),
             ..Default::default()
         })
         .unwrap();
 
     let back = taffy
-        .new_with_children(
-            Style {
-                size: Size {
-                    width: percent(1.0),
-                    height: percent(1.0),
-                },
-                ..Default::default()
+        .new_leaf(Style {
+            grid_row: line(1),
+            grid_column: line(1),
+            margin: Rect {
+                top: points(16.0),
+                bottom: points(16.0),
+                left: points(16.0),
+                right: points(16.0),
             },
-            &[front],
-        )
+            ..Default::default()
+        })
         .unwrap();
 
     let root = taffy
         .new_with_children(
             Style {
+                display: Display::Grid,
+                grid_template_columns: vec![fr(1.0)],
+                grid_template_rows: vec![fr(1.0)],
                 size: Size {
                     width: percent(1.0),
                     height: percent(1.0),
                 },
-                padding: Rect {
-                    top: points(16.0),
-                    bottom: points(16.0),
-                    left: points(16.0),
-                    right: points(16.0),
-                },
                 ..Default::default()
             },
-            &[back],
+            &[front, back],
         )
         .unwrap();
 
