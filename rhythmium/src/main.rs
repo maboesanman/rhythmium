@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
 use scene::{
-    image_view::{ImageFit, ImageView},
-    view::{SolidColorView, View}, scene_view::SceneView,
+    image_view::{ImageFit, ImageView, ImageViewBuilder},
+    scene_view::{SceneView, SceneViewBuilder},
+    view::View,
 };
 use taffy::{
     geometry::{Rect, Size},
@@ -54,60 +55,51 @@ pub async fn main() {
     //     )
     //     .unwrap();
 
-    let front = taffy.new_leaf(Style {
-        size: Size {
-            width: percent(1.0),
-            height: percent(1.0),
+    let front = taffy
+        .new_leaf(Style {
+            size: Size {
+                width: percent(1.0),
+                height: percent(1.0),
+            },
+            ..Default::default()
+        })
+        .unwrap();
 
-        },
-        ..Default::default()
-    }).unwrap();
-
-    let back = taffy.new_with_children(Style {
-        size: Size {
-            width: percent(1.0),
-            height: percent(1.0),
-        },
-        ..Default::default()
-    }, &[front]).unwrap();
+    let back = taffy
+        .new_with_children(
+            Style {
+                size: Size {
+                    width: percent(1.0),
+                    height: percent(1.0),
+                },
+                ..Default::default()
+            },
+            &[front],
+        )
+        .unwrap();
 
     let scene = scene::Scene {
         root: back,
         view_tree: taffy,
     };
 
-    scene::view::run(|wgpu_shared| {
-        let views = {
+    let mut view_builder = Box::new(SceneViewBuilder::new(scene));
 
-            let mut views = HashMap::<_, Box<dyn View>>::new();
-            // views.insert(root_node, Box::new(ImageView::new(
-            //     wgpu_shared.clone(),
-            //     include_bytes!("../assets/bold-and-brash.jpg"),
-            //     ImageFit::Cover,
-            // )));
-            // views.insert(back, Box::new(SolidColorView::random()));
-            views.insert(back, Box::new(ImageView::new(
-                wgpu_shared.clone(),
-                include_bytes!("../assets/bold-and-brash.jpg"),
-                ImageFit::Contain,
-            )));
-            views.insert(front, Box::new(ImageView::new(
-                wgpu_shared.clone(),
-                include_bytes!("../assets/pointing.png"),
-                ImageFit::SetWidth(scene::image_view::ImageJustification::End),
-            )));
-    
-            views
-        };
+    view_builder.add_view(
+        back,
+        Box::new(ImageViewBuilder::new(
+            include_bytes!("../assets/bold-and-brash.jpg"),
+            ImageFit::Contain,
+        )),
+    );
 
-        let size = wgpu_shared.window.inner_size();
-        Box::new(SceneView::new(
-            scene,
-            views,
-            size,
-            wgpu_shared.clone(),
-        ))
-    })
-    .await;
-    // scene::view::run(Box::new(SolidColorView::new())).await;
+    view_builder.add_view(
+        front,
+        Box::new(ImageViewBuilder::new(
+            include_bytes!("../assets/pointing.png"),
+            ImageFit::SetWidth(scene::image_view::ImageJustification::End),
+        )),
+    );
+
+    scene::view::run(view_builder).await;
 }

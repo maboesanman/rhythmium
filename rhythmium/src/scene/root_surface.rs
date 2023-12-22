@@ -4,28 +4,16 @@ use winit::dpi::PhysicalSize;
 
 use super::{shared_wgpu_state::SharedWgpuState, view::View};
 
-pub struct ViewSurface {
+pub struct RootSurface {
     view: Box<dyn View>,
     surface: wgpu::Surface,
     config: wgpu::SurfaceConfiguration,
     shared_wgpu_state: Arc<SharedWgpuState>,
 }
 
-impl ViewSurface {
-    pub fn new_root(view: Box<dyn View>, shared_wgpu_state: Arc<SharedWgpuState>) -> Self {
-        Self::new(
-            view,
-            shared_wgpu_state.window.inner_size(),
-            wgpu::TextureUsages::RENDER_ATTACHMENT,
-            shared_wgpu_state,
-        )
-    }
-    pub fn new(
-        view: Box<dyn View>,
-        size: PhysicalSize<u32>,
-        usage: wgpu::TextureUsages,
-        shared_wgpu_state: Arc<SharedWgpuState>,
-    ) -> Self {
+impl RootSurface {
+    pub fn new(view: Box<dyn View>, shared_wgpu_state: Arc<SharedWgpuState>) -> Self {
+        let size = shared_wgpu_state.window.inner_size();
         let instance = &shared_wgpu_state.instance;
         let window = &shared_wgpu_state.window;
         let adapter = &shared_wgpu_state.adapter;
@@ -42,7 +30,7 @@ impl ViewSurface {
             .unwrap_or(surface_capabilities.formats[0]);
 
         let config = wgpu::SurfaceConfiguration {
-            usage,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: surface_format,
             width: size.width,
             height: size.height,

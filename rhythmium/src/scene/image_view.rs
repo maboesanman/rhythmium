@@ -4,8 +4,37 @@ use image::GenericImageView;
 use wgpu::{util::DeviceExt, CommandEncoder, TextureView};
 use winit::dpi::PhysicalSize;
 
-use super::{shared_wgpu_state::SharedWgpuState, view::View};
+use super::{
+    shared_wgpu_state::SharedWgpuState,
+    view::{View, ViewBuilder},
+};
 use anyhow::*;
+
+pub struct ImageViewBuilder<'a> {
+    image_bytes: &'a [u8],
+    fit: ImageFit,
+}
+
+impl<'a> ImageViewBuilder<'a> {
+    pub fn new(image_bytes: &'a [u8], fit: ImageFit) -> Self {
+        Self { image_bytes, fit }
+    }
+}
+
+impl<'a> ViewBuilder for ImageViewBuilder<'a> {
+    fn build(
+        self: Box<Self>,
+        shared_wgpu_state: Arc<SharedWgpuState>,
+        size: PhysicalSize<u32>,
+    ) -> Box<dyn View> {
+        Box::new(ImageView::new(
+            shared_wgpu_state,
+            self.image_bytes,
+            size,
+            self.fit,
+        ))
+    }
+}
 
 #[derive(Debug)]
 pub struct ImageView {
@@ -65,9 +94,10 @@ impl View for ImageView {
 }
 
 impl ImageView {
-    pub fn new(
+    fn new(
         shared_wgpu_state: Arc<SharedWgpuState>,
         image_bytes: &[u8],
+        size: PhysicalSize<u32>,
         fit: ImageFit,
     ) -> Self {
         let texture = Texture::from_bytes(&shared_wgpu_state, image_bytes, None).unwrap();
@@ -172,7 +202,7 @@ impl ImageView {
         Self {
             shared_wgpu_state,
             texture: Arc::new(texture),
-            size: PhysicalSize::new(1, 1),
+            size,
             render_pipeline,
             vertex_buffer,
             index_buffer,
@@ -367,8 +397,8 @@ pub fn get_vertex_buffer(
             }
 
             Cow::Owned(vertices)
-        },
-        _ => unreachable!()
+        }
+        _ => unreachable!(),
     };
 
     device.create_buffer_init(&wgpu::util::BufferInitDescriptor {

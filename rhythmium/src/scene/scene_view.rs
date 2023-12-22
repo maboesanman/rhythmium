@@ -1,4 +1,4 @@
-use std::{borrow::Cow, sync::Arc, collections::HashMap};
+use std::{borrow::Cow, collections::HashMap, sync::Arc};
 
 use image::GenericImageView;
 use slotmap::DefaultKey;
@@ -6,19 +6,59 @@ use taffy::Taffy;
 use wgpu::{util::DeviceExt, CommandEncoder, TextureView};
 use winit::dpi::PhysicalSize;
 
-use super::{shared_wgpu_state::SharedWgpuState, view::View, Scene};
+use super::{
+    shared_wgpu_state::SharedWgpuState,
+    view::{View, ViewBuilder},
+    Scene,
+};
 
 #[derive(Debug)]
 pub struct SceneView {
     size: PhysicalSize<u32>,
-    
+
     scene: Scene,
     views: HashMap<DefaultKey, SceneSubView>,
-    
+
     index_buffer: wgpu::Buffer,
-    
+
     render_pipeline: wgpu::RenderPipeline,
-    _shared_wgpu_state: Arc<SharedWgpuState>,
+}
+
+pub struct SceneViewBuilder {
+    scene: Scene,
+    views: HashMap<DefaultKey, Box<dyn ViewBuilder>>,
+}
+
+impl SceneViewBuilder {
+    pub fn new(scene: Scene) -> Self {
+        Self {
+            scene,
+            views: HashMap::new(),
+        }
+    }
+
+    pub fn add_view(&mut self, key: DefaultKey, view: Box<dyn ViewBuilder>) {
+        self.views.insert(key, view);
+    }
+}
+
+impl ViewBuilder for SceneViewBuilder {
+    fn build(
+        mut self: Box<Self>,
+        shared_wgpu_state: Arc<SharedWgpuState>,
+        size: PhysicalSize<u32>,
+    ) -> Box<dyn View> {
+        self.scene.resize(taffy::geometry::Size {
+            width: size.width as f32,
+            height: size.height as f32,
+        });
+        let views = self
+            .views
+            .into_iter()
+            .map(|(key, view)| (key, view.build(shared_wgpu_state.clone(), size)))
+            .collect::<HashMap<_, _>>();
+        Box::new(SceneView::new(self.scene, views, size, shared_wgpu_state))
+    }
 }
 
 #[derive(Debug)]
@@ -42,20 +82,22 @@ impl SceneSubView {
             format: Some(wgpu::TextureFormat::Bgra8UnormSrgb),
             ..Default::default()
         });
-        let bind_group = shared_wgpu_state.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Texture Bind Group"),
-            layout: &bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&texture_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&sampler),
-                },
-            ],
-        });
+        let bind_group = shared_wgpu_state
+            .device
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("Texture Bind Group"),
+                layout: &bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&texture_view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&sampler),
+                    },
+                ],
+            });
 
         Self {
             view,
@@ -70,20 +112,23 @@ impl SceneSubView {
     }
 
     fn get_texture(size: PhysicalSize<u32>, shared_wgpu_state: &SharedWgpuState) -> wgpu::Texture {
-        shared_wgpu_state.device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("Scene Sub View Texture"),
-            size: wgpu::Extent3d {
-                width: size.width,
-                height: size.height,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Bgra8UnormSrgb,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
-            view_formats: &[],
-        })
+        shared_wgpu_state
+            .device
+            .create_texture(&wgpu::TextureDescriptor {
+                label: Some("Scene Sub View Texture"),
+                size: wgpu::Extent3d {
+                    width: size.width,
+                    height: size.height,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Bgra8UnormSrgb,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                    | wgpu::TextureUsages::TEXTURE_BINDING,
+                view_formats: &[],
+            })
     }
 }
 
@@ -113,39 +158,45 @@ impl View for SceneView {
         output_view: &TextureView,
     ) {
         {
-            let layout: Vec<_> = self.scene.get_layout().into_iter().filter_map(|(size, position, key)| {
-                let sub_view = match self.views.get_mut(&key) {
-                    Some(view) => view,
-                    None => return None,
-                };
-                
-                sub_view.view.render(command_encoder, &sub_view.texture_view);
-                let x = position.x;
-                let y = position.y;
-                let w = size.width;
-                let h = size.height;
+            let layout: Vec<_> = self
+                .scene
+                .get_layout()
+                .into_iter()
+                .filter_map(|(size, position, key)| {
+                    let sub_view = match self.views.get_mut(&key) {
+                        Some(view) => view,
+                        None => return None,
+                    };
 
-                let x = x * 2.0 / self.size.width as f32 - 1.0;
-                let y = y * 2.0 / self.size.height as f32 - 1.0;
-                let w = w * 2.0 / self.size.width as f32;
-                let h = h * 2.0 / self.size.height as f32;
-                let mut vertices = SET_TEX_COORDS.clone();
-                vertices[0].position = [x, y];
-                vertices[1].position = [x + w, y];
-                vertices[2].position = [x, y + h];
-                vertices[3].position = [x + w, y + h];
+                    sub_view
+                        .view
+                        .render(command_encoder, &sub_view.texture_view);
+                    let x = position.x;
+                    let y = position.y;
+                    let w = size.width;
+                    let h = size.height;
 
-                let vertex_buffer = sub_view
-                    .shared_wgpu_state
-                    .device
-                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("Vertex Buffer"),
-                        contents: bytemuck::cast_slice(&vertices),
-                        usage: wgpu::BufferUsages::VERTEX,
-                    });
-                
-                Some((key, vertex_buffer))
-            }).collect();
+                    let x = x * 2.0 / self.size.width as f32 - 1.0;
+                    let y = y * 2.0 / self.size.height as f32 - 1.0;
+                    let w = w * 2.0 / self.size.width as f32;
+                    let h = h * 2.0 / self.size.height as f32;
+                    let mut vertices = SET_TEX_COORDS.clone();
+                    vertices[0].position = [x, y];
+                    vertices[1].position = [x + w, y];
+                    vertices[2].position = [x, y + h];
+                    vertices[3].position = [x + w, y + h];
+
+                    let vertex_buffer = sub_view.shared_wgpu_state.device.create_buffer_init(
+                        &wgpu::util::BufferInitDescriptor {
+                            label: Some("Vertex Buffer"),
+                            contents: bytemuck::cast_slice(&vertices),
+                            usage: wgpu::BufferUsages::VERTEX,
+                        },
+                    );
+
+                    Some((key, vertex_buffer))
+                })
+                .collect();
 
             let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
@@ -164,7 +215,7 @@ impl View for SceneView {
 
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-            
+
             for (key, vertex_buffer) in layout.iter() {
                 let sub_view = self.views.get(&key).unwrap();
                 render_pass.set_bind_group(0, &sub_view.bind_group, &[]);
@@ -186,28 +237,27 @@ impl SceneView {
 
         let shader = device.create_shader_module(wgpu::include_wgsl!("scene_view.wgsl"));
 
-        let bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("Texture Bind Group Layout"),
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Texture {
-                            multisampled: false,
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                            sample_type: wgpu::TextureSampleType::Float { filterable: false },
-                        },
-                        count: None,
+        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("Texture Bind Group Layout"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        multisampled: false,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        sample_type: wgpu::TextureSampleType::Float { filterable: false },
                     },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
-                        count: None,
-                    },
-                ],
-            });
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
+                    count: None,
+                },
+            ],
+        });
 
         let views = views
             .into_iter()
@@ -273,7 +323,6 @@ impl SceneView {
             views,
             index_buffer,
             render_pipeline,
-            _shared_wgpu_state: shared_wgpu_state,
         }
     }
 }

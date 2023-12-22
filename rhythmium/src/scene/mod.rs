@@ -1,18 +1,15 @@
 use core::fmt::Debug;
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 
 use slotmap::DefaultKey;
 use taffy::{geometry::Point, prelude::*};
 
-use self::view::{SolidColorView, View};
-
 pub mod image_view;
-// pub mod root_renderer;
-pub mod shared_wgpu_state;
-pub mod view;
-// pub mod scene_renderer;
-pub mod view_surface;
+pub mod root_surface;
 pub mod scene_view;
+pub mod shared_wgpu_state;
+pub mod solid_color_view;
+pub mod view;
 
 pub struct Scene {
     pub view_tree: Taffy,
@@ -26,21 +23,20 @@ impl Debug for Scene {
 }
 
 impl Scene {
-    pub fn new(
-        view_tree: Taffy,
-        root: DefaultKey,
-    ) -> Self {
-        Self {
-            view_tree,
-            root,
-        }
+    pub fn new(view_tree: Taffy, root: DefaultKey) -> Self {
+        Self { view_tree, root }
     }
 
     pub fn resize(&mut self, size: Size<f32>) {
-        self.view_tree.compute_layout(self.root, Size {
-            width: AvailableSpace::Definite(size.width),
-            height: AvailableSpace::Definite(size.height),
-        }).unwrap();
+        self.view_tree
+            .compute_layout(
+                self.root,
+                Size {
+                    width: AvailableSpace::Definite(size.width),
+                    height: AvailableSpace::Definite(size.height),
+                },
+            )
+            .unwrap();
     }
 
     pub fn get_layout(&self) -> impl IntoIterator<Item = (Size<f32>, Point<f32>, DefaultKey)> {
