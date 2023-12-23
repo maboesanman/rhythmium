@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use slotmap::DefaultKey;
 use wgpu::{util::DeviceExt, CommandEncoder, TextureView};
-use winit::dpi::{PhysicalSize, LogicalSize, PhysicalPosition, LogicalPosition};
+use winit::dpi::{LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize};
 
 use super::{
     shared_wgpu_state::SharedWgpuState,
@@ -135,7 +135,8 @@ impl SceneSubView {
 impl View for SceneView {
     fn set_size(&mut self, size: PhysicalSize<u32>) {
         self.size = size;
-        self.scene.resize(Self::physical_size_to_taffy(&self.shared_wgpu_state, size));
+        self.scene
+            .resize(Self::physical_size_to_taffy(&self.shared_wgpu_state, size));
 
         for (size, _, key) in self.scene.get_layout() {
             let size = Self::taffy_to_physical_size(&self.shared_wgpu_state, size);
@@ -165,8 +166,10 @@ impl View for SceneView {
                         .view
                         .render(command_encoder, &sub_view.texture_view);
 
-                    let physical_size: PhysicalSize<f32> = Self::taffy_to_physical_size(&self.shared_wgpu_state, size).cast();
-                    let physical_position: PhysicalPosition<f32> = Self::taffy_to_physical_position(&self.shared_wgpu_state, position).cast();
+                    let physical_size: PhysicalSize<f32> =
+                        Self::taffy_to_physical_size(&self.shared_wgpu_state, size).cast();
+                    let physical_position: PhysicalPosition<f32> =
+                        Self::taffy_to_physical_position(&self.shared_wgpu_state, position).cast();
 
                     let x = physical_position.x * 2.0 / self_size.width - 1.0;
                     let y = physical_position.y * 2.0 / self_size.height - 1.0;
@@ -319,15 +322,21 @@ impl SceneView {
         }
     }
 
-    fn taffy_to_physical_size(shared_wgpu_state: &SharedWgpuState, size: taffy::geometry::Size<f32>) -> PhysicalSize<u32> {
+    fn taffy_to_physical_size(
+        shared_wgpu_state: &SharedWgpuState,
+        size: taffy::geometry::Size<f32>,
+    ) -> PhysicalSize<u32> {
         let logical_size = LogicalSize {
-            width: size.width as f32,
-            height: size.height as f32,
+            width: size.width,
+            height: size.height,
         };
         logical_size.to_physical(shared_wgpu_state.window.scale_factor())
     }
 
-    fn physical_size_to_taffy(shared_wgpu_state: &SharedWgpuState, size: PhysicalSize<u32>) -> taffy::geometry::Size<f32> {
+    fn physical_size_to_taffy(
+        shared_wgpu_state: &SharedWgpuState,
+        size: PhysicalSize<u32>,
+    ) -> taffy::geometry::Size<f32> {
         let logical_size = size.to_logical::<f32>(shared_wgpu_state.window.scale_factor());
         taffy::geometry::Size {
             width: logical_size.width,
@@ -335,10 +344,13 @@ impl SceneView {
         }
     }
 
-    fn taffy_to_physical_position(shared_wgpu_state: &SharedWgpuState, position: taffy::geometry::Point<f32>) -> PhysicalPosition<u32> {
+    fn taffy_to_physical_position(
+        shared_wgpu_state: &SharedWgpuState,
+        position: taffy::geometry::Point<f32>,
+    ) -> PhysicalPosition<u32> {
         let logical_position = LogicalPosition {
-            x: position.x as f32,
-            y: position.y as f32,
+            x: position.x,
+            y: position.y,
         };
         logical_position.to_physical(shared_wgpu_state.window.scale_factor())
     }
