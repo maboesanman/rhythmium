@@ -1,0 +1,8 @@
+[package]
+name = "cef_wrapper"
+description = "A Rhythm Game Client"
+version.workspace = true
+edition.workspace = true
+
+[build-dependencies]
+cmake = "0.1.50"
