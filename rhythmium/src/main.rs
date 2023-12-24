@@ -9,7 +9,6 @@ pub mod scene;
 
 #[tokio::main]
 pub async fn main() {
-
     let x = call_the_library();
 
     println!("Hello, world! {}", x);
