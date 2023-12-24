@@ -1530,6 +1530,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bytemuck",
+ "cef_wrapper",
  "env_logger",
  "image",
  "log",

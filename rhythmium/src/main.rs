@@ -1,3 +1,4 @@
+use cef_wrapper::call_the_library;
 use scene::{
     image_view::{ImageFit, ImageViewBuilder},
     scene_view::SceneViewBuilder,
@@ -8,6 +9,10 @@ pub mod scene;
 
 #[tokio::main]
 pub async fn main() {
+
+    let x = call_the_library();
+
+    println!("Hello, world! {}", x);
     env_logger::init();
 
     let mut taffy = Taffy::new();

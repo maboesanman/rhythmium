@@ -14,6 +14,7 @@ authors = ["Mason Boeman <masonboeman@gmail.com"]
 [workspace.dependencies]
 anyhow = "1.0.75"
 bytemuck = { version = "1.14.0", features = ["derive"] }
+cef_wrapper = { path = "./cef_wrapper" }
 env_logger = "0.10.1"
 futures = "0.3.29"
 image = "0.24.7"

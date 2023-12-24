@@ -19,3 +19,4 @@ taffy = { version = "0.3.18", features = ["serde"] }
 tokio.workspace = true
 wgpu.workspace = true
 winit.workspace = true
+cef_wrapper.workspace = true
