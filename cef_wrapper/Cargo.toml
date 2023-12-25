@@ -4,6 +4,9 @@ description = "A Rhythm Game Client"
 version.workspace = true
 edition.workspace = true
 
+[profile.dev]
+opt-level = 3
+
 [build-dependencies]
 cmake = "0.1.50"
 regex = "1.10.2"

@@ -2,8 +2,7 @@ use cmake;
 
 fn main() {
     let dst = cmake::Config::new("./cef")
-        .generator("Ninja")
-        .build_target("libminimal.a")
+        .build_target("minimal")
         .build();
 
     let cmake_cache_path = dst.join("build/CMakeCache.txt");
