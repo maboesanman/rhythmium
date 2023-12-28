@@ -25,6 +25,5 @@ int APIENTRY wWinMain(HINSTANCE hInstance,
 
 extern "C" int main_ffi(int argc, char* argv[]) {
   return shared::main(argc, argv);
-  // return 42;
 }
 #endif

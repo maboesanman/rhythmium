@@ -21,9 +21,6 @@ set_property(GLOBAL PROPERTY OS_FOLDERS ON)
 # CEF configuration.
 #
 
-# Specify the CEF distribution version.
-set(CEF_VERSION "119.4.7+g55e15c8+chromium-119.0.6045.199")
-
 # Determine the platform.
 if("${CMAKE_SYSTEM_NAME}" STREQUAL "Darwin")
   if("${PROJECT_ARCH}" STREQUAL "arm64")
@@ -61,6 +58,7 @@ endif()
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 # Download and extract the CEF binary distribution (executes DownloadCEF.cmake).
+include(CEFVersion)
 include(DownloadCEF)
 DownloadCEF("${CEF_PLATFORM}" "${CEF_VERSION}" "${CMAKE_SOURCE_DIR}/third_party/cef")
 

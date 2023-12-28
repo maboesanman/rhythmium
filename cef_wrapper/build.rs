@@ -41,7 +41,6 @@ fn main() {
         dir.as_ref().unwrap().file_name().to_owned()
     }).unwrap().unwrap().path().canonicalize().unwrap();
 
-    println!("cef_sandbox_path: {:?}", cef_sandbox_path.canonicalize());
     let cef_build_type = match build_type {
         "Release" => "Release",
         _ => "Debug",
@@ -51,10 +50,4 @@ fn main() {
 
     println!("cargo:rustc-link-search=native={}", cef_sandbox_path.display());
     println!("cargo:rustc-link-lib=static:+verbatim=cef_sandbox.a");
-
-    #[cfg(target_os = "macos")]
-    {
-        println!("cargo:rustc-link-search=framework={}", cef_sandbox_path.display());
-        println!("cargo:rustc-link-lib=framework=Chromium Embedded Framework");
-    }
 }
