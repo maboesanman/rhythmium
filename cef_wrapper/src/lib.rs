@@ -1,3 +1,5 @@
+extern crate link_cplusplus;
+
 use std::ffi::{c_int, c_void};
 extern "C" {
     fn main_ffi(argc: c_int, argv: *const c_void) -> c_int;
