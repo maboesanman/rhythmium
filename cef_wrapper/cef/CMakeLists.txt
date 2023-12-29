@@ -102,29 +102,78 @@ message(STATUS "Using Python: ${PYTHON_EXECUTABLE}")
 add_subdirectory(${CEF_LIBCEF_DLL_WRAPPER_PATH} libcef_dll_wrapper)
 
 # Include CEF's test application targets (executes <target>/CMakeLists.txt).
-add_subdirectory(${CEF_ROOT}/tests/cefclient)
-add_subdirectory(${CEF_ROOT}/tests/cefsimple)
-add_subdirectory(${CEF_ROOT}/tests/gtest)
-add_subdirectory(${CEF_ROOT}/tests/ceftests)
+# add_subdirectory(${CEF_ROOT}/tests/cefclient)
+# add_subdirectory(${CEF_ROOT}/tests/cefsimple)
+# add_subdirectory(${CEF_ROOT}/tests/gtest)
+# add_subdirectory(${CEF_ROOT}/tests/ceftests)
 
 # Allow includes relative to the current source directory.
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
 # Configure building of the examples.
-option(WITH_EXAMPLES "Enable or disable building of examples." ON)
-if(WITH_EXAMPLES)
-  # Include example application targets.
-  add_subdirectory(examples)
+if(OS_MAC)
+  # Shared macOS resources (menus, icons, etc).
+  set(SHARED_RESOURCES_SRCS
+    ../resources/mac/English.lproj/InfoPlist.strings
+    ../resources/mac/English.lproj/MainMenu.xib
+    ../resources/mac/Info.plist
+    ../resources/mac/shared.icns
+    )
+
+  # Info.plist files used for main and helper app bundles.
+  set(SHARED_INFO_PLIST ../resources/mac/Info.plist)
+  set(SHARED_HELPER_INFO_PLIST ../resources/mac/helper-Info.plist)
+elseif(OS_WINDOWS)
+  # Shared Windows resources (version information, icons).
+  set(SHARED_RESOURCES_SRCS
+    ../resources/win/big.ico
+    ../resources/win/resource.h
+    ../resources/win/shared.rc
+    ../resources/win/small.ico
+    )
+
+  # Manifest files used for executables.
+  set(SHARED_EXE_MANIFEST ../resources/win/shared.exe.manifest)
+  set(SHARED_COMPATIBILITY_MANIFEST ../resources/win/compatibility.manifest)
 endif()
 
-# TODO: Include other application targets here.
+set(EXAMPLE_TARGET_OUT_DIR "${CMAKE_BINARY_DIR}/target_out")
 
-# Display configuration settings.
-PRINT_CEF_CONFIG()
+# Set properties common to all example targets.
+macro(SET_EXAMPLE_PROPERTIES target)
+  # Output all binaries to the configuration-specific build directory.
+  set_target_properties(${target} PROPERTIES
+                        ARCHIVE_OUTPUT_DIRECTORY "${EXAMPLE_TARGET_OUT_DIR}"
+                        RUNTIME_OUTPUT_DIRECTORY "${EXAMPLE_TARGET_OUT_DIR}"
+                        LIBRARY_OUTPUT_DIRECTORY "${EXAMPLE_TARGET_OUT_DIR}")
+endmacro()
 
-if(NOT WITH_EXAMPLES)
-  message(STATUS "")
-  message(STATUS "NOTE: Targets from the examples folder are not included.")
-  message(STATUS "Add -DWITH_EXAMPLES=On to the CMake command-line to include them.")
-  message(STATUS "")
-endif()
+macro(SET_EXAMPLE_LIBRARY_TARGET_PROPERTIES target)
+  SET_LIBRARY_TARGET_PROPERTIES(${target})
+  SET_EXAMPLE_PROPERTIES(${target})
+endmacro()
+
+macro(SET_EXAMPLE_EXECUTABLE_TARGET_PROPERTIES target)
+  SET_EXECUTABLE_TARGET_PROPERTIES(${target})
+  SET_EXAMPLE_PROPERTIES(${target})
+
+  if(OS_LINUX)
+    # Set rpath so that libraries can be placed next to the executable.
+    set_target_properties(${target} PROPERTIES INSTALL_RPATH "$ORIGIN")
+    set_target_properties(${target} PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE)
+  elseif(OS_WINDOWS)
+    # Add the custom Windows manifest files to the executable.
+    add_custom_command(
+      TARGET ${target}
+      POST_BUILD
+      COMMAND "mt.exe" -nologo
+              -manifest \"${CMAKE_CURRENT_SOURCE_DIR}/${SHARED_EXE_MANIFEST}\"
+                        \"${CMAKE_CURRENT_SOURCE_DIR}/${SHARED_COMPATIBILITY_MANIFEST}\"
+              -outputresource:"${EXAMPLE_TARGET_OUT_DIR}/${target}.exe"\;\#1
+      COMMENT "Adding manifest..."
+      )
+  endif()
+endmacro()
+
+add_subdirectory(shared)
+add_subdirectory(rhythmium)

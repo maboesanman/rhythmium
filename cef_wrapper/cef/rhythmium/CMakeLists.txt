@@ -8,25 +8,25 @@
 
 # Main executable sources.
 set(EXAMPLE_SRCS
-  app_browser_minimal.cc
-  client_minimal.cc
-  client_minimal.h
-  main_minimal.cc
+  app_browser.cc
+  client.cc
+  client.h
+  main.cc
   )
 
 if(OS_LINUX OR OS_WINDOWS)
   # On Windows and Linux the same executable is used for all processes.
   set(EXAMPLE_SRCS
     ${EXAMPLE_SRCS}
-    app_other_minimal.cc
-    app_renderer_minimal.cc
+    app_other.cc
+    app_renderer.cc
     )
 elseif(OS_MAC)
   # On macOS a separate helper executable is used for subprocesses.
   set(EXAMPLE_HELPER_SRCS
-    app_other_minimal.cc
-    app_renderer_minimal.cc
-    process_helper_mac_minimal.cc
+    app_other.cc
+    app_renderer.cc
+    process_helper_mac.cc
     )
 endif()
 
@@ -43,10 +43,10 @@ endif()
 #
 
 # Target executable names.
-set(EXAMPLE_TARGET "minimal")
+set(EXAMPLE_TARGET "rhythmium")
 if(OS_MAC)
-  set(EXAMPLE_HELPER_TARGET "minimal_Helper")
-  set(EXAMPLE_HELPER_OUTPUT_NAME "minimal Helper")
+  set(EXAMPLE_HELPER_TARGET "rhythmium_Helper")
+  set(EXAMPLE_HELPER_OUTPUT_NAME "rhythmium Helper")
 endif()
 
 
@@ -69,10 +69,6 @@ endif()
 #
 
 if(OS_MAC)
-  # Create source groups for Xcode.
-  SET_EXAMPLE_SOURCE_GROUPS("${EXAMPLE_SRCS}")
-  SET_EXAMPLE_SOURCE_GROUPS("${EXAMPLE_HELPER_SRCS}")
-
   # Output path for the main app bundle.
   set(EXAMPLE_APP "${EXAMPLE_TARGET_OUT_DIR}/${EXAMPLE_TARGET}.app")
 
@@ -87,7 +83,6 @@ if(OS_MAC)
 
   # Main app bundle target.
   add_library(${EXAMPLE_TARGET} STATIC ${EXAMPLE_SRCS} ${EXAMPLE_RESOURCES_SRCS})
-  # add_executable(${EXAMPLE_TARGET} MACOSX_BUNDLE ${EXAMPLE_SRCS} ${EXAMPLE_RESOURCES_SRCS})
   SET_EXAMPLE_EXECUTABLE_TARGET_PROPERTIES(${EXAMPLE_TARGET})
   add_dependencies(${EXAMPLE_TARGET} shared)
   target_link_libraries(${EXAMPLE_TARGET} shared)
@@ -162,7 +157,7 @@ if(OS_MAC)
   # directive but that doesn't properly handle nested resource directories.
   # Remove these prefixes from input file paths.
   set(PREFIXES
-    "../shared/resources/mac/"
+    "../resources/mac/"
     )
   COPY_MAC_RESOURCES("${EXAMPLE_RESOURCES_SRCS}" "${PREFIXES}" "${EXAMPLE_TARGET}" "${CMAKE_CURRENT_SOURCE_DIR}" "${EXAMPLE_APP}")
 endif()
@@ -178,9 +173,6 @@ if(OS_WINDOWS)
     ${EXAMPLE_SRCS}
     ${EXAMPLE_RESOURCES_SRCS}
     )
-
-  # Create source groups for Visual Studio.
-  SET_EXAMPLE_SOURCE_GROUPS("${EXAMPLE_SRCS}")
 
   # Executable target.
   add_library(${EXAMPLE_TARGET} STATIC ${EXAMPLE_SRCS})

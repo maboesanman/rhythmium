@@ -2,9 +2,9 @@
 // reserved. Use of this source code is governed by a BSD-style license that
 // can be found in the LICENSE file.
 
-#include "examples/minimal/client_minimal.h"
-#include "examples/shared/app_factory.h"
-#include "examples/shared/browser_util.h"
+#include "rhythmium/client.h"
+#include "shared/app_factory.h"
+#include "shared/browser_util.h"
 
 namespace minimal {
 

@@ -2,15 +2,15 @@
 // reserved. Use of this source code is governed by a BSD-style license that
 // can be found in the LICENSE file.
 
-#include "examples/shared/main.h"
+#include "shared/main.h"
 
 #include <X11/Xlib.h>
 
 #include "include/base/cef_logging.h"
 
-#include "examples/shared/app_factory.h"
-#include "examples/shared/client_manager.h"
-#include "examples/shared/main_util.h"
+#include "shared/app_factory.h"
+#include "shared/client_manager.h"
+#include "shared/main_util.h"
 
 namespace shared {
 

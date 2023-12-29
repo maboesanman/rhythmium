@@ -97,10 +97,6 @@ endif()
 #
 
 if(OS_MAC)
-  # Create source groups for Xcode.
-  SET_EXAMPLE_SOURCE_GROUPS("${SHARED_SRCS}")
-  SET_EXAMPLE_SOURCE_GROUPS("${SHARED_HELPER_SRCS}")
-
   # Helper static library target.
   add_library(${SHARED_HELPER_TARGET} STATIC ${SHARED_HELPER_SRCS})
   SET_EXAMPLE_LIBRARY_TARGET_PROPERTIES(${SHARED_HELPER_TARGET})

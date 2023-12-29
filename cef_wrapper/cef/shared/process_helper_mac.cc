@@ -2,13 +2,13 @@
 // reserved. Use of this source code is governed by a BSD-style license that can
 // be found in the LICENSE file.
 
-#include "examples/shared/process_helper_mac.h"
+#include "shared/process_helper_mac.h"
 
 #include "include/cef_app.h"
 #include "include/wrapper/cef_library_loader.h"
 
-#include "examples/shared/app_factory.h"
-#include "examples/shared/main_util.h"
+#include "shared/app_factory.h"
+#include "shared/main_util.h"
 
 // When generating projects with CMake the CEF_USE_SANDBOX value will be defined
 // automatically. Pass -DUSE_SANDBOX=OFF to the CMake command-line to disable

@@ -3,12 +3,23 @@ use std::path::Path;
 use cmake;
 
 fn main() {
-    let dst = cmake::Config::new("./cef")
+    let cmake_target_dir = cmake::Config::new("./cef")
         .generator("Ninja")
-        .build_target("minimal")
-        .build();
+        .build_target("rhythmium")
+        .build()
+        .join("build");
 
-    let cmake_cache_path = dst.join("build/CMakeCache.txt");
+    link_wrapper(&cmake_target_dir);
+    link_binaries(&cmake_target_dir);
+    link_sandbox(&cmake_target_dir);
+
+    if cfg!(target_os = "macos") {
+        copy_mac_framework(&cmake_target_dir);
+    }
+}
+
+fn get_cef_build_type(binary_dir: &Path) -> &'static str {
+    let cmake_cache_path = binary_dir.join("CMakeCache.txt");
     let cmake_cache = std::fs::read_to_string(cmake_cache_path).unwrap();
 
     let cmake_build_type = &regex::Regex::new(r"CMAKE_BUILD_TYPE:STRING=([a-zA-Z]+)")
@@ -16,24 +27,14 @@ fn main() {
         .captures(&cmake_cache)
         .unwrap()[1];
 
-    let cef_build_type = match cmake_build_type {
+    match cmake_build_type {
         "Release" => "Release",
         _ => "Debug",
-    };
-
-    let cmake_build_dir = dst.join("build");
-    let cmake_build_dir_wrapper = cmake_build_dir.join("libcef_dll_wrapper");
-    let cmake_build_dir_type = cmake_build_dir.join(cmake_build_type);
-
-    link_wrapper(&cmake_build_dir_wrapper);
-    link_binaries(&cmake_build_dir_type, cef_build_type);
-
-    if cfg!(target_os = "macos") {
-        copy_mac_framework(&cmake_build_dir_type);
     }
 }
 
-fn link_wrapper(wrapper_dir: &Path) {
+fn link_wrapper(binary_dir: &Path) {
+    let wrapper_dir = binary_dir.join("libcef_dll_wrapper");
     println!(
         "cargo:rustc-link-search=native={}",
         wrapper_dir.display()
@@ -41,15 +42,18 @@ fn link_wrapper(wrapper_dir: &Path) {
     println!("cargo:rustc-link-lib=static=cef_dll_wrapper");
 }
 
-fn link_binaries(binary_dir: &Path, cef_build_type: &str) {
+fn link_binaries(binary_dir: &Path) {
+    let target_out = binary_dir.join("target_out");
     println!(
         "cargo:rustc-link-search=native={}",
-        binary_dir.display()
+        target_out.display()
     );
-    println!("cargo:rustc-link-lib=static=minimal");
+    println!("cargo:rustc-link-lib=static=rhythmium");
     println!("cargo:rustc-link-lib=static=shared");
     println!("cargo:rustc-link-lib=static=shared_helper");
+}
 
+fn link_sandbox(binary_dir: &Path) {
     let cef_sandbox_path = std::fs::read_dir("./cef/third_party/cef/").unwrap()
         .filter(|dir| {
             // only directories
@@ -59,7 +63,7 @@ fn link_binaries(binary_dir: &Path, cef_build_type: &str) {
         dir.as_ref().unwrap().file_name().to_owned()
     }).unwrap().unwrap().path().canonicalize().unwrap();
 
-    let cef_sandbox_path = cef_sandbox_path.join(cef_build_type).canonicalize().unwrap();
+    let cef_sandbox_path = cef_sandbox_path.join(get_cef_build_type(binary_dir)).canonicalize().unwrap();
 
     println!("cargo:rustc-link-search=native={}", cef_sandbox_path.display());
     println!("cargo:rustc-link-lib=static:+verbatim=cef_sandbox.a");
@@ -67,7 +71,7 @@ fn link_binaries(binary_dir: &Path, cef_build_type: &str) {
 
 fn copy_mac_framework(binary_dir: &Path) {
     let scratch_dir = scratch::path("cef_wrapper");
-    let bundle = binary_dir.join("minimal.app");
+    let bundle = binary_dir.join("target_out/rhythmium.app");
 
     fs_extra::dir::copy(
         bundle,

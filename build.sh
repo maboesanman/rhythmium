@@ -28,8 +28,8 @@ rm -rf "$bundle_dir"
 mkdir -p "$bundle_dir"
 
 # copy the scratch dir into the bundle dir
-cp -r "$scratch_dir/minimal.app" "$bundle_dir"
+cp -r "$scratch_dir/rhythmium.app" "$bundle_dir"
 
 # copy the rhythmium artifact into the bundle dir
-mkdir -p "$bundle_dir/minimal.app/Contents/MacOS"
-cp "$rhythmium_artifact" "$bundle_dir/minimal.app/Contents/MacOS/rhythmium"
+mkdir -p "$bundle_dir/rhythmium.app/Contents/MacOS"
+cp "$rhythmium_artifact" "$bundle_dir/rhythmium.app/Contents/MacOS/rhythmium"

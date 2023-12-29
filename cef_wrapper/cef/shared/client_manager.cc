@@ -2,7 +2,7 @@
 // reserved. Use of this source code is governed by a BSD-style license that
 // can be found in the LICENSE file.
 
-#include "examples/shared/client_manager.h"
+#include "shared/client_manager.h"
 
 #include "include/cef_app.h"
 #include "include/wrapper/cef_helpers.h"

@@ -2,12 +2,12 @@
 // reserved. Use of this source code is governed by a BSD-style license that
 // can be found in the LICENSE file.
 
-#include "examples/shared/app_factory.h"
+#include "shared/app_factory.h"
 
 namespace shared {
 
-// No CefApp for the renderer subprocess.
-CefRefPtr<CefApp> CreateRendererProcessApp() {
+// No CefApp for other subprocesses.
+CefRefPtr<CefApp> CreateOtherProcessApp() {
   return nullptr;
 }
 

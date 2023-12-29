@@ -3,7 +3,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "examples/shared/main.h"
+#include "shared/main.h"
 
 #import <Cocoa/Cocoa.h>
 
@@ -11,8 +11,8 @@
 #include "include/wrapper/cef_helpers.h"
 #import "include/wrapper/cef_library_loader.h"
 
-#include "examples/shared/app_factory.h"
-#include "examples/shared/client_manager.h"
+#include "shared/app_factory.h"
+#include "shared/client_manager.h"
 
 // Receives notifications from the application.
 @interface SharedAppDelegate : NSObject <NSApplicationDelegate>

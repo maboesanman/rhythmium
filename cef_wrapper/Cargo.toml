@@ -4,9 +4,6 @@ description = "A Rhythm Game Client"
 version.workspace = true
 edition.workspace = true
 
-[profile.dev]
-opt-level = 3
-
 [dependencies]
 link-cplusplus = { version = "1.0", features = ["libc++"] }
 

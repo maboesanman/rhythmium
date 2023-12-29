@@ -2,7 +2,7 @@
 // reserved. Use of this source code is governed by a BSD-style license that
 // can be found in the LICENSE file.
 
-#include "examples/shared/main_util.h"
+#include "shared/main_util.h"
 
 #if defined(OS_WIN)
 #include <windows.h>

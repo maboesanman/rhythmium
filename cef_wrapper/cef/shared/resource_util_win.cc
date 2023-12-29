@@ -2,7 +2,7 @@
 // reserved. Use of this source code is governed by a BSD-style license that
 // can be found in the LICENSE file.
 
-#include "examples/shared/resource_util.h"
+#include "shared/resource_util.h"
 
 #include "include/base/cef_logging.h"
 #include "include/wrapper/cef_byte_read_handler.h"
