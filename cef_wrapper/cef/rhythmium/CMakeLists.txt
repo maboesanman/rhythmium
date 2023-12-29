@@ -86,9 +86,21 @@ if(OS_MAC)
   SET_EXAMPLE_EXECUTABLE_TARGET_PROPERTIES(${EXAMPLE_TARGET})
   add_dependencies(${EXAMPLE_TARGET} shared)
   target_link_libraries(${EXAMPLE_TARGET} shared)
-  set_target_properties(${EXAMPLE_TARGET} PROPERTIES
-    RESOURCE "${EXAMPLE_RESOURCES_SRCS}"
-    MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/${SHARED_INFO_PLIST}"
+
+  set(_main_info_plist "${CMAKE_CURRENT_BINARY_DIR}/Info.plist")
+  file(READ "${CMAKE_CURRENT_SOURCE_DIR}/${SHARED_INFO_PLIST}" _plist_contents)
+  string(REPLACE "\${EXECUTABLE_NAME}" "${EXAMPLE_TARGET}" _plist_contents ${_plist_contents})
+  string(REPLACE "\${PRODUCT_NAME}" "${EXAMPLE_TARGET}" _plist_contents ${_plist_contents})
+  file(WRITE ${_main_info_plist} ${_plist_contents})
+
+  # Copy the Info.plist into the bundle.
+  add_custom_command(
+    TARGET ${EXAMPLE_TARGET}
+    POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy
+            "${_main_info_plist}"
+            "${EXAMPLE_APP}/Contents/Info.plist"
+    VERBATIM
     )
 
   # Copy the CEF framework into the Frameworks directory.
