@@ -109,7 +109,7 @@ endif()
 if(OS_MAC)
   set(BINARY_NAME "rhythmium")
   # set(BINARY_NAME $ENV{CARGO_BIN_NAME})
-  set(HELPER_TARGET "${BINARY_NAME}_Helper")
+  set(HELPER_TARGET "${BINARY_NAME}_helper")
   set(HELPER_OUTPUT_NAME "${BINARY_NAME} Helper")
 
   # Output path for the main app bundle.
@@ -145,4 +145,56 @@ if(OS_MAC)
             "${APP}/Contents/Frameworks/Chromium Embedded Framework.framework"
     VERBATIM
   )
+
+  # Create the multiple Helper app bundle targets.
+  foreach(_suffix_list ${CEF_HELPER_APP_SUFFIXES})
+    # Convert to a list and extract the suffix values.
+    string(REPLACE ":" ";" _suffix_list ${_suffix_list})
+    list(GET _suffix_list 0 _name_suffix)
+    list(GET _suffix_list 1 _target_suffix)
+    list(GET _suffix_list 2 _plist_suffix)
+
+    # Define Helper target and output names.
+    set(_helper_target "${HELPER_TARGET}${_target_suffix}")
+    set(_helper_output_name "${HELPER_OUTPUT_NAME}${_name_suffix}")
+
+    # Create Helper-specific variants of the helper-Info.plist file. Do this
+    # manually because the configure_file command (which is executed as part of
+    # MACOSX_BUNDLE_INFO_PLIST) uses global env variables and would insert the
+    # wrong values with multiple targets.
+    set(_helper_info_plist "${CMAKE_CURRENT_BINARY_DIR}/helper-Info${_target_suffix}.plist")
+    file(READ "${CMAKE_CURRENT_SOURCE_DIR}/${HELPER_INFO_PLIST}" _plist_contents)
+    string(REPLACE "\${EXECUTABLE_NAME}" "${_helper_output_name}" _plist_contents ${_plist_contents})
+    string(REPLACE "\${PRODUCT_NAME}" "${_helper_output_name}" _plist_contents ${_plist_contents})
+    string(REPLACE "\${BUNDLE_ID_SUFFIX}" "${_plist_suffix}" _plist_contents ${_plist_contents})
+    file(WRITE ${_helper_info_plist} ${_plist_contents})
+
+    # Create Helper executable target.
+    add_executable(${_helper_target} MACOSX_BUNDLE ${HELPER_SRCS})
+    SET_EXECUTABLE_TARGET_PROPERTIES(${_helper_target})
+    add_dependencies(${_helper_target} libcef_dll_wrapper)
+    target_link_libraries(${_helper_target} libcef_dll_wrapper ${CEF_STANDARD_LIBS})
+    set_target_properties(${_helper_target} PROPERTIES
+      MACOSX_BUNDLE_INFO_PLIST ${_helper_info_plist}
+      OUTPUT_NAME ${_helper_output_name}
+    )
+
+    if(USE_SANDBOX)
+      add_dependencies(${_helper_target} cef_sandbox_lib)
+      target_link_libraries(${_helper_target} cef_sandbox_lib ${CEF_SANDBOX_STANDARD_LIBS})
+    endif()
+
+    # Add the Helper as a dependency of the main executable target.
+    add_dependencies(${TARGET} "${_helper_target}")
+
+    # Copy the Helper app bundle into the Frameworks directory.
+    add_custom_command(
+      TARGET ${TARGET}
+      POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_directory
+              "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${_helper_output_name}.app"
+              "${APP}/Contents/Frameworks/${_helper_output_name}.app"
+      VERBATIM
+    )
+  endforeach()
 endif()

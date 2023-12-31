@@ -13,8 +13,10 @@ fn main() {
 
     println!("cargo:rustc-link-search=native={}", lib_dir.display());
     println!("cargo:rustc-link-lib=static=cef");
-    println!("cargo:rustc-link-lib=static=cef_sandbox");
     println!("cargo:rustc-link-lib=static=cef_dll_wrapper");
+
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
+    println!("cargo:rustc-link-lib=static=cef_sandbox");
 
     if cfg!(target_os = "macos") {
         copy_mac_framework(&cmake_target_dir);
