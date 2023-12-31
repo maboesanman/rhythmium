@@ -2,63 +2,61 @@
 // reserved. Use of this source code is governed by a BSD-style license that
 // can be found in the LICENSE file.
 
-#include "shared/browser_util.h"
+#include "browser_util.h"
 
 #include "include/cef_command_line.h"
+#include "include/cef_task.h"
 #include "include/views/cef_browser_view.h"
 #include "include/views/cef_window.h"
 #include "include/wrapper/cef_helpers.h"
 
-namespace shared {
-
 namespace {
 
-// When using the Views framework this object provides the delegate
-// implementation for the CefWindow that hosts the Views-based browser.
-class WindowDelegate : public CefWindowDelegate {
- public:
-  explicit WindowDelegate(CefRefPtr<CefBrowserView> browser_view)
-      : browser_view_(browser_view) {}
+  // When using the Views framework this object provides the delegate
+  // implementation for the CefWindow that hosts the Views-based browser.
+  class WindowDelegate : public CefWindowDelegate {
+  public:
+    explicit WindowDelegate(CefRefPtr<CefBrowserView> browser_view)
+        : browser_view_(browser_view) {}
 
-  void OnWindowCreated(CefRefPtr<CefWindow> window) override {
-    // Add the browser view and show the window.
-    window->AddChildView(browser_view_);
-    window->Show();
+    void OnWindowCreated(CefRefPtr<CefWindow> window) override {
+      // Add the browser view and show the window.
+      window->AddChildView(browser_view_);
+      window->Show();
 
-    // Give keyboard focus to the browser view.
-    browser_view_->RequestFocus();
-  }
+      // Give keyboard focus to the browser view.
+      browser_view_->RequestFocus();
+    }
 
-  void OnWindowDestroyed(CefRefPtr<CefWindow> window) override {
-    browser_view_ = nullptr;
-  }
+    void OnWindowDestroyed(CefRefPtr<CefWindow> window) override {
+      browser_view_ = nullptr;
+    }
 
-  bool CanClose(CefRefPtr<CefWindow> window) override {
-    // Allow the window to close if the browser says it's OK.
-    CefRefPtr<CefBrowser> browser = browser_view_->GetBrowser();
-    if (browser)
-      return browser->GetHost()->TryCloseBrowser();
-    return true;
-  }
+    bool CanClose(CefRefPtr<CefWindow> window) override {
+      // Allow the window to close if the browser says it's OK.
+      CefRefPtr<CefBrowser> browser = browser_view_->GetBrowser();
+      if (browser)
+        return browser->GetHost()->TryCloseBrowser();
+      return true;
+    }
 
-  CefSize GetPreferredSize(CefRefPtr<CefView> view) override {
-    // Preferred window size.
-    return CefSize(800, 600);
-  }
+    CefSize GetPreferredSize(CefRefPtr<CefView> view) override {
+      // Preferred window size.
+      return CefSize(800, 600);
+    }
 
-  CefSize GetMinimumSize(CefRefPtr<CefView> view) override {
-    // Minimum window size.
-    return CefSize(200, 100);
-  }
+    CefSize GetMinimumSize(CefRefPtr<CefView> view) override {
+      // Minimum window size.
+      return CefSize(200, 100);
+    }
 
- private:
-  CefRefPtr<CefBrowserView> browser_view_;
+  private:
+    CefRefPtr<CefBrowserView> browser_view_;
 
-  IMPLEMENT_REFCOUNTING(WindowDelegate);
-  DISALLOW_COPY_AND_ASSIGN(WindowDelegate);
-};
-
-}  // namespace
+    IMPLEMENT_REFCOUNTING(WindowDelegate);
+    DISALLOW_COPY_AND_ASSIGN(WindowDelegate);
+  };
+}
 
 void CreateBrowser(CefRefPtr<CefClient> client,
                    const CefString& startup_url,
@@ -100,5 +98,3 @@ void CreateBrowser(CefRefPtr<CefClient> client,
                                   nullptr, nullptr);
   }
 }
-
-}  // namespace shared

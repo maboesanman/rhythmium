@@ -2,15 +2,12 @@
 // reserved. Use of this source code is governed by a BSD-style license that
 // can be found in the LICENSE file.
 
-#ifndef CEF_EXAMPLES_SHARED_CLIENT_MANAGER_H_
-#define CEF_EXAMPLES_SHARED_CLIENT_MANAGER_H_
+#pragma once
 
 #include <list>
 
 #include "include/base/cef_thread_checker.h"
 #include "include/cef_browser.h"
-
-namespace shared {
 
 // Manages multiple CefBrowser instances. All methods must be called on the
 // main application thread (browser process UI thread).
@@ -42,7 +39,3 @@ class ClientManager {
   typedef std::list<CefRefPtr<CefBrowser>> BrowserList;
   BrowserList browser_list_;
 };
-
-}  // namespace shared
-
-#endif  // CEF_EXAMPLES_SHARED_CLIENT_MANAGER_H_

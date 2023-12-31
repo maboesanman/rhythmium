@@ -2,13 +2,13 @@
 // reserved. Use of this source code is governed by a BSD-style license that can
 // be found in the LICENSE file.
 
-#include "shared/process_helper_mac.h"
+#include "process_helper_mac.h"
 
 #include "include/cef_app.h"
 #include "include/wrapper/cef_library_loader.h"
 
-#include "shared/app_factory.h"
-#include "shared/main_util.h"
+#include "app_factory.h"
+#include "subprocess_util.h"
 
 // When generating projects with CMake the CEF_USE_SANDBOX value will be defined
 // automatically. Pass -DUSE_SANDBOX=OFF to the CMake command-line to disable
@@ -17,7 +17,6 @@
 #include "include/cef_sandbox_mac.h"
 #endif
 
-namespace shared {
 
 // Entry point function for sub-processes.
 int main(int argc, char* argv[]) {
@@ -41,7 +40,7 @@ int main(int argc, char* argv[]) {
   CefRefPtr<CefCommandLine> command_line = CreateCommandLine(main_args);
 
   // Create a CefApp of the correct process type. The browser process is handled
-  // by main_mac.mm.
+  // by start_subprocess.cc.
   CefRefPtr<CefApp> app;
   switch (GetProcessType(command_line)) {
     case PROCESS_TYPE_RENDERER:
@@ -57,5 +56,3 @@ int main(int argc, char* argv[]) {
   // Execute the sub-process.
   return CefExecuteProcess(main_args, app, nullptr);
 }
-
-}  // namespace shared

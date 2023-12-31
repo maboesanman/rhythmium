@@ -2,12 +2,10 @@
 // reserved. Use of this source code is governed by a BSD-style license that
 // can be found in the LICENSE file.
 
-#include "shared/client_manager.h"
+#include "client_manager.h"
 
 #include "include/cef_app.h"
 #include "include/wrapper/cef_helpers.h"
-
-namespace shared {
 
 namespace {
 
@@ -81,5 +79,3 @@ bool ClientManager::IsClosing() const {
   DCHECK(thread_checker_.CalledOnValidThread());
   return is_closing_;
 }
-
-}  // namespace shared

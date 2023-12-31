@@ -9,10 +9,8 @@ pub mod scene;
 
 #[tokio::main]
 pub async fn main() {
-    let x = call_the_library();
-
-    println!("Hello, world! {}", x);
     env_logger::init();
+    call_the_library();
 
     let mut taffy = Taffy::new();
 

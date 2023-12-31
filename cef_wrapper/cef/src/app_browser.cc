@@ -2,22 +2,17 @@
 // reserved. Use of this source code is governed by a BSD-style license that
 // can be found in the LICENSE file.
 
-#include "rhythmium/client.h"
-#include "shared/app_factory.h"
-#include "shared/browser_util.h"
+#include "app_factory.h"
 
-namespace minimal {
-
-namespace {
-
-const char kStartupURL[] = "https://www.google.com";
-
-}  // namespace
+#include "include/cef_app.h"
 
 // Minimal implementation of CefApp for the browser process.
 class BrowserApp : public CefApp, public CefBrowserProcessHandler {
- public:
-  BrowserApp() {}
+  public: BrowserApp() {}
+
+  BrowserApp(const BrowserApp&) = delete;
+  BrowserApp& operator=(const BrowserApp&) = delete;
+  ~BrowserApp() = default;
 
   // CefApp methods:
   CefRefPtr<CefBrowserProcessHandler> GetBrowserProcessHandler() override {
@@ -40,20 +35,12 @@ class BrowserApp : public CefApp, public CefBrowserProcessHandler {
   // CefBrowserProcessHandler methods:
   void OnContextInitialized() override {
     // Create the browser window.
-    shared::CreateBrowser(new Client(), kStartupURL, CefBrowserSettings());
   }
 
  private:
   IMPLEMENT_REFCOUNTING(BrowserApp);
-  DISALLOW_COPY_AND_ASSIGN(BrowserApp);
 };
 
-}  // namespace minimal
-
-namespace shared {
-
 CefRefPtr<CefApp> CreateBrowserProcessApp() {
-  return new minimal::BrowserApp();
+  return new BrowserApp();
 }
-
-}  // namespace shared

@@ -2,12 +2,9 @@
 // reserved. Use of this source code is governed by a BSD-style license that
 // can be found in the LICENSE file.
 
-#ifndef CEF_EXAMPLES_SHARED_APP_FACTORY_H_
-#define CEF_EXAMPLES_SHARED_APP_FACTORY_H_
+#pragma once
 
 #include "include/cef_app.h"
-
-namespace shared {
 
 // This file declares methods that must be implemented in each executable
 // target. CefApp is a global singleton that controls process-specific
@@ -16,15 +13,11 @@ namespace shared {
 // and Windows a single executable is used for all processes. On macOS a
 // separate helper executable is used for sub-processes.
 
-// Called in the main browser process to create the CefApp for that process.
-CefRefPtr<CefApp> CreateBrowserProcessApp();
-
 // Called in the renderer sub-process to create the CefApp for that process.
 CefRefPtr<CefApp> CreateRendererProcessApp();
 
 // Called in other sub-processes to create the CefApp for that process.
 CefRefPtr<CefApp> CreateOtherProcessApp();
 
-}  // namespace shared
-
-#endif  // CEF_EXAMPLES_SHARED_APP_FACTORY_H_
+// Called in the main process to create the CefApp for that process.
+CefRefPtr<CefApp> CreateBrowserProcessApp();
