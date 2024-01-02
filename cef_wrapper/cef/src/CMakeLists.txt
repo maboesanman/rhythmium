@@ -162,7 +162,7 @@ if(OS_MAC)
     # manually because the configure_file command (which is executed as part of
     # MACOSX_BUNDLE_INFO_PLIST) uses global env variables and would insert the
     # wrong values with multiple targets.
-    set(_helper_info_plist "${CMAKE_CURRENT_BINARY_DIR}/helper-Info${_target_suffix}.plist")
+    set(_helper_info_plist "${CMAKE_CURRENT_BINARY_DIR}/${BINARY_NAME}-helper-Info${_target_suffix}.plist")
     file(READ "${CMAKE_CURRENT_SOURCE_DIR}/${HELPER_INFO_PLIST}" _plist_contents)
     string(REPLACE "\${EXECUTABLE_NAME}" "${_helper_output_name}" _plist_contents ${_plist_contents})
     string(REPLACE "\${PRODUCT_NAME}" "${_helper_output_name}" _plist_contents ${_plist_contents})
