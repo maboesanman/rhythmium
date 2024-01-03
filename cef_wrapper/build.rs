@@ -3,6 +3,21 @@ use std::path::Path;
 use cmake;
 
 fn main() {
+    println!("cargo:rerun-if-changed=cef/CMakeLists.txt");
+    println!("cargo:rerun-if-changed=cef/src/CmakeLists.txt");
+    println!("cargo:rerun-if-changed=cef/cmake");
+
+    let bindings = bindgen::Builder::default()
+        .header("wrapper.hpp")
+        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
+        .generate()
+        .expect("Unable to generate bindings");
+
+    let out_path = Path::new(&std::env::var("OUT_DIR").unwrap()).join("bindings.rs");
+    bindings
+        .write_to_file(out_path)
+        .expect("Unable to write bindings");
+
     let cmake_target_dir = cmake::Config::new("./cef")
         .generator("Ninja")
         .build_target("cef")
@@ -17,22 +32,4 @@ fn main() {
 
     #[cfg(any(target_os = "windows", target_os = "macos"))]
     println!("cargo:rustc-link-lib=static=cef_sandbox");
-
-    if cfg!(target_os = "macos") {
-        copy_mac_framework(&cmake_target_dir);
-    }
-}
-
-fn copy_mac_framework(binary_dir: &Path) {
-    let scratch_dir = scratch::path("cef_wrapper");
-    let bundle = binary_dir.join("target_out/rhythmium.app");
-
-    fs_extra::dir::copy(
-        bundle,
-        scratch_dir,
-        &fs_extra::dir::CopyOptions {
-            overwrite: true,
-            ..Default::default()
-        },
-    ).unwrap();
 }

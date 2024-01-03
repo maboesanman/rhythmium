@@ -14,7 +14,7 @@ class Client : public CefClient,
                public CefRenderHandler
 {
  public:
-  Client();
+  Client() {}
   Client(const Client&) = delete;
   Client& operator=(const Client&) = delete;
   ~Client() override = default;
@@ -34,6 +34,11 @@ class Client : public CefClient,
 
   // CefRenderHandler methods:
   bool GetRootScreenRect(CefRefPtr<CefBrowser> browser, CefRect& rect) override;
+  bool GetScreenInfo(CefRefPtr<CefBrowser> browser, CefScreenInfo& screen_info) override;
+  bool GetScreenPoint(CefRefPtr<CefBrowser> browser, int viewX, int viewY, int& screenX, int& screenY) override;
+  void GetTouchHandleSize(CefRefPtr<CefBrowser> browser, cef_horizontal_alignment_t orientation, CefSize& size) override;
+  void GetViewRect(CefRefPtr<CefBrowser> browser, CefRect& rect) override;
+  void OnPaint(CefRefPtr<CefBrowser> browser, PaintElementType type, const RectList& dirtyRects, const void* buffer, int width, int height) override;
 
  private:
   IMPLEMENT_REFCOUNTING(Client);

@@ -6,9 +6,10 @@ edition.workspace = true
 
 [dependencies]
 link-cplusplus = { version = "1.0", features = ["libc++"] }
+futures.workspace = true
 
 [build-dependencies]
 cmake = "0.1.50"
 regex = "1.10.2"
-scratch.workspace = true
 fs_extra.workspace = true
+bindgen = "0.69.1"

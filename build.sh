@@ -1,5 +1,5 @@
 
-compilation_output=$(cargo build --bin rhythmium --message-format json)
+compilation_output=$(cargo build --bin rhythmium --message-format json-render-diagnostics)
 
 declare -a "success=$(
   echo "$compilation_output" \
@@ -12,10 +12,10 @@ if [ "$success" != "true" ]; then
   exit 1
 fi
 
-declare -a "scratch_dir=$(
+declare -a "cmake_target_out=$(
   echo "$compilation_output" \
-  | jq -r 'select((.reason=="build-script-executed") and (.package_id | startswith("scratch "))) | .out_dir' \
-)/cef_wrapper"
+  | jq -r 'select((.reason=="build-script-executed") and (.package_id | startswith("cef_wrapper "))) | .out_dir' \
+)/build/target_out"
 
 declare -a "rhythmium_artifact=$(
   echo "$compilation_output" \
@@ -28,7 +28,7 @@ rm -rf "$bundle_dir"
 mkdir -p "$bundle_dir"
 
 # copy the scratch dir into the bundle dir
-cp -r "$scratch_dir/rhythmium.app" "$bundle_dir"
+cp -r "$cmake_target_out/rhythmium.app" "$bundle_dir"
 
 # copy the rhythmium artifact into the bundle dir
 mkdir -p "$bundle_dir/rhythmium.app/Contents/MacOS"

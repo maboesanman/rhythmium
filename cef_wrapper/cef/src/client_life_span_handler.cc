@@ -1,7 +1,5 @@
 #include "client.h"
 
-Client::Client() {}
-
 void Client::OnAfterCreated(CefRefPtr<CefBrowser> browser) {
 }
 

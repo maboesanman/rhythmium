@@ -1,4 +1,6 @@
-use cef_wrapper::call_the_library;
+use std::process::exit;
+
+use cef_wrapper::CefApp;
 use scene::{
     image_view::{ImageFit, ImageViewBuilder},
     scene_view::SceneViewBuilder,
@@ -10,7 +12,11 @@ pub mod scene;
 #[tokio::main]
 pub async fn main() {
     env_logger::init();
-    call_the_library();
+
+    let app = match CefApp::new() {
+        Ok(app) => app.await,
+        Err(e) => exit(e)
+    };
 
     let mut taffy = Taffy::new();
 

@@ -7,18 +7,17 @@
 #include "include/base/cef_logging.h"
 
 #include "app_factory.h"
-#include "client_manager.h"
 #include "subprocess_util.h"
 
 // Entry point function for all processes.
-int try_start_subprocess(int argc, char* argv[]) {
+int try_start_subprocess(int argc, char* argv[], void (*app_ready)(void* app_ready_arg), void* app_ready_arg) {
   // Provide CEF with command-line arguments.
   CefMainArgs main_args(argc, argv);
 
   CefRefPtr<CefApp> app;
   #if defined(OS_MACOSX)
     // macos fires them from the bundle, so we skip all this.
-    app = CreateBrowserProcessApp();
+    app = CreateBrowserProcessApp(app_ready, app_ready_arg);
   #else
     // Create a temporary CommandLine object.
     CefRefPtr<CefCommandLine> command_line = CreateCommandLine(main_args);
@@ -26,7 +25,7 @@ int try_start_subprocess(int argc, char* argv[]) {
     // Create a CefApp of the correct process type.
     switch (GetProcessType(command_line)) {
       case PROCESS_TYPE_BROWSER:
-        app = CreateBrowserProcessApp();
+        app = CreateBrowserProcessApp(app_ready, app_ready_arg);
         break;
       case PROCESS_TYPE_RENDERER:
         app = CreateRendererProcessApp();
@@ -54,9 +53,6 @@ int try_start_subprocess(int argc, char* argv[]) {
     CefScopedSandboxInfo scoped_sandbox;
     sandbox_info = scoped_sandbox.sandbox_info();
   #endif
-
-  // Create the singleton manager instance.
-  ClientManager manager;
 
   // Specify CEF global settings here.
   CefSettings settings;

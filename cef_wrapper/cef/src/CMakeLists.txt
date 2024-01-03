@@ -22,10 +22,10 @@ set(LIB_SRCS
   app_factory.h
   client_display_handler.cc
   client_life_span_handler.cc
-  client_manager.cc
-  client_manager.h
   client_render_handler.cc
   client.h
+  create_browser.cc
+  create_browser.h
   start_subprocess.cc
   start_subprocess.h
 )
