@@ -58,7 +58,7 @@ endif()
 # main static library target.
 #
 
-set(TARGET "cef")
+set(TARGET "cef_wrapper")
 
 add_library(${TARGET} STATIC)
 target_sources(${TARGET} PRIVATE ${LIB_SRCS})

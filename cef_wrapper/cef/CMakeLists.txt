@@ -11,7 +11,7 @@ cmake_minimum_required(VERSION 3.21)
 set(CMAKE_CONFIGURATION_TYPES Debug Release)
 
 # Project name.
-project(cef)
+project(cef_wrapper)
 
 # Use folders in the resulting project files.
 set_property(GLOBAL PROPERTY OS_FOLDERS ON)
