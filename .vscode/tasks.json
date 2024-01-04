@@ -1,0 +1,16 @@
+{
+  "tasks": [
+    {
+      "type": "shell",
+      "command": "./build.sh",
+      "problemMatcher": [
+        "$rustc"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "label": "build"
+    }
+  ]
+}

@@ -15,7 +15,7 @@ pub async fn main() {
 
     let app = match CefApp::new() {
         Ok(app) => app.await,
-        Err(e) => exit(e)
+        Err(e) => exit(e),
     };
 
     let mut taffy = Taffy::new();
