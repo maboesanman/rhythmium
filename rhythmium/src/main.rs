@@ -6,6 +6,7 @@ use scene::{
     scene_view::SceneViewBuilder,
 };
 use taffy::prelude::*;
+use winit::event_loop::EventLoop;
 
 pub mod scene;
 
@@ -13,10 +14,24 @@ pub mod scene;
 pub async fn main() {
     env_logger::init();
 
+    // the winit event loop needs to launch first.
+    // in particular, it needs to run before the cef subprocess is launched.
+    let event_loop = EventLoop::new().unwrap();
+
     let app = match CefApp::new() {
         Ok(app) => app.await,
         Err(e) => exit(e),
     };
+
+    app.create_browser(|buf, w, h| {
+        println!("painting {}x{} buffer", w, h);
+
+        // convert buf from a *const c_void to a &[u8]
+        let buf = unsafe { std::slice::from_raw_parts(buf.cast::<u8>(), (w * h * 4) as usize) };
+
+        image::save_buffer("./test.png", buf, w as u32, h as u32, image::ColorType::Rgba8)
+            .unwrap();
+    });
 
     let mut taffy = Taffy::new();
 
@@ -81,5 +96,5 @@ pub async fn main() {
         )),
     );
 
-    scene::view::run(view_builder).await;
+    scene::view::run(event_loop, view_builder).await;
 }

@@ -41,6 +41,21 @@ impl CefApp {
             CefApp
         })
     }
+
+    pub fn create_browser(&self, on_paint: impl Fn(*const c_void, c_int, c_int)) {
+        let (func, arg) = anonymize(on_paint);
+        unsafe { create_browser(Some(func), arg) };
+    }
+
+    
+}
+
+fn anonymize<F: Fn(*const c_void, c_int, c_int)>(f: F) -> (unsafe extern "C" fn(*mut c_void, *const c_void, c_int, c_int), *mut c_void) {
+    let ptr = Box::into_raw(Box::new(f));
+    unsafe extern "C" fn call_thunk<F: Fn(*const c_void, c_int, c_int)>(data: *mut c_void, buf: *const c_void, w: c_int, h: c_int) {
+        (*data.cast::<F>())(buf, w, h)
+    }
+    (call_thunk::<F>, ptr.cast())
 }
 
 fn get_posix_args() -> (c_int, *mut *mut c_char) {
@@ -53,4 +68,8 @@ fn get_posix_args() -> (c_int, *mut *mut c_char) {
     let argv = Box::into_raw(args) as *mut *mut c_char;
 
     (argc, argv)
+}
+
+pub fn do_cef_message_loop_work() {
+    unsafe { do_message_loop_work() }
 }

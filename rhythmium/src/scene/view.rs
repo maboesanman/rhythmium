@@ -1,6 +1,7 @@
 pub use core::fmt::Debug;
 use std::sync::Arc;
 
+use cef_wrapper::do_cef_message_loop_work;
 use wgpu::{CommandEncoder, TextureView};
 use winit::{
     dpi::PhysicalSize,
@@ -28,8 +29,7 @@ pub trait ViewBuilder {
     ) -> Box<dyn View>;
 }
 
-pub async fn run(view_builder: Box<dyn ViewBuilder>) {
-    let event_loop = EventLoop::new().unwrap();
+pub async fn run(event_loop: EventLoop<()>, view_builder: Box<dyn ViewBuilder>) {
     let window = WindowBuilder::new().build(&event_loop).unwrap();
     let shared_wgpu_state = shared_wgpu_state::SharedWgpuState::new(window).await;
     let view = view_builder.build(
@@ -41,6 +41,9 @@ pub async fn run(view_builder: Box<dyn ViewBuilder>) {
 
     event_loop
         .run(move |event, window_target| match event {
+            Event::AboutToWait => {
+                do_cef_message_loop_work();
+            }
             Event::WindowEvent {
                 ref event,
                 window_id,
