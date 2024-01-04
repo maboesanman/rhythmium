@@ -5,12 +5,18 @@
 #include "start_subprocess.h"
 
 #include "include/base/cef_logging.h"
+#include "include/wrapper/cef_library_loader.h"
 
 #include "app_factory.h"
 #include "subprocess_util.h"
 
 // Entry point function for all processes.
 int try_start_subprocess(int argc, char* argv[], void (*app_ready)(void* app_ready_arg), void* app_ready_arg) {
+  #if defined(OS_MACOSX)
+    if (!InitMacProcess(argc, argv, false))
+      return 1;
+  #endif
+
   // Provide CEF with command-line arguments.
   CefMainArgs main_args(argc, argv);
 

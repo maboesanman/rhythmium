@@ -47,3 +47,28 @@ ProcessType GetProcessType(const CefRefPtr<CefCommandLine>& command_line) {
 
   return PROCESS_TYPE_OTHER;
 }
+
+#if defined(OS_MACOSX)
+#include "include/wrapper/cef_library_loader.h"
+
+#if defined(CEF_USE_SANDBOX)
+#include "include/cef_sandbox_mac.h"
+#endif
+
+bool InitMacProcess(int argc, char* argv[], bool helper) {
+  #if defined(CEF_USE_SANDBOX)
+    // Initialize the macOS sandbox for this helper process.
+    CefScopedSandboxContext sandbox_context;
+    if (!sandbox_context.Initialize(argc, argv))
+      return false;
+  #endif
+
+  CefScopedLibraryLoader library_loader;
+  bool load_result = helper ? library_loader.LoadInHelper() : library_loader.LoadInMain();
+  if (!load_result)
+    return false;
+
+  return true;
+}
+
+#endif

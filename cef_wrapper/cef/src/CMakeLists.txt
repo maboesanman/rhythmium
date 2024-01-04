@@ -64,13 +64,13 @@ add_library(${TARGET} STATIC)
 target_sources(${TARGET} PRIVATE ${LIB_SRCS})
 SET_LIBRARY_TARGET_PROPERTIES(${TARGET})
 add_dependencies(${TARGET} libcef_dll_wrapper)
-target_link_libraries(${TARGET} libcef_dll_wrapper ${CEF_STANDARD_LIBS})
+target_link_libraries(${TARGET} libcef_dll_wrapper ${CEF_STANDARD_LIBS} ${CEF_SANDBOX_STANDARD_LIBS} )
 
 if(OS_LINUX OR OS_WINDOWS)
   # Logical target used to link the libcef library on Linux and Windows.
   # On macOS the CEF framework is loaded dynamically at startup.
   ADD_LOGICAL_TARGET("libcef_lib" "${CEF_LIB_DEBUG}" "${CEF_LIB_RELEASE}")
-  target_link_libraries(${TARGET} libcef_lib ${CEF_STANDARD_LIBS})
+  target_link_libraries(${TARGET} libcef_lib ${CEF_STANDARD_LIBS} ${CEF_SANDBOX_STANDARD_LIBS})
 endif()
 
 if(OS_MAC OR OS_WINDOWS)

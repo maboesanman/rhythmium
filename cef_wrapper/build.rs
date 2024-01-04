@@ -17,7 +17,7 @@ fn main() {
 
     // set up cmake build
     println!("cargo:rerun-if-changed=cef/CMakeLists.txt");
-    println!("cargo:rerun-if-changed=cef/src/CmakeLists.txt");
+    println!("cargo:rerun-if-changed=cef/src");
     println!("cargo:rerun-if-changed=cef/cmake");
 
     let cmake_target_dir = cmake::Config::new("./cef")
@@ -33,5 +33,8 @@ fn main() {
     println!("cargo:rustc-link-lib=static=cef_dll_wrapper");
 
     #[cfg(any(target_os = "windows", target_os = "macos"))]
-    println!("cargo:rustc-link-lib=static=cef_sandbox");
+    {
+        println!("cargo:rustc-link-lib=sandbox");
+        println!("cargo:rustc-link-lib=static=cef_sandbox");
+    }
 }

@@ -1,6 +1,9 @@
 use core::future::Future;
-use std::{os::raw::{c_void, c_char, c_int}, ffi::CString};
 use futures::channel::oneshot::{self, Sender};
+use std::{
+    ffi::CString,
+    os::raw::{c_char, c_int, c_void}, mem::ManuallyDrop,
+};
 
 extern crate link_cplusplus;
 
@@ -11,7 +14,7 @@ pub struct CefApp;
 impl CefApp {
     pub fn new() -> Result<impl Future<Output = Self>, i32> {
         let (sender, receiver) = oneshot::channel::<()>();
-        
+
         let mut sender = Box::new(Some(sender));
 
         extern "C" fn app_ready(sender: *mut c_void) {
@@ -23,7 +26,7 @@ impl CefApp {
 
         let sender_ptr = sender.as_mut() as *mut _ as *mut c_void;
         let result = unsafe {
-            let (argc, argv) = get_c_args();
+            let (argc, argv) = get_posix_args();
             try_start_subprocess(argc, argv, Some(app_ready), sender_ptr)
         };
 
@@ -40,14 +43,14 @@ impl CefApp {
     }
 }
 
-fn get_c_args() -> (c_int, *mut *mut c_char) {
+fn get_posix_args() -> (c_int, *mut *mut c_char) {
     // create a vector of zero terminated strings
-    let mut args = std::env::args().map(|arg| CString::new(arg).unwrap() ).collect::<Vec<CString>>();
-    // convert the strings to raw pointers
-    let c_args = args.iter_mut().map(|arg| arg.as_ptr().cast_mut()).collect::<Vec<*mut c_char>>();
-    
-    let argc = c_args.len() as c_int;
-    let argv = c_args.as_ptr().cast_mut();
+    let args = argv::iter()
+        .map(|arg| arg as *const _)
+        .collect::<Box<[_]>>();
+
+    let argc = args.len() as c_int;
+    let argv = Box::into_raw(args) as *mut *mut c_char;
 
     (argc, argv)
 }

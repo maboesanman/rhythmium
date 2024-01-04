@@ -20,17 +20,7 @@
 
 // Entry point function for sub-processes.
 int main(int argc, char* argv[]) {
-#if defined(CEF_USE_SANDBOX)
-  // Initialize the macOS sandbox for this helper process.
-  CefScopedSandboxContext sandbox_context;
-  if (!sandbox_context.Initialize(argc, argv))
-    return 1;
-#endif
-
-  // Load the CEF framework library at runtime instead of linking directly
-  // as required by the macOS sandbox implementation.
-  CefScopedLibraryLoader library_loader;
-  if (!library_loader.LoadInHelper())
+  if(!InitMacProcess(argc, argv, true))
     return 1;
 
   // Provide CEF with command-line arguments.
