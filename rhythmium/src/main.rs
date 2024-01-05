@@ -1,9 +1,9 @@
-use std::process::exit;
+use std::{process::exit, sync::Arc};
 
 use cef_wrapper::CefApp;
 use scene::{
     image_view::{ImageFit, ImageViewBuilder},
-    scene_view::SceneViewBuilder,
+    scene_view::SceneViewBuilder, web_view::WebViewBuilder,
 };
 use taffy::prelude::*;
 use winit::event_loop::EventLoop;
@@ -23,15 +23,7 @@ pub async fn main() {
         Err(e) => exit(e),
     };
 
-    app.create_browser(|buf, w, h| {
-        println!("painting {}x{} buffer", w, h);
-
-        // convert buf from a *const c_void to a &[u8]
-        let buf = unsafe { std::slice::from_raw_parts(buf.cast::<u8>(), (w * h * 4) as usize) };
-
-        image::save_buffer("./test.png", buf, w as u32, h as u32, image::ColorType::Rgba8)
-            .unwrap();
-    });
+    let app = Arc::new(app);
 
     let mut taffy = Taffy::new();
 
@@ -82,10 +74,7 @@ pub async fn main() {
 
     view_builder.add_view(
         back,
-        Box::new(ImageViewBuilder::new(
-            include_bytes!("../assets/bold-and-brash.jpg"),
-            ImageFit::Cover,
-        )),
+        Box::new(WebViewBuilder::new(app)),
     );
 
     view_builder.add_view(

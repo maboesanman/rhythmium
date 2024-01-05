@@ -1,5 +1,5 @@
 
-compilation_output=$(cargo build --bin rhythmium --message-format json-render-diagnostics)
+compilation_output=$(cargo build --release --bin rhythmium --message-format json-render-diagnostics)
 
 declare -a "success=$(
   echo "$compilation_output" \

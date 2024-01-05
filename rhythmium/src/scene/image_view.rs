@@ -70,7 +70,7 @@ impl View for ImageView {
     ) {
         {
             let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Render Pass"),
+                label: Some("Image View Render Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: output_view,
                     resolve_target: None,
@@ -179,8 +179,8 @@ impl ImageView {
         );
 
         let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Scene Vertex Buffer"),
-            contents: bytemuck::cast_slice(INDEXES),
+            label: Some("Image View Index Buffer"),
+            contents: bytemuck::cast_slice(INDICES),
             usage: wgpu::BufferUsages::INDEX,
         });
 
@@ -321,7 +321,7 @@ const VERTICES_FULL: &[Vertex] = &[
     },
 ];
 
-const INDEXES: &[u16] = &[0, 1, 2, 1, 3, 2];
+const INDICES: &[u16] = &[0, 1, 2, 1, 3, 2];
 
 impl Vertex {
     const ATTRIBS: [wgpu::VertexAttribute; 2] =
@@ -402,7 +402,7 @@ pub fn get_vertex_buffer(
     };
 
     device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("Scene Vertex Buffer"),
+        label: Some("Image View Vertex Buffer"),
         contents: bytemuck::cast_slice(&vertices),
         usage: wgpu::BufferUsages::VERTEX,
     })

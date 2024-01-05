@@ -24,7 +24,7 @@ int create_browser(
     browser = CefBrowserHost::CreateBrowserSync(
       window_info,
       new Client(client_settings),
-      "https://media1.giphy.com/media/v1.Y2lkPTc5MGI3NjExMWJtd2gwNDh2ZHMzb294N2pwdjI3MXkyZGZyZDBjbWxtMTFxOWowMCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/oEXpKfMSx5WXC/giphy.mp4",
+      "https://webglsamples.org/blob/blob.html",
       browser_settings,
       nullptr,
       nullptr

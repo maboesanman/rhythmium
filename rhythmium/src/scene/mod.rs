@@ -10,6 +10,7 @@ pub mod scene_view;
 pub mod shared_wgpu_state;
 pub mod solid_color_view;
 pub mod view;
+pub mod web_view;
 
 pub struct Scene {
     pub view_tree: Taffy,

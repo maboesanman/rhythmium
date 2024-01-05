@@ -3,8 +3,8 @@
 #include "include/cef_render_handler.h"
 
 void Client::GetViewRect(CefRefPtr<CefBrowser> browser, CefRect& rect) {
-  rect.width = 400;
-  rect.height = 400;
+  rect.width = 1600;
+  rect.height = 1600;
 }
 
 void Client::OnPaint(

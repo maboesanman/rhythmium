@@ -13,3 +13,5 @@ target/
 
 DawnCache
 GPUCache
+MediaDeviceSalts
+MediaDeviceSalts-journal
