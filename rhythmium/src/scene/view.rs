@@ -5,7 +5,7 @@ use cef_wrapper::do_cef_message_loop_work;
 use wgpu::{CommandEncoder, TextureView};
 use winit::{
     dpi::PhysicalSize,
-    event::{ElementState, Event, KeyEvent, WindowEvent},
+    event::{ElementState, Event, KeyEvent, WindowEvent, StartCause},
     event_loop::EventLoop,
     keyboard::NamedKey,
     window::WindowBuilder,
@@ -37,16 +37,15 @@ pub async fn run(event_loop: EventLoop<()>, view_builder: Box<dyn ViewBuilder>) 
         shared_wgpu_state.window.inner_size(),
     );
 
-    let mut view_surface = RootSurface::new(view, shared_wgpu_state.clone());
-
     let size = shared_wgpu_state.window.inner_size();
+    let mut view_surface = RootSurface::new(view, shared_wgpu_state.clone());
     view_surface.resize(size);
-    // event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
-
+    
+    event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
     event_loop
         .run(move |event, window_target| {
             match event {
-                Event::NewEvents(_) => {
+                Event::NewEvents(StartCause::Poll) => {
                     view_surface.render().unwrap();
                 }
                 Event::AboutToWait => {
