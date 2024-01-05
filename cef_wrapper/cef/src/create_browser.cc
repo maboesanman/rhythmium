@@ -25,6 +25,7 @@ int create_browser(
       window_info,
       new Client(client_settings),
       "https://webglsamples.org/blob/blob.html",
+      // "https://www.google.com",
       browser_settings,
       nullptr,
       nullptr

@@ -1,12 +1,13 @@
 use std::sync::Arc;
 
-use cef_wrapper::{create_browser, CefApp};
+use cef_wrapper::CefApp;
 use wgpu::{util::DeviceExt, CommandEncoder, TextureView};
 use winit::dpi::PhysicalSize;
 
-use super::{shared_wgpu_state::{SharedWgpuState, self}, view::{View, ViewBuilder}};
-
-
+use super::{
+    shared_wgpu_state::SharedWgpuState,
+    view::{View, ViewBuilder},
+};
 
 pub struct WebViewBuilder {
     cef_app: Arc<CefApp>,
@@ -14,7 +15,7 @@ pub struct WebViewBuilder {
 
 impl WebViewBuilder {
     pub fn new(cef_app: Arc<CefApp>) -> Self {
-        Self { cef_app } 
+        Self { cef_app }
     }
 }
 
@@ -24,11 +25,7 @@ impl ViewBuilder for WebViewBuilder {
         shared_wgpu_state: Arc<SharedWgpuState>,
         size: PhysicalSize<u32>,
     ) -> Box<dyn View> {
-        Box::new(WebView::new(
-            shared_wgpu_state,
-            size,
-            &self.cef_app,
-        ))
+        Box::new(WebView::new(shared_wgpu_state, size, &self.cef_app))
     }
 }
 
@@ -95,35 +92,36 @@ impl WebView {
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Nearest,
-            min_filter: wgpu::FilterMode::Nearest,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
             mipmap_filter: wgpu::FilterMode::Nearest,
             ..Default::default()
         });
 
         let shader = device.create_shader_module(wgpu::include_wgsl!("web_view.wgsl"));
 
-        let texture_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("WebView Texture Bind Group Layout"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        multisampled: false,
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        sample_type: wgpu::TextureSampleType::Float { filterable: false },
+        let texture_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("WebView Texture Bind Group Layout"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        },
+                        count: None,
                     },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
-                    count: None,
-                },
-            ],
-        });
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+            });
 
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -195,7 +193,6 @@ impl WebView {
         });
 
         let texture_clone = texture.clone();
-        let shared_wgpu_state_clone = shared_wgpu_state.clone();
 
         cef_app.create_browser(move |buf, w, h| {
             println!("painting {}x{} buffer", w, h);
@@ -222,14 +219,7 @@ impl WebView {
                 rows_per_image: None,
             };
 
-            queue.write_texture(
-                texture_copy_view,
-                buf,
-                texture_data_layout,
-                texture_extent,
-            );
-
-            shared_wgpu_state_clone.window.request_redraw();
+            queue.write_texture(texture_copy_view, buf, texture_data_layout, texture_extent);
         });
 
         Self {

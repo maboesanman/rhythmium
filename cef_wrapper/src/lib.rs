@@ -2,7 +2,8 @@ use core::future::Future;
 use futures::channel::oneshot::{self, Sender};
 use std::{
     ffi::CString,
-    os::raw::{c_char, c_int, c_void}, mem::ManuallyDrop,
+    mem::ManuallyDrop,
+    os::raw::{c_char, c_int, c_void},
 };
 
 extern crate link_cplusplus;
@@ -46,13 +47,21 @@ impl CefApp {
         let (func, arg) = anonymize(on_paint);
         unsafe { create_browser(Some(func), arg) };
     }
-
-    
 }
 
-fn anonymize<F: Fn(*const c_void, c_int, c_int)>(f: F) -> (unsafe extern "C" fn(*mut c_void, *const c_void, c_int, c_int), *mut c_void) {
+fn anonymize<F: Fn(*const c_void, c_int, c_int)>(
+    f: F,
+) -> (
+    unsafe extern "C" fn(*mut c_void, *const c_void, c_int, c_int),
+    *mut c_void,
+) {
     let ptr = Box::into_raw(Box::new(f));
-    unsafe extern "C" fn call_thunk<F: Fn(*const c_void, c_int, c_int)>(data: *mut c_void, buf: *const c_void, w: c_int, h: c_int) {
+    unsafe extern "C" fn call_thunk<F: Fn(*const c_void, c_int, c_int)>(
+        data: *mut c_void,
+        buf: *const c_void,
+        w: c_int,
+        h: c_int,
+    ) {
         (*data.cast::<F>())(buf, w, h)
     }
     (call_thunk::<F>, ptr.cast())

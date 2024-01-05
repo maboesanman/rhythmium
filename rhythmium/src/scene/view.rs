@@ -39,38 +39,43 @@ pub async fn run(event_loop: EventLoop<()>, view_builder: Box<dyn ViewBuilder>) 
 
     let mut view_surface = RootSurface::new(view, shared_wgpu_state.clone());
 
+    let size = shared_wgpu_state.window.inner_size();
+    view_surface.resize(size);
+    // event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
+
     event_loop
-        .run(move |event, window_target| match event {
-            Event::AboutToWait => {
-                do_cef_message_loop_work();
-            }
-            Event::WindowEvent {
-                ref event,
-                window_id,
-            } if window_id == shared_wgpu_state.window.id() => match event {
-                WindowEvent::RedrawRequested => {
+        .run(move |event, window_target| {
+            match event {
+                Event::NewEvents(_) => {
                     view_surface.render().unwrap();
                 }
-                WindowEvent::CloseRequested
-                | WindowEvent::KeyboardInput {
-                    event:
-                        KeyEvent {
-                            logical_key: winit::keyboard::Key::Named(NamedKey::Escape),
-                            state: ElementState::Pressed,
-                            ..
-                        },
-                    ..
-                } => {
-                    window_target.exit();
+                Event::AboutToWait => {
+                    do_cef_message_loop_work();
                 }
-                WindowEvent::Resized(..) => {
-                    let size = shared_wgpu_state.window.inner_size();
-                    view_surface.resize(size);
-                    shared_wgpu_state.window.request_redraw();
-                }
+                Event::WindowEvent {
+                    ref event,
+                    window_id,
+                } if window_id == shared_wgpu_state.window.id() => match event {
+                    WindowEvent::CloseRequested
+                    | WindowEvent::KeyboardInput {
+                        event:
+                            KeyEvent {
+                                logical_key: winit::keyboard::Key::Named(NamedKey::Escape),
+                                state: ElementState::Pressed,
+                                ..
+                            },
+                        ..
+                    } => {
+                        window_target.exit();
+                    }
+                    WindowEvent::Resized(..) => {
+                        let size = shared_wgpu_state.window.inner_size();
+                        view_surface.resize(size);
+                    }
+                    _ => {}
+                },
                 _ => {}
-            },
-            _ => {}
+            };
         })
         .unwrap();
 }

@@ -3,7 +3,8 @@ use std::{process::exit, sync::Arc};
 use cef_wrapper::CefApp;
 use scene::{
     image_view::{ImageFit, ImageViewBuilder},
-    scene_view::SceneViewBuilder, web_view::WebViewBuilder,
+    scene_view::SceneViewBuilder,
+    web_view::WebViewBuilder,
 };
 use taffy::prelude::*;
 use winit::event_loop::EventLoop;
@@ -72,10 +73,7 @@ pub async fn main() {
 
     let mut view_builder = Box::new(SceneViewBuilder::new(scene));
 
-    view_builder.add_view(
-        back,
-        Box::new(WebViewBuilder::new(app)),
-    );
+    view_builder.add_view(back, Box::new(WebViewBuilder::new(app)));
 
     view_builder.add_view(
         front,
