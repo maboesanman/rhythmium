@@ -28,17 +28,13 @@ bool Client::GetScreenInfo(CefRefPtr<CefBrowser> browser, CefScreenInfo& screen_
     return false;
   }
 
-  int w;
-  int h;
-  _client_settings.get_view_rect(_client_settings.get_view_rect_arg, &w, &h);
-
   screen_info.Set(
     new_scale_factor,
     32,
-    0,
+    8,
     false,
-    CefRect(0, 0, w, h),
-    CefRect(0, 0, w, h)
+    CefRect(0, 0, 0, 0),
+    CefRect(0, 0, 0, 0)
   );
 
   return true;

@@ -1,11 +1,11 @@
 use std::sync::{Arc, RwLock};
 
-use cef_wrapper::{CefApp, browser, browser_host::BrowserHost};
+use cef_wrapper::{browser, browser_host::BrowserHost, CefApp};
 use wgpu::{util::DeviceExt, CommandEncoder, TextureView};
-use winit::dpi::{PhysicalSize, LogicalSize, LogicalPosition};
+use winit::dpi::{LogicalPosition, LogicalSize, PhysicalSize};
 
 use super::{
-    shared_wgpu_state::{SharedWgpuState, self},
+    shared_wgpu_state::{self, SharedWgpuState},
     view::{View, ViewBuilder},
 };
 
@@ -209,130 +209,143 @@ impl WebView {
         let shared_wgpu_state_clone_2 = shared_wgpu_state.clone();
         let shared_wgpu_state_clone_3 = shared_wgpu_state.clone();
 
-        let browser = cef_app.create_browser(
-            move |w, h| {
-                shared_wgpu_state_clone.window.request_redraw();
-                let w = unsafe { w.as_mut().unwrap() };
-                let h = unsafe { h.as_mut().unwrap() };
+        let browser = cef_app
+            .create_browser(
+                move |w, h| {
+                    println!("get_view_rect");
+                    let w = unsafe { w.as_mut().unwrap() };
+                    let h = unsafe { h.as_mut().unwrap() };
 
-                let physical_size = *size_clone.read().unwrap();
-                let logical_size: LogicalSize<i32> = physical_size.to_logical(shared_wgpu_state_clone.window.scale_factor());
+                    let physical_size = *size_clone.read().unwrap();
+                    let logical_size: LogicalSize<i32> =
+                        physical_size.to_logical(shared_wgpu_state_clone.window.scale_factor());
 
-                *w = logical_size.width;
-                *h = logical_size.height;
-            },
-            move |buf, w, h| {
+                    *w = logical_size.width;
+                    *h = logical_size.height;
+                },
+                move |buf, w, h| {
+                    println!("on_paint: {}x{}", w, h);
+                    let buf = unsafe {
+                        std::slice::from_raw_parts(buf.cast::<u8>(), (w * h * 4) as usize)
+                    };
+                    let current_size = { texture_clone.read().unwrap().size() };
+                    if current_size.width != w as u32 || current_size.height != h as u32 {
+                        let texture_size = wgpu::Extent3d {
+                            width: w as u32,
+                            height: h as u32,
+                            depth_or_array_layers: 1,
+                        };
 
-                let buf =
-                    unsafe { std::slice::from_raw_parts(buf.cast::<u8>(), (w * h * 4) as usize) };
-                let current_size = { texture_clone.read().unwrap().size() };
-                if current_size.width != w as u32 || current_size.height != h as u32 {
-                    let texture_size = wgpu::Extent3d {
+                        let texture = device.create_texture(&wgpu::TextureDescriptor {
+                            label: Some("WebView Texture"),
+                            size: texture_size,
+                            mip_level_count: 1,
+                            sample_count: 1,
+                            dimension: wgpu::TextureDimension::D2,
+                            format: wgpu::TextureFormat::Bgra8UnormSrgb,
+                            usage: wgpu::TextureUsages::TEXTURE_BINDING
+                                | wgpu::TextureUsages::COPY_DST,
+                            view_formats: &[],
+                        });
+
+                        queue.write_texture(
+                            wgpu::ImageCopyTexture {
+                                aspect: wgpu::TextureAspect::All,
+                                texture: &texture,
+                                mip_level: 0,
+                                origin: wgpu::Origin3d::ZERO,
+                            },
+                            buf,
+                            wgpu::ImageDataLayout {
+                                offset: 0,
+                                bytes_per_row: Some(4 * texture_size.width),
+                                rows_per_image: Some(texture_size.height),
+                            },
+                            texture_size,
+                        );
+
+                        let texture_view =
+                            texture.create_view(&wgpu::TextureViewDescriptor::default());
+                        let texture_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+                            address_mode_u: wgpu::AddressMode::ClampToEdge,
+                            address_mode_v: wgpu::AddressMode::ClampToEdge,
+                            address_mode_w: wgpu::AddressMode::ClampToEdge,
+                            mag_filter: wgpu::FilterMode::Nearest,
+                            min_filter: wgpu::FilterMode::Nearest,
+                            mipmap_filter: wgpu::FilterMode::Nearest,
+                            ..Default::default()
+                        });
+
+                        {
+                            let mut texture_write = texture_clone.write().unwrap();
+                            *texture_write = texture;
+                        }
+
+                        *texture_bind_group_clone.write().unwrap() =
+                            device.create_bind_group(&wgpu::BindGroupDescriptor {
+                                label: Some("Diffuse Bind Group"),
+                                layout: &texture_bind_group_layout,
+                                entries: &[
+                                    wgpu::BindGroupEntry {
+                                        binding: 0,
+                                        resource: wgpu::BindingResource::TextureView(&texture_view),
+                                    },
+                                    wgpu::BindGroupEntry {
+                                        binding: 1,
+                                        resource: wgpu::BindingResource::Sampler(&texture_sampler),
+                                    },
+                                ],
+                            });
+                        return;
+                    }
+
+                    // convert buf from a *const c_void to a &[u8]
+
+                    let texture_extent = wgpu::Extent3d {
                         width: w as u32,
                         height: h as u32,
                         depth_or_array_layers: 1,
                     };
 
-                    let texture = device.create_texture(&wgpu::TextureDescriptor {
-                        label: Some("WebView Texture"),
-                        size: texture_size,
-                        mip_level_count: 1,
-                        sample_count: 1,
-                        dimension: wgpu::TextureDimension::D2,
-                        format: wgpu::TextureFormat::Bgra8UnormSrgb,
-                        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-                        view_formats: &[],
-                    });
+                    let texture_copy_view = wgpu::ImageCopyTexture {
+                        texture: &texture_clone.read().unwrap(),
+                        mip_level: 0,
+                        origin: wgpu::Origin3d::ZERO,
+                        aspect: wgpu::TextureAspect::All,
+                    };
+
+                    let texture_data_layout = wgpu::ImageDataLayout {
+                        offset: 0,
+                        bytes_per_row: Some(4 * w as u32),
+                        rows_per_image: None,
+                    };
 
                     queue.write_texture(
-                        wgpu::ImageCopyTexture {
-                            aspect: wgpu::TextureAspect::All,
-                            texture: &texture,
-                            mip_level: 0,
-                            origin: wgpu::Origin3d::ZERO,
-                        },
+                        texture_copy_view,
                         buf,
-                        wgpu::ImageDataLayout {
-                            offset: 0,
-                            bytes_per_row: Some(4 * texture_size.width),
-                            rows_per_image: Some(texture_size.height),
-                        },
-                        texture_size,
+                        texture_data_layout,
+                        texture_extent,
                     );
+                },
+                move |scale_factor| {
+                    println!("get_scale_factor");
+                    let scale_factor = unsafe { scale_factor.as_mut().unwrap() };
+                    *scale_factor = shared_wgpu_state_clone_2.window.scale_factor() as f32;
+                },
+                move |view_x, view_y, screen_x, screen_y| {
+                    println!("get_screen_point: {}x{}", view_x, view_y);
+                    let scale_factor = shared_wgpu_state_clone_3.window.scale_factor();
 
-                    let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-                    let texture_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-                        address_mode_u: wgpu::AddressMode::ClampToEdge,
-                        address_mode_v: wgpu::AddressMode::ClampToEdge,
-                        address_mode_w: wgpu::AddressMode::ClampToEdge,
-                        mag_filter: wgpu::FilterMode::Nearest,
-                        min_filter: wgpu::FilterMode::Nearest,
-                        mipmap_filter: wgpu::FilterMode::Nearest,
-                        ..Default::default()
-                    });
+                    let logical_position = LogicalPosition::new(view_x, view_y);
+                    let physical_position = logical_position.to_physical(scale_factor);
 
-                    {
-                        let mut texture_write = texture_clone.write().unwrap();
-                        *texture_write = texture;
+                    unsafe {
+                        *screen_x = physical_position.x;
+                        *screen_y = physical_position.y;
                     }
-
-                    *texture_bind_group_clone.write().unwrap() =
-                        device.create_bind_group(&wgpu::BindGroupDescriptor {
-                            label: Some("Diffuse Bind Group"),
-                            layout: &texture_bind_group_layout,
-                            entries: &[
-                                wgpu::BindGroupEntry {
-                                    binding: 0,
-                                    resource: wgpu::BindingResource::TextureView(&texture_view),
-                                },
-                                wgpu::BindGroupEntry {
-                                    binding: 1,
-                                    resource: wgpu::BindingResource::Sampler(&texture_sampler),
-                                },
-                            ],
-                        });
-                    return;
-                }
-
-                // convert buf from a *const c_void to a &[u8]
-
-                let texture_extent = wgpu::Extent3d {
-                    width: w as u32,
-                    height: h as u32,
-                    depth_or_array_layers: 1,
-                };
-
-                let texture_copy_view = wgpu::ImageCopyTexture {
-                    texture: &texture_clone.read().unwrap(),
-                    mip_level: 0,
-                    origin: wgpu::Origin3d::ZERO,
-                    aspect: wgpu::TextureAspect::All,
-                };
-
-                let texture_data_layout = wgpu::ImageDataLayout {
-                    offset: 0,
-                    bytes_per_row: Some(4 * w as u32),
-                    rows_per_image: None,
-                };
-
-                queue.write_texture(texture_copy_view, buf, texture_data_layout, texture_extent);
-            },
-            move |scale_factor| {
-                let scale_factor = unsafe { scale_factor.as_mut().unwrap() };
-                *scale_factor = shared_wgpu_state_clone_2.window.scale_factor() as f32;
-            },
-            move |view_x, view_y, screen_x, screen_y| {
-                let scale_factor = shared_wgpu_state_clone_3.window.scale_factor();
-
-                let logical_position = LogicalPosition::new(view_x, view_y);
-                let physical_position = logical_position.to_physical(scale_factor);
-
-                unsafe {
-                    *screen_x = physical_position.x;
-                    *screen_y = physical_position.y;
-                }
-            }
-        ).await;
+                },
+            )
+            .await;
 
         let current_scale_factor = shared_wgpu_state.window.scale_factor() as f64;
 
@@ -353,6 +366,7 @@ impl WebView {
 impl View for WebView {
     fn set_size(&mut self, size: PhysicalSize<u32>) {
         *self.size.write().unwrap() = size;
+        println!("set_size: {:?}", size);
         self.browser_host.was_resized();
 
         if self.current_scale_factor != self.shared_wgpu_state.window.scale_factor() as f64 {

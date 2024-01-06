@@ -1,5 +1,3 @@
-
-
 #[derive(Debug)]
 pub struct BrowserHost {
     pub(crate) browser_host: *mut crate::sys::cef_browser_host_t,

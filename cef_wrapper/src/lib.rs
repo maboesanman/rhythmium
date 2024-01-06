@@ -1,8 +1,9 @@
-use core::{future::Future, panic};
 use browser::Browser;
+use core::{future::Future, panic};
 use futures::channel::oneshot::{self, Sender};
 use std::{
-    os::raw::{c_char, c_int, c_void}, ffi::c_float,
+    ffi::c_float,
+    os::raw::{c_char, c_int, c_void},
 };
 
 extern crate link_cplusplus;
@@ -70,7 +71,8 @@ impl CefApp {
         };
         let (get_view_rect, get_view_rect_arg) = anonymize_get_view_rect(get_view_rect);
         let (on_paint, on_paint_arg) = anonymize_on_paint(on_paint);
-        let (on_browser_created, on_browser_created_arg) = anonymize_on_browser_created(on_browser_created);
+        let (on_browser_created, on_browser_created_arg) =
+            anonymize_on_browser_created(on_browser_created);
         let (get_scale_factor, get_scale_factor_arg) = anonymize_get_scale_factor(get_scale_factor);
         let (get_screen_point, get_screen_point_arg) = anonymize_get_screen_point(get_screen_point);
         let client_settings = sys::ClientSettings {
@@ -86,9 +88,7 @@ impl CefApp {
             get_screen_point_arg,
         };
 
-        unsafe {
-            sys::create_browser(client_settings)
-        };
+        unsafe { sys::create_browser(client_settings) };
 
         receiver.await.expect("browser creation failed")
     }
@@ -131,10 +131,7 @@ fn anonymize_get_view_rect<F: Fn(*mut c_int, *mut c_int)>(
 
 fn anonymize_on_browser_created<F: FnMut(*mut c_void)>(
     f: F,
-) -> (
-    unsafe extern "C" fn(*mut c_void, *mut c_void),
-    *mut c_void,
-) {
+) -> (unsafe extern "C" fn(*mut c_void, *mut c_void), *mut c_void) {
     let ptr = Box::into_raw(Box::new(f));
     unsafe extern "C" fn call_thunk<F: FnMut(*mut c_void)>(
         data: *mut c_void,
@@ -147,10 +144,7 @@ fn anonymize_on_browser_created<F: FnMut(*mut c_void)>(
 
 fn anonymize_get_scale_factor<F: FnMut(*mut c_float)>(
     f: F,
-) -> (
-    unsafe extern "C" fn(*mut c_void, *mut c_float),
-    *mut c_void,
-) {
+) -> (unsafe extern "C" fn(*mut c_void, *mut c_float), *mut c_void) {
     let ptr = Box::into_raw(Box::new(f));
     unsafe extern "C" fn call_thunk<F: FnMut(*mut c_float)>(
         data: *mut c_void,

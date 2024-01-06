@@ -18,8 +18,8 @@ int create_browser(ClientSettings client_settings) {
     browser = CefBrowserHost::CreateBrowserSync(
       window_info,
       new Client(client_settings),
-      // "https://webglsamples.org/blob/blob.html",
-      "https://www.reddit.com",
+      "https://webglsamples.org/blob/blob.html",
+      // "https://www.spacejam.com/1996/jam.html",
       browser_settings,
       nullptr,
       nullptr

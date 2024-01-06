@@ -48,15 +48,27 @@ impl ViewBuilder for SceneViewBuilder {
         shared_wgpu_state: Arc<SharedWgpuState>,
         size: PhysicalSize<u32>,
     ) -> Box<dyn View> {
+        let logical_size = size.to_logical::<f32>(shared_wgpu_state.window.scale_factor());
         self.scene.resize(taffy::geometry::Size {
-            width: size.width as f32,
-            height: size.height as f32,
+            width: logical_size.width as f32,
+            height: logical_size.height as f32,
         });
+
         let views = self
-            .views
+            .scene
+            .get_layout()
             .into_iter()
-            .map(|(key, view)| (key, view.build(shared_wgpu_state.clone(), size)))
+            .map(|(size, _, key)| {
+                let physical_size = SceneView::taffy_to_physical_size(&shared_wgpu_state, size);
+                let view = self
+                    .views
+                    .remove(&key)
+                    .unwrap()
+                    .build(shared_wgpu_state.clone(), physical_size);
+                (key, view)
+            })
             .collect::<HashMap<_, _>>();
+
         Box::new(SceneView::new(self.scene, views, size, shared_wgpu_state))
     }
 }

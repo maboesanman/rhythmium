@@ -1,5 +1,3 @@
-
-
 #[derive(Debug)]
 pub struct Browser {
     pub(crate) browser: *mut crate::sys::cef_browser_t,
@@ -12,9 +10,9 @@ impl Browser {
 
     pub fn get_host(&self) -> crate::browser_host::BrowserHost {
         unsafe {
-            crate::browser_host::BrowserHost::new(
-                (*self.browser).get_host.unwrap()(self.browser.cast())
-            )
+            crate::browser_host::BrowserHost::new((*self.browser).get_host.unwrap()(
+                self.browser.cast(),
+            ))
         }
     }
 
