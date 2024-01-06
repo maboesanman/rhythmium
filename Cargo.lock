@@ -1728,6 +1728,7 @@ dependencies = [
  "bytemuck",
  "cef_wrapper",
  "env_logger",
+ "futures",
  "image",
  "log",
  "rand",

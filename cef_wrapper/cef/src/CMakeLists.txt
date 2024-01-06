@@ -61,6 +61,10 @@ endif()
 set(TARGET "cef_wrapper")
 
 add_library(${TARGET} STATIC)
+
+# a hack to use cef wrapper to convert c++ api types to c api types
+target_compile_definitions(${TARGET} PUBLIC -DWRAPPING_CEF_SHARED)
+
 target_sources(${TARGET} PRIVATE ${LIB_SRCS})
 SET_LIBRARY_TARGET_PROPERTIES(${TARGET})
 add_dependencies(${TARGET} libcef_dll_wrapper)
@@ -143,6 +147,15 @@ if(OS_MAC)
     COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${CEF_BINARY_DIR}/Chromium Embedded Framework.framework"
             "${APP}/Contents/Frameworks/Chromium Embedded Framework.framework"
+    VERBATIM
+  )
+
+  add_custom_command(
+    TARGET ${TARGET}
+    POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CEF_INCLUDE_PATH}/include"
+            "${CMAKE_INCLUDE_OUTPUT_DIRECTORY}/include"
     VERBATIM
   )
 

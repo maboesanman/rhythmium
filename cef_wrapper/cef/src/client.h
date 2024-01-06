@@ -6,12 +6,7 @@
 
 #include "include/cef_client.h"
 #include "include/cef_app.h"
-
-
-struct ClientSettings {
-  void (*on_paint) ( void* arg, const void* buffer, int width, int height );
-  void* on_paint_arg;
-};
+#include "create_browser.h"
 
 
 // Minimal implementation of client handlers.

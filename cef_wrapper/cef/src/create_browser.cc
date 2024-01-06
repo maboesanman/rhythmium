@@ -4,11 +4,9 @@
 #include "create_browser.h"
 #include "client.h"
 
+#include "libcef_dll/ctocpp/browser_ctocpp.h"
 
-int create_browser(
-  void (*on_paint) ( void* arg, const void* buffer, int width, int height ),
-  void* on_paint_arg
-) {
+int create_browser(ClientSettings client_settings) {
   CefRefPtr<CefBrowser> browser;
   {
     CefWindowInfo window_info;
@@ -17,15 +15,11 @@ int create_browser(
     browser_settings.windowless_frame_rate = 60;
     window_info.SetAsWindowless(nullptr);
 
-    ClientSettings client_settings;
-    client_settings.on_paint = on_paint;
-    client_settings.on_paint_arg = on_paint_arg;
-
     browser = CefBrowserHost::CreateBrowserSync(
       window_info,
       new Client(client_settings),
-      "https://webglsamples.org/blob/blob.html",
-      // "https://www.google.com",
+      // "https://webglsamples.org/blob/blob.html",
+      "https://www.reddit.com",
       browser_settings,
       nullptr,
       nullptr

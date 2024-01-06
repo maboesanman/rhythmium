@@ -3,18 +3,6 @@ use std::path::Path;
 use cmake;
 
 fn main() {
-    // set up bindgen for cmake library
-    let bindings = bindgen::Builder::default()
-        .header("wrapper.hpp")
-        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
-        .generate()
-        .expect("Unable to generate bindings");
-
-    let out_path = Path::new(&std::env::var("OUT_DIR").unwrap()).join("bindings.rs");
-    bindings
-        .write_to_file(out_path)
-        .expect("Unable to write bindings");
-
     // set up cmake build
     println!("cargo:rerun-if-changed=cef/CMakeLists.txt");
     println!("cargo:rerun-if-changed=cef/src");
@@ -37,4 +25,32 @@ fn main() {
         println!("cargo:rustc-link-lib=sandbox");
         println!("cargo:rustc-link-lib=static=cef_sandbox");
     }
+
+    let include_dir = cmake_target_dir.join("include");
+    let clang_include_arg = format!("-I{}", include_dir.display());
+
+    // set up bindgen for cmake library
+    let bindings = bindgen::Builder::default()
+        .header("wrapper.hpp")
+        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
+        .generate()
+        .expect("Unable to generate bindings");
+
+    let out_path = Path::new(&std::env::var("OUT_DIR").unwrap()).join("bindings_cpp.rs");
+    bindings
+        .write_to_file(out_path)
+        .expect("Unable to write bindings");
+
+    // set up bindgen for cmake library
+    let bindings = bindgen::Builder::default()
+        .header("wrapper.h")
+        .clang_arg(clang_include_arg)
+        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
+        .generate()
+        .expect("Unable to generate bindings");
+
+    let out_path = Path::new(&std::env::var("OUT_DIR").unwrap()).join("bindings_c.rs");
+    bindings
+        .write_to_file(out_path)
+        .expect("Unable to write bindings");
 }

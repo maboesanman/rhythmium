@@ -1,6 +1,6 @@
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
-use cef_wrapper::CefApp;
+use cef_wrapper::{CefApp, browser, browser_host::BrowserHost};
 use wgpu::{util::DeviceExt, CommandEncoder, TextureView};
 use winit::dpi::PhysicalSize;
 
@@ -25,26 +25,30 @@ impl ViewBuilder for WebViewBuilder {
         shared_wgpu_state: Arc<SharedWgpuState>,
         size: PhysicalSize<u32>,
     ) -> Box<dyn View> {
-        Box::new(WebView::new(shared_wgpu_state, size, &self.cef_app))
+        let fut = WebView::new(shared_wgpu_state, size, &self.cef_app);
+        let view = futures::executor::block_on(fut);
+        Box::new(view)
     }
 }
 
 #[derive(Debug)]
 pub struct WebView {
     shared_wgpu_state: Arc<SharedWgpuState>,
-    texture: Arc<wgpu::Texture>,
-    texture_view: wgpu::TextureView,
-    texture_sampler: wgpu::Sampler,
-    texture_bind_group: wgpu::BindGroup,
+    texture: Arc<RwLock<wgpu::Texture>>,
+    texture_bind_group: Arc<RwLock<wgpu::BindGroup>>,
 
     render_pipeline: wgpu::RenderPipeline,
 
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
+
+    size: Arc<RwLock<PhysicalSize<u32>>>,
+
+    browser_host: BrowserHost,
 }
 
 impl WebView {
-    pub fn new(
+    pub async fn new(
         shared_wgpu_state: Arc<SharedWgpuState>,
         size: PhysicalSize<u32>,
         cef_app: &CefApp,
@@ -52,15 +56,15 @@ impl WebView {
         let device = &shared_wgpu_state.device;
         let queue = &shared_wgpu_state.queue;
 
-        let size = wgpu::Extent3d {
-            width: 1600,
-            height: 1600,
+        let texture_size = wgpu::Extent3d {
+            width: size.width,
+            height: size.height,
             depth_or_array_layers: 1,
         };
 
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("WebView Texture"),
-            size,
+            size: texture_size,
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -69,8 +73,6 @@ impl WebView {
             view_formats: &[],
         });
 
-        let texture = Arc::new(texture);
-
         queue.write_texture(
             wgpu::ImageCopyTexture {
                 aspect: wgpu::TextureAspect::All,
@@ -78,13 +80,13 @@ impl WebView {
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
             },
-            &vec![128u8; 4 * size.width as usize * size.height as usize],
+            &vec![128u8; 4 * texture_size.width as usize * texture_size.height as usize],
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(4 * size.width),
-                rows_per_image: Some(size.height),
+                bytes_per_row: Some(4 * texture_size.width),
+                rows_per_image: Some(texture_size.height),
             },
-            size,
+            texture_size,
         );
 
         let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
@@ -192,52 +194,141 @@ impl WebView {
             ],
         });
 
+        let texture = Arc::new(RwLock::new(texture));
         let texture_clone = texture.clone();
 
-        cef_app.create_browser(move |buf, w, h| {
-            println!("painting {}x{} buffer", w, h);
+        let texture_bind_group = Arc::new(RwLock::new(texture_bind_group));
+        let texture_bind_group_clone = texture_bind_group.clone();
 
-            // convert buf from a *const c_void to a &[u8]
-            let buf = unsafe { std::slice::from_raw_parts(buf.cast::<u8>(), (w * h * 4) as usize) };
+        let size = Arc::new(RwLock::new(size));
+        let size_clone = size.clone();
 
-            let texture_extent = wgpu::Extent3d {
-                width: w as u32,
-                height: h as u32,
-                depth_or_array_layers: 1,
-            };
+        let browser = cef_app.create_browser(
+            move |w, h| {
+                let w = unsafe { w.as_mut().unwrap() };
+                let h = unsafe { h.as_mut().unwrap() };
 
-            let texture_copy_view = wgpu::ImageCopyTexture {
-                texture: &texture_clone,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            };
+                let size = *size_clone.read().unwrap();
 
-            let texture_data_layout = wgpu::ImageDataLayout {
-                offset: 0,
-                bytes_per_row: Some(4 * w as u32),
-                rows_per_image: None,
-            };
+                *w = size.width as i32;
+                *h = size.height as i32;
+            },
+            move |buf, w, h| {
+                let buf =
+                    unsafe { std::slice::from_raw_parts(buf.cast::<u8>(), (w * h * 4) as usize) };
+                let current_size = { texture_clone.read().unwrap().size() };
+                if current_size.width != w as u32 || current_size.height != h as u32 {
+                    println!("resizing texture to {}x{}", w, h);
 
-            queue.write_texture(texture_copy_view, buf, texture_data_layout, texture_extent);
-        });
+                    let texture_size = wgpu::Extent3d {
+                        width: w as u32,
+                        height: h as u32,
+                        depth_or_array_layers: 1,
+                    };
+
+                    let texture = device.create_texture(&wgpu::TextureDescriptor {
+                        label: Some("WebView Texture"),
+                        size: texture_size,
+                        mip_level_count: 1,
+                        sample_count: 1,
+                        dimension: wgpu::TextureDimension::D2,
+                        format: wgpu::TextureFormat::Bgra8UnormSrgb,
+                        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                        view_formats: &[],
+                    });
+
+                    queue.write_texture(
+                        wgpu::ImageCopyTexture {
+                            aspect: wgpu::TextureAspect::All,
+                            texture: &texture,
+                            mip_level: 0,
+                            origin: wgpu::Origin3d::ZERO,
+                        },
+                        buf,
+                        wgpu::ImageDataLayout {
+                            offset: 0,
+                            bytes_per_row: Some(4 * texture_size.width),
+                            rows_per_image: Some(texture_size.height),
+                        },
+                        texture_size,
+                    );
+
+                    let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+                    let texture_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+                        address_mode_u: wgpu::AddressMode::ClampToEdge,
+                        address_mode_v: wgpu::AddressMode::ClampToEdge,
+                        address_mode_w: wgpu::AddressMode::ClampToEdge,
+                        mag_filter: wgpu::FilterMode::Nearest,
+                        min_filter: wgpu::FilterMode::Nearest,
+                        mipmap_filter: wgpu::FilterMode::Nearest,
+                        ..Default::default()
+                    });
+
+                    {
+                        let mut texture_write = texture_clone.write().unwrap();
+                        *texture_write = texture;
+                    }
+
+                    *texture_bind_group_clone.write().unwrap() =
+                        device.create_bind_group(&wgpu::BindGroupDescriptor {
+                            label: Some("Diffuse Bind Group"),
+                            layout: &texture_bind_group_layout,
+                            entries: &[
+                                wgpu::BindGroupEntry {
+                                    binding: 0,
+                                    resource: wgpu::BindingResource::TextureView(&texture_view),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 1,
+                                    resource: wgpu::BindingResource::Sampler(&texture_sampler),
+                                },
+                            ],
+                        });
+                    return;
+                }
+
+                // convert buf from a *const c_void to a &[u8]
+
+                let texture_extent = wgpu::Extent3d {
+                    width: w as u32,
+                    height: h as u32,
+                    depth_or_array_layers: 1,
+                };
+
+                let texture_copy_view = wgpu::ImageCopyTexture {
+                    texture: &texture_clone.read().unwrap(),
+                    mip_level: 0,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                };
+
+                let texture_data_layout = wgpu::ImageDataLayout {
+                    offset: 0,
+                    bytes_per_row: Some(4 * w as u32),
+                    rows_per_image: None,
+                };
+
+                queue.write_texture(texture_copy_view, buf, texture_data_layout, texture_extent);
+            },
+        ).await;
 
         Self {
             shared_wgpu_state,
-            texture,
-            texture_view,
-            texture_sampler,
             render_pipeline,
             vertex_buffer,
             index_buffer,
+            texture,
             texture_bind_group,
+            size,
+            browser_host: browser.get_host(),
         }
     }
 }
 
 impl View for WebView {
     fn set_size(&mut self, size: PhysicalSize<u32>) {
-        // todo
+        *self.size.write().unwrap() = size;
+        self.browser_host.was_resized();
     }
 
     fn render<'pass>(
@@ -245,6 +336,7 @@ impl View for WebView {
         command_encoder: &'pass mut CommandEncoder,
         output_view: &TextureView,
     ) {
+        let texture_bind_group = self.texture_bind_group.read().unwrap();
         {
             let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Web View Render Pass"),
@@ -262,7 +354,7 @@ impl View for WebView {
             });
 
             render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.set_bind_group(0, &self.texture_bind_group, &[]);
+            render_pass.set_bind_group(0, &*texture_bind_group, &[]);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
             render_pass.draw_indexed(0..6, 0, 0..1);
