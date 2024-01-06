@@ -2,7 +2,7 @@ use core::{future::Future, panic};
 use browser::Browser;
 use futures::channel::oneshot::{self, Sender};
 use std::{
-    os::raw::{c_char, c_int, c_void},
+    os::raw::{c_char, c_int, c_void}, ffi::c_float,
 };
 
 extern crate link_cplusplus;
@@ -57,6 +57,8 @@ impl CefApp {
         &self,
         get_view_rect: impl Fn(*mut c_int, *mut c_int),
         on_paint: impl Fn(*const c_void, c_int, c_int),
+        get_scale_factor: impl Fn(*mut c_float),
+        get_screen_point: impl Fn(c_int, c_int, *mut c_int, *mut c_int),
     ) -> Browser {
         let (sender, receiver) = oneshot::channel::<Browser>();
         let mut sender = Some(sender);
@@ -69,6 +71,8 @@ impl CefApp {
         let (get_view_rect, get_view_rect_arg) = anonymize_get_view_rect(get_view_rect);
         let (on_paint, on_paint_arg) = anonymize_on_paint(on_paint);
         let (on_browser_created, on_browser_created_arg) = anonymize_on_browser_created(on_browser_created);
+        let (get_scale_factor, get_scale_factor_arg) = anonymize_get_scale_factor(get_scale_factor);
+        let (get_screen_point, get_screen_point_arg) = anonymize_get_screen_point(get_screen_point);
         let client_settings = sys::ClientSettings {
             get_view_rect: Some(get_view_rect),
             get_view_rect_arg,
@@ -76,6 +80,10 @@ impl CefApp {
             on_paint_arg,
             on_browser_created: Some(on_browser_created),
             on_browser_created_arg,
+            get_scale_factor: Some(get_scale_factor),
+            get_scale_factor_arg,
+            get_screen_point: Some(get_screen_point),
+            get_screen_point_arg,
         };
 
         unsafe {
@@ -133,6 +141,41 @@ fn anonymize_on_browser_created<F: FnMut(*mut c_void)>(
         browser: *mut c_void,
     ) {
         (*data.cast::<F>())(browser)
+    }
+    (call_thunk::<F>, ptr.cast())
+}
+
+fn anonymize_get_scale_factor<F: FnMut(*mut c_float)>(
+    f: F,
+) -> (
+    unsafe extern "C" fn(*mut c_void, *mut c_float),
+    *mut c_void,
+) {
+    let ptr = Box::into_raw(Box::new(f));
+    unsafe extern "C" fn call_thunk<F: FnMut(*mut c_float)>(
+        data: *mut c_void,
+        scale_factor: *mut c_float,
+    ) {
+        (*data.cast::<F>())(scale_factor)
+    }
+    (call_thunk::<F>, ptr.cast())
+}
+
+fn anonymize_get_screen_point<F: Fn(c_int, c_int, *mut c_int, *mut c_int)>(
+    f: F,
+) -> (
+    unsafe extern "C" fn(*mut c_void, c_int, c_int, *mut c_int, *mut c_int),
+    *mut c_void,
+) {
+    let ptr = Box::into_raw(Box::new(f));
+    unsafe extern "C" fn call_thunk<F: Fn(c_int, c_int, *mut c_int, *mut c_int)>(
+        data: *mut c_void,
+        x: c_int,
+        y: c_int,
+        screen_x: *mut c_int,
+        screen_y: *mut c_int,
+    ) {
+        (*data.cast::<F>())(x, y, screen_x, screen_y)
     }
     (call_thunk::<F>, ptr.cast())
 }

@@ -12,6 +12,12 @@ extern "C" struct ClientSettings {
 
   void (*on_browser_created) ( void* arg, void* browser );
   void* on_browser_created_arg;
+
+  void (*get_scale_factor) ( void* arg, float* scale_factor);
+  void* get_scale_factor_arg;
+
+  void (*get_screen_point) ( void* arg, int view_x, int view_y, int* screen_x, int* screen_y );
+  void* get_screen_point_arg;
 };
 
 extern "C" int create_browser(ClientSettings client_settings);

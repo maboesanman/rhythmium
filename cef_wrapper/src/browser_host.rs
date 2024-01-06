@@ -15,6 +15,12 @@ impl BrowserHost {
             (*self.browser_host).was_resized.unwrap()(self.browser_host.cast());
         }
     }
+
+    pub fn notify_screen_info_changed(&self) {
+        unsafe {
+            (*self.browser_host).notify_screen_info_changed.unwrap()(self.browser_host.cast());
+        }
+    }
 }
 
 impl Drop for BrowserHost {

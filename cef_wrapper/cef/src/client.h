@@ -39,6 +39,8 @@ class Client : public CefClient,
   // CefRenderHandler methods:
   void GetViewRect(CefRefPtr<CefBrowser> browser, CefRect& rect) override;
   void OnPaint(CefRefPtr<CefBrowser> browser, PaintElementType type, const RectList& dirtyRects, const void* buffer, int width, int height) override;
+  bool GetScreenInfo(CefRefPtr<CefBrowser> browser, CefScreenInfo& screen_info) override;
+  bool GetScreenPoint(CefRefPtr<CefBrowser> browser, int viewX, int viewY, int& screenX, int& screenY) override;
 
  private:
   IMPLEMENT_REFCOUNTING(Client);

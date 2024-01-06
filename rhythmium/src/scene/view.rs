@@ -17,7 +17,7 @@ use super::{
 };
 
 pub trait View: Debug {
-    fn set_size(&mut self, size: PhysicalSize<u32>);
+    fn set_size(&mut self, size: PhysicalSize<u32>) { }
     fn render<'a>(&'a mut self, command_encoder: &'a mut CommandEncoder, output_view: &TextureView);
 }
 

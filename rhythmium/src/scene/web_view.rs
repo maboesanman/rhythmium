@@ -2,10 +2,10 @@ use std::sync::{Arc, RwLock};
 
 use cef_wrapper::{CefApp, browser, browser_host::BrowserHost};
 use wgpu::{util::DeviceExt, CommandEncoder, TextureView};
-use winit::dpi::PhysicalSize;
+use winit::dpi::{PhysicalSize, LogicalSize, LogicalPosition};
 
 use super::{
-    shared_wgpu_state::SharedWgpuState,
+    shared_wgpu_state::{SharedWgpuState, self},
     view::{View, ViewBuilder},
 };
 
@@ -45,6 +45,8 @@ pub struct WebView {
     size: Arc<RwLock<PhysicalSize<u32>>>,
 
     browser_host: BrowserHost,
+
+    current_scale_factor: f64,
 }
 
 impl WebView {
@@ -203,23 +205,28 @@ impl WebView {
         let size = Arc::new(RwLock::new(size));
         let size_clone = size.clone();
 
+        let shared_wgpu_state_clone = shared_wgpu_state.clone();
+        let shared_wgpu_state_clone_2 = shared_wgpu_state.clone();
+        let shared_wgpu_state_clone_3 = shared_wgpu_state.clone();
+
         let browser = cef_app.create_browser(
             move |w, h| {
+                shared_wgpu_state_clone.window.request_redraw();
                 let w = unsafe { w.as_mut().unwrap() };
                 let h = unsafe { h.as_mut().unwrap() };
 
-                let size = *size_clone.read().unwrap();
+                let physical_size = *size_clone.read().unwrap();
+                let logical_size: LogicalSize<i32> = physical_size.to_logical(shared_wgpu_state_clone.window.scale_factor());
 
-                *w = size.width as i32;
-                *h = size.height as i32;
+                *w = logical_size.width;
+                *h = logical_size.height;
             },
             move |buf, w, h| {
+
                 let buf =
                     unsafe { std::slice::from_raw_parts(buf.cast::<u8>(), (w * h * 4) as usize) };
                 let current_size = { texture_clone.read().unwrap().size() };
                 if current_size.width != w as u32 || current_size.height != h as u32 {
-                    println!("resizing texture to {}x{}", w, h);
-
                     let texture_size = wgpu::Extent3d {
                         width: w as u32,
                         height: h as u32,
@@ -310,7 +317,24 @@ impl WebView {
 
                 queue.write_texture(texture_copy_view, buf, texture_data_layout, texture_extent);
             },
+            move |scale_factor| {
+                let scale_factor = unsafe { scale_factor.as_mut().unwrap() };
+                *scale_factor = shared_wgpu_state_clone_2.window.scale_factor() as f32;
+            },
+            move |view_x, view_y, screen_x, screen_y| {
+                let scale_factor = shared_wgpu_state_clone_3.window.scale_factor();
+
+                let logical_position = LogicalPosition::new(view_x, view_y);
+                let physical_position = logical_position.to_physical(scale_factor);
+
+                unsafe {
+                    *screen_x = physical_position.x;
+                    *screen_y = physical_position.y;
+                }
+            }
         ).await;
+
+        let current_scale_factor = shared_wgpu_state.window.scale_factor() as f64;
 
         Self {
             shared_wgpu_state,
@@ -321,6 +345,7 @@ impl WebView {
             texture_bind_group,
             size,
             browser_host: browser.get_host(),
+            current_scale_factor,
         }
     }
 }
@@ -329,6 +354,11 @@ impl View for WebView {
     fn set_size(&mut self, size: PhysicalSize<u32>) {
         *self.size.write().unwrap() = size;
         self.browser_host.was_resized();
+
+        if self.current_scale_factor != self.shared_wgpu_state.window.scale_factor() as f64 {
+            self.current_scale_factor = self.shared_wgpu_state.window.scale_factor() as f64;
+            self.browser_host.notify_screen_info_changed();
+        }
     }
 
     fn render<'pass>(
