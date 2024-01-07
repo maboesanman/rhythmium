@@ -15,7 +15,11 @@ void Client::OnPaint(
   int height
 ) {
   auto arg = _client_settings.on_paint_arg;
-  _client_settings.on_paint(arg, buffer, width, height);
+
+  auto dirty_count = dirtyRects.size();
+  auto dirty_start = dirtyRects.data();
+
+  _client_settings.on_paint(arg, dirty_count, dirty_start, buffer, width, height);
 }
 
 bool Client::GetScreenInfo(CefRefPtr<CefBrowser> browser, CefScreenInfo& screen_info) {

@@ -1,7 +1,5 @@
 use std::ffi::c_void;
 
-
-
 pub trait Anonymizable<A, R> {
     type Anonymized;
 
@@ -197,8 +195,8 @@ impl<A1, A2, A3, A4, R, F: FnMut(A1, A2, A3, A4) -> R> AnonymizableMut<(A1, A2, 
     }
 }
 
-impl<A1, A2, A3, A4, A5, R, F: FnMut(A1, A2, A3, A4, A5) -> R> AnonymizableMut<(A1, A2, A3, A4, A5), R>
-    for F
+impl<A1, A2, A3, A4, A5, R, F: FnMut(A1, A2, A3, A4, A5) -> R>
+    AnonymizableMut<(A1, A2, A3, A4, A5), R> for F
 {
     type Anonymized = unsafe extern "C" fn(*mut c_void, A1, A2, A3, A4, A5) -> R;
 

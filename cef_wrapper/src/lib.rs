@@ -24,6 +24,8 @@ pub mod browser_host;
 
 use anonymize::{anonymize, anonymize_mut};
 
+pub use sys::cef_rect_t as CefRect;
+
 pub struct CefApp;
 
 impl CefApp {
@@ -60,7 +62,7 @@ impl CefApp {
     pub async fn create_browser(
         &self,
         get_view_rect: impl Fn(*mut c_int, *mut c_int),
-        on_paint: impl Fn(*const c_void, c_int, c_int),
+        on_paint: impl FnMut(c_int, *const c_void, *const c_void, c_int, c_int),
         get_scale_factor: impl Fn(*mut c_float),
         get_screen_point: impl Fn(c_int, c_int, *mut c_int, *mut c_int),
     ) -> Browser {
@@ -68,13 +70,13 @@ impl CefApp {
         let mut sender = Some(sender);
         let on_browser_created = move |browser: *mut c_void| {
             let browser = Browser::new(browser.cast());
-            if let Err(_) = sender.take().unwrap().send(browser) {
+            if sender.take().unwrap().send(browser).is_err() {
                 panic!("browser creation failed");
             }
         };
 
         let (get_view_rect, get_view_rect_arg) = anonymize(get_view_rect);
-        let (on_paint, on_paint_arg) = anonymize(on_paint);
+        let (on_paint, on_paint_arg) = anonymize_mut(on_paint);
         let (on_browser_created, on_browser_created_arg) = anonymize_mut(on_browser_created);
         let (get_scale_factor, get_scale_factor_arg) = anonymize(get_scale_factor);
         let (get_screen_point, get_screen_point_arg) = anonymize(get_screen_point);

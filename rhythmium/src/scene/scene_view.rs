@@ -50,8 +50,8 @@ impl ViewBuilder for SceneViewBuilder {
     ) -> Box<dyn View> {
         let logical_size = size.to_logical::<f32>(shared_wgpu_state.window.scale_factor());
         self.scene.resize(taffy::geometry::Size {
-            width: logical_size.width as f32,
-            height: logical_size.height as f32,
+            width: logical_size.width,
+            height: logical_size.height,
         });
 
         let views = self

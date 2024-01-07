@@ -1,7 +1,5 @@
 use std::path::Path;
 
-use cmake;
-
 fn main() {
     // set up cmake build
     println!("cargo:rerun-if-changed=cef/CMakeLists.txt");

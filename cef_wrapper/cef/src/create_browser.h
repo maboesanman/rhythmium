@@ -4,7 +4,7 @@
 // #include "include/capi/cef_browser_capi.h"
 
 extern "C" struct ClientSettings {
-  void (*on_paint) ( void* arg, const void* buffer, int width, int height );
+  void (*on_paint) ( void* arg, int dirty_count, const void* dirty_start, const void* buffer, int width, int height );
   void* on_paint_arg;
 
   void (*get_view_rect) ( void* arg, int* width, int* height );

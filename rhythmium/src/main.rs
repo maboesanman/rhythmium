@@ -73,7 +73,7 @@ pub async fn main() {
 
     let mut view_builder = Box::new(SceneViewBuilder::new(scene));
 
-    view_builder.add_view(back, Box::new(WebViewBuilder::new(app)));
+    // view_builder.add_view(back, Box::new(WebViewBuilder::new(app)));
 
     view_builder.add_view(
         front,
@@ -83,5 +83,6 @@ pub async fn main() {
         )),
     );
 
-    scene::view::run(event_loop, view_builder).await;
+    scene::view::run(event_loop, Box::new(WebViewBuilder::new(app))).await;
+    // scene::view::run(event_loop, view_builder).await;
 }
