@@ -21,7 +21,6 @@ class Client : public CefClient,
   }
   Client(const Client&) = delete;
   Client& operator=(const Client&) = delete;
-  ~Client() override = default;
 
   // CefClient methods:
   CefRefPtr<CefDisplayHandler> GetDisplayHandler() override { return this; }

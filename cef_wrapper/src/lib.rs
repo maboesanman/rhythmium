@@ -75,23 +75,28 @@ impl CefApp {
             }
         };
 
-        let (get_view_rect, get_view_rect_arg) = anonymize(get_view_rect);
-        let (on_paint, on_paint_arg) = anonymize_mut(on_paint);
-        let (on_browser_created, on_browser_created_arg) = anonymize_mut(on_browser_created);
-        let (get_scale_factor, get_scale_factor_arg) = anonymize(get_scale_factor);
-        let (get_screen_point, get_screen_point_arg) = anonymize(get_screen_point);
+        let get_view_rect = anonymize(get_view_rect);
+        let on_paint = anonymize_mut(on_paint);
+        let on_browser_created = anonymize_mut(on_browser_created);
+        let get_scale_factor = anonymize(get_scale_factor);
+        let get_screen_point = anonymize(get_screen_point);
 
         let client_settings = sys::ClientSettings {
-            get_view_rect: Some(get_view_rect),
-            get_view_rect_arg,
-            on_paint: Some(on_paint),
-            on_paint_arg,
-            on_browser_created: Some(on_browser_created),
-            on_browser_created_arg,
-            get_scale_factor: Some(get_scale_factor),
-            get_scale_factor_arg,
-            get_screen_point: Some(get_screen_point),
-            get_screen_point_arg,
+            get_view_rect: Some(get_view_rect.function),
+            get_view_rect_arg: get_view_rect.data,
+            get_view_rect_destroy: Some(get_view_rect.drop),
+            on_paint: Some(on_paint.function),
+            on_paint_arg: on_paint.data,
+            on_paint_destroy: Some(on_paint.drop),
+            on_browser_created: Some(on_browser_created.function),
+            on_browser_created_arg: on_browser_created.data,
+            on_browser_created_destroy: Some(on_browser_created.drop),
+            get_scale_factor: Some(get_scale_factor.function),
+            get_scale_factor_arg: get_scale_factor.data,
+            get_scale_factor_destroy: Some(get_scale_factor.drop),
+            get_screen_point: Some(get_screen_point.function),
+            get_screen_point_arg: get_screen_point.data,
+            get_screen_point_destroy: Some(get_screen_point.drop),
         };
 
         unsafe { sys::create_browser(client_settings) };
