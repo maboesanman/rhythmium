@@ -8,13 +8,21 @@ use std::{
 
 extern crate link_cplusplus;
 
-pub(crate) mod sys {
+pub mod cef_capi_sys {
     #![allow(non_upper_case_globals)]
     #![allow(non_camel_case_types)]
     #![allow(non_snake_case)]
     #![allow(dead_code)]
 
     include!(concat!(env!("OUT_DIR"), "/bindings_c.rs"));
+}
+
+pub mod cef_wrapper_sys {
+    #![allow(non_upper_case_globals)]
+    #![allow(non_camel_case_types)]
+    #![allow(non_snake_case)]
+    #![allow(dead_code)]
+
     include!(concat!(env!("OUT_DIR"), "/bindings_cpp.rs"));
 }
 
@@ -24,7 +32,7 @@ pub mod browser_host;
 
 use anonymize::{anonymize, anonymize_mut};
 
-pub use sys::cef_rect_t as CefRect;
+pub use cef_capi_sys::cef_rect_t as CefRect;
 
 pub struct CefApp;
 
@@ -44,7 +52,7 @@ impl CefApp {
         let sender_ptr = sender.as_mut() as *mut _ as *mut c_void;
         let result = unsafe {
             let (argc, argv) = get_posix_args();
-            sys::try_start_subprocess(argc, argv, Some(app_ready), sender_ptr)
+            cef_wrapper_sys::try_start_subprocess(argc, argv, Some(app_ready), sender_ptr)
         };
 
         if result != 0 {
@@ -81,7 +89,7 @@ impl CefApp {
         let get_scale_factor = anonymize(get_scale_factor);
         let get_screen_point = anonymize(get_screen_point);
 
-        let client_settings = sys::ClientSettings {
+        let client_settings = cef_wrapper_sys::ClientSettings {
             get_view_rect: Some(get_view_rect.function),
             get_view_rect_arg: get_view_rect.data,
             get_view_rect_destroy: Some(get_view_rect.drop),
@@ -99,7 +107,7 @@ impl CefApp {
             get_screen_point_destroy: Some(get_screen_point.drop),
         };
 
-        unsafe { sys::create_browser(client_settings) };
+        unsafe { cef_wrapper_sys::create_browser(client_settings) };
 
         receiver.await.expect("browser creation failed")
     }
@@ -118,5 +126,5 @@ fn get_posix_args() -> (c_int, *mut *mut c_char) {
 }
 
 pub fn do_cef_message_loop_work() {
-    unsafe { sys::do_message_loop_work() }
+    unsafe { cef_wrapper_sys::do_message_loop_work() }
 }

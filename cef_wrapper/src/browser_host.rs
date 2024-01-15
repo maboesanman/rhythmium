@@ -1,10 +1,10 @@
 #[derive(Debug)]
 pub struct BrowserHost {
-    pub(crate) browser_host: *mut crate::sys::cef_browser_host_t,
+    pub(crate) browser_host: *mut crate::cef_capi_sys::cef_browser_host_t,
 }
 
 impl BrowserHost {
-    pub(crate) fn new(browser_host: *mut crate::sys::cef_browser_host_t) -> Self {
+    pub(crate) fn new(browser_host: *mut crate::cef_capi_sys::cef_browser_host_t) -> Self {
         Self { browser_host }
     }
 
