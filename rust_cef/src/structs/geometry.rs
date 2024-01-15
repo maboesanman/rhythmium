@@ -1,5 +1,6 @@
 use cef_wrapper::cef_capi_sys::{cef_point_t, cef_rect_t};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Point {
     pub x: i32,
     pub y: i32,
@@ -20,6 +21,7 @@ impl From<Point> for cef_point_t {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Rect {
     pub x: i32,
     pub y: i32,
@@ -49,6 +51,7 @@ impl From<Rect> for cef_rect_t {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Insets {
     pub top: i32,
     pub left: i32,
