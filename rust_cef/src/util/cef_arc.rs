@@ -136,14 +136,11 @@ mod c_callbacks {
     }
 }
 
-// we can deref to the rust impl if we have a cef type.
-// we can't if we only have a vtable.
-// this only gets used when implementing traits for cef types.
-impl<V: StartsWith<cef_base_ref_counted_t>, R> Deref for CefArc<CefArcFromRust<V, R>> {
-    type Target = R;
+impl<T: StartsWith<cef_base_ref_counted_t>> Deref for CefArc<T> {
+    type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        unsafe { &self.ptr.as_ref().rust_impl }
+        unsafe { &self.ptr.as_ref() }
     }
 }
 

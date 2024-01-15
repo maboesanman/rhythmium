@@ -1,4 +1,3 @@
-
 /// # Safety
 /// `T` must be the first field of `Self`, and use repr(C).
 pub unsafe trait StartsWith<T> {}
