@@ -1,7 +1,6 @@
-use cef_wrapper::cef_capi_sys::{cef_browser_host_t, cef_base_ref_counted_t};
+use cef_wrapper::cef_capi_sys::{cef_base_ref_counted_t, cef_browser_host_t};
 
 use crate::util::starts_with::StartsWith;
-
 
 #[repr(transparent)]
 pub struct BrowserHost(pub(crate) cef_browser_host_t);

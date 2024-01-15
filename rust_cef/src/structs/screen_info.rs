@@ -71,15 +71,15 @@ impl From<cef_screen_info_t> for ScreenInfo {
     }
 }
 
-impl Into<cef_screen_info_t> for ScreenInfo {
-    fn into(self) -> cef_screen_info_t {
+impl From<ScreenInfo> for cef_screen_info_t {
+    fn from(val: ScreenInfo) -> Self {
         cef_screen_info_t {
-            device_scale_factor: self.device_scale_factor,
-            depth: self.depth as i32,
-            depth_per_component: self.depth_per_component as i32,
-            is_monochrome: if self.is_monochrome { 1 } else { 0 },
-            rect: self.rect.into(),
-            available_rect: self.available_rect.into(),
+            device_scale_factor: val.device_scale_factor,
+            depth: val.depth as i32,
+            depth_per_component: val.depth_per_component as i32,
+            is_monochrome: if val.is_monochrome { 1 } else { 0 },
+            rect: val.rect.into(),
+            available_rect: val.available_rect.into(),
         }
     }
 }

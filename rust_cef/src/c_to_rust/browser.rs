@@ -1,4 +1,4 @@
-use cef_wrapper::{cef_capi_sys::{cef_base_ref_counted_t, cef_browser_t}};
+use cef_wrapper::cef_capi_sys::{cef_base_ref_counted_t, cef_browser_t};
 
 use crate::util::{cef_arc::CefArc, starts_with::StartsWith};
 

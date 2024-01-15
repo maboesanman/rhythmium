@@ -14,12 +14,9 @@ impl From<cef_point_t> for Point {
     }
 }
 
-impl Into<cef_point_t> for Point {
-    fn into(self) -> cef_point_t {
-        cef_point_t {
-            x: self.x,
-            y: self.y,
-        }
+impl From<Point> for cef_point_t {
+    fn from(val: Point) -> Self {
+        cef_point_t { x: val.x, y: val.y }
     }
 }
 
@@ -41,13 +38,13 @@ impl From<cef_rect_t> for Rect {
     }
 }
 
-impl Into<cef_rect_t> for Rect {
-    fn into(self) -> cef_rect_t {
+impl From<Rect> for cef_rect_t {
+    fn from(val: Rect) -> Self {
         cef_rect_t {
-            x: self.x,
-            y: self.y,
-            width: self.width,
-            height: self.height,
+            x: val.x,
+            y: val.y,
+            width: val.width,
+            height: val.height,
         }
     }
 }
@@ -70,13 +67,13 @@ impl From<cef_rect_t> for Insets {
     }
 }
 
-impl Into<cef_rect_t> for Insets {
-    fn into(self) -> cef_rect_t {
+impl From<Insets> for cef_rect_t {
+    fn from(val: Insets) -> Self {
         cef_rect_t {
-            x: self.left,
-            y: self.top,
-            width: self.right,
-            height: self.bottom,
+            x: val.left,
+            y: val.top,
+            width: val.right,
+            height: val.bottom,
         }
     }
 }

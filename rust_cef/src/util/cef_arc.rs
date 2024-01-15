@@ -140,7 +140,7 @@ impl<T: StartsWith<cef_base_ref_counted_t>> Deref for CefArc<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        unsafe { &self.ptr.as_ref() }
+        unsafe { self.ptr.as_ref() }
     }
 }
 

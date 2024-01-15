@@ -14,8 +14,8 @@ impl From<cef_paint_element_type_t> for PaintElementType {
     }
 }
 
-impl Into<cef_paint_element_type_t> for PaintElementType {
-    fn into(self) -> cef_paint_element_type_t {
-        unsafe { std::mem::transmute(self) }
+impl From<PaintElementType> for cef_paint_element_type_t {
+    fn from(val: PaintElementType) -> Self {
+        unsafe { std::mem::transmute(val) }
     }
 }
