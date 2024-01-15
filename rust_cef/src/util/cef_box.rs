@@ -43,7 +43,7 @@ unsafe impl<V: StartsWith<cef_base_scoped_t>, RustImpl> StartsWith<cef_base_scop
 }
 
 impl<V: StartsWith<cef_base_scoped_t>, R> CefBoxFromRust<V, R> {
-    fn new(mut capi_v_table: V, rust_impl: R) -> Self {
+    pub(crate) fn new(mut capi_v_table: V, rust_impl: R) -> Self {
         let base = capi_v_table.get_start_mut();
         base.size = std::mem::size_of::<CefBoxFromRust<V, R>>();
         base.del = Some(del_ptr::<CefBoxFromRust<V, R>>);
@@ -52,6 +52,11 @@ impl<V: StartsWith<cef_base_scoped_t>, R> CefBoxFromRust<V, R> {
             capi_v_table,
             rust_impl,
         }
+    }
+
+    pub(crate) fn get_rust_impl_from_ptr(ptr: *mut cef_base_scoped_t) -> *mut R {
+        let rust_type = unsafe { ptr.cast::<CefBoxFromRust<V, R>>().as_ref().unwrap() };
+        &rust_type.rust_impl as *const _ as *mut _
     }
 }
 

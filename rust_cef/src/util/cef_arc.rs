@@ -74,6 +74,11 @@ impl<V: StartsWith<cef_base_ref_counted_t>, R> CefArcFromRust<V, R> {
             rust_impl,
         }
     }
+
+    pub(crate) fn get_rust_impl_from_ptr(ptr: *mut cef_base_ref_counted_t) -> *mut R {
+        let rust_type = unsafe { ptr.cast::<CefArcFromRust<V, R>>().as_ref().unwrap() };
+        &rust_type.rust_impl as *const _ as *mut _
+    }
 }
 
 mod c_callbacks {
@@ -142,17 +147,17 @@ impl<V: StartsWith<cef_base_ref_counted_t>, R> Deref for CefArc<CefArcFromRust<V
     }
 }
 
-impl<T: StartsWith<cef_base_ref_counted_t>> CefArc<T> {
-    pub(crate) fn uninit_arc_vtable() -> cef_base_ref_counted_t {
-        cef_base_ref_counted_t {
-            size: 0,
-            add_ref: None,
-            release: None,
-            has_one_ref: None,
-            has_at_least_one_ref: None,
-        }
+pub(crate) fn uninit_arc_vtable() -> cef_base_ref_counted_t {
+    cef_base_ref_counted_t {
+        size: 0,
+        add_ref: None,
+        release: None,
+        has_one_ref: None,
+        has_at_least_one_ref: None,
     }
+}
 
+impl<T: StartsWith<cef_base_ref_counted_t>> CefArc<T> {
     pub(crate) fn type_erase<U>(self) -> CefArc<U>
     where
         U: StartsWith<cef_base_ref_counted_t>,

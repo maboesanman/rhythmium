@@ -7,4 +7,4 @@ pub mod macros;
 
 pub mod util;
 // pub mod c_to_rust;
-// pub mod rust_to_c;
+pub mod rust_to_c;
