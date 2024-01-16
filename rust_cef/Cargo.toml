@@ -13,5 +13,5 @@ name = "rust_cef"
 # name = "mac_helper_process"
 
 [dependencies]
-cef_wrapper = { path = "../cef_wrapper" }
+cef_wrapper.workspace = true
 flagset = "0.4.4"

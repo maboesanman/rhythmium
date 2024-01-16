@@ -6,6 +6,7 @@ use crate::{
     structs::{browser_settings::BrowserSettings, window_info::WindowInfo},
     util::{cef_arc::CefArc, cef_string::str_into_cef_string_utf16, starts_with::StartsWith},
 };
+use std::fmt::{Debug, Formatter};
 
 #[repr(transparent)]
 pub struct BrowserHost(pub(crate) cef_browser_host_t);
@@ -13,6 +14,12 @@ pub struct BrowserHost(pub(crate) cef_browser_host_t);
 unsafe impl StartsWith<cef_browser_host_t> for BrowserHost {}
 unsafe impl StartsWith<cef_base_ref_counted_t> for BrowserHost {}
 unsafe impl StartsWith<cef_base_ref_counted_t> for cef_browser_host_t {}
+
+impl Debug for BrowserHost {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BrowserHost").finish()
+    }
+}
 
 impl BrowserHost {
     pub fn was_resized(&self) {

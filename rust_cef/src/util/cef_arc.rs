@@ -2,6 +2,7 @@ use std::{ops::Deref, ptr::NonNull, sync::atomic::AtomicUsize};
 
 use super::starts_with::{StartsWith, StartsWithExt as _};
 use cef_wrapper::cef_capi_sys::cef_base_ref_counted_t;
+use std::fmt::Debug;
 
 /// A reference counted wrapper for CEF types.
 ///
@@ -9,6 +10,13 @@ use cef_wrapper::cef_capi_sys::cef_base_ref_counted_t;
 #[repr(transparent)]
 pub struct CefArc<T: StartsWith<cef_base_ref_counted_t>> {
     pub(crate) ptr: NonNull<T>,
+}
+
+impl<T: Debug + StartsWith<cef_base_ref_counted_t>> Debug for CefArc<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let inner = unsafe { self.ptr.as_ref() };
+        f.debug_struct("CefArc").field("inner", &inner).finish()
+    }
 }
 
 unsafe impl<T: StartsWith<cef_base_ref_counted_t>> Send for CefArc<T> {}

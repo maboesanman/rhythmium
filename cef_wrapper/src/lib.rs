@@ -1,10 +1,6 @@
-use browser::Browser;
-use core::{future::Future, panic};
+use core::future::Future;
 use futures::channel::oneshot::{self, Sender};
-use std::{
-    ffi::c_float,
-    os::raw::{c_char, c_int, c_void},
-};
+use std::os::raw::{c_char, c_int, c_void};
 
 extern crate link_cplusplus;
 
@@ -26,91 +22,34 @@ pub mod cef_wrapper_sys {
     include!(concat!(env!("OUT_DIR"), "/bindings_cpp.rs"));
 }
 
-mod anonymize;
-pub mod browser;
-pub mod browser_host;
-
-use anonymize::{anonymize, anonymize_mut};
-
 pub use cef_capi_sys::cef_rect_t as CefRect;
 
-pub struct CefApp;
+pub fn init() -> Result<impl Future<Output = ()>, i32> {
+    let (sender, receiver) = oneshot::channel::<()>();
 
-impl CefApp {
-    pub fn new() -> Result<impl Future<Output = Self>, i32> {
-        let (sender, receiver) = oneshot::channel::<()>();
+    let mut sender = Box::new(Some(sender));
 
-        let mut sender = Box::new(Some(sender));
-
-        extern "C" fn app_ready(sender: *mut c_void) {
-            let sender = sender.cast::<Option<Sender<()>>>();
-            let sender = unsafe { sender.as_mut().unwrap() };
-            let sender = sender.take().expect("app_ready called twice");
-            sender.send(()).expect("app initialization failed");
-        }
-
-        let sender_ptr = sender.as_mut() as *mut _ as *mut c_void;
-        let result = unsafe {
-            let (argc, argv) = get_posix_args();
-            cef_wrapper_sys::try_start_subprocess(argc, argv, Some(app_ready), sender_ptr)
-        };
-
-        if result != 0 {
-            return Err(result);
-        }
-
-        Ok(async move {
-            let _ = receiver.await;
-            drop(sender);
-
-            CefApp
-        })
+    extern "C" fn app_ready(sender: *mut c_void) {
+        let sender = sender.cast::<Option<Sender<()>>>();
+        let sender = unsafe { sender.as_mut().unwrap() };
+        let sender = sender.take().expect("app_ready called twice");
+        sender.send(()).expect("app initialization failed");
     }
 
-    pub async fn create_browser(
-        &self,
-        get_view_rect: impl Fn(*mut c_int, *mut c_int),
-        on_paint: impl FnMut(c_int, *const c_void, *const c_void, c_int, c_int),
-        get_scale_factor: impl Fn(*mut c_float),
-        get_screen_point: impl Fn(c_int, c_int, *mut c_int, *mut c_int),
-    ) -> Browser {
-        let (sender, receiver) = oneshot::channel::<Browser>();
-        let mut sender = Some(sender);
-        let on_browser_created = move |browser: *mut c_void| {
-            let browser = Browser::new(browser.cast());
-            if sender.take().unwrap().send(browser).is_err() {
-                panic!("browser creation failed");
-            }
-        };
+    let sender_ptr = sender.as_mut() as *mut _ as *mut c_void;
+    let result = unsafe {
+        let (argc, argv) = get_posix_args();
+        cef_wrapper_sys::try_start_subprocess(argc, argv, Some(app_ready), sender_ptr)
+    };
 
-        let get_view_rect = anonymize(get_view_rect);
-        let on_paint = anonymize_mut(on_paint);
-        let on_browser_created = anonymize_mut(on_browser_created);
-        let get_scale_factor = anonymize(get_scale_factor);
-        let get_screen_point = anonymize(get_screen_point);
-
-        let client_settings = cef_wrapper_sys::ClientSettings {
-            get_view_rect: Some(get_view_rect.function),
-            get_view_rect_arg: get_view_rect.data,
-            get_view_rect_destroy: Some(get_view_rect.drop),
-            on_paint: Some(on_paint.function),
-            on_paint_arg: on_paint.data,
-            on_paint_destroy: Some(on_paint.drop),
-            on_browser_created: Some(on_browser_created.function),
-            on_browser_created_arg: on_browser_created.data,
-            on_browser_created_destroy: Some(on_browser_created.drop),
-            get_scale_factor: Some(get_scale_factor.function),
-            get_scale_factor_arg: get_scale_factor.data,
-            get_scale_factor_destroy: Some(get_scale_factor.drop),
-            get_screen_point: Some(get_screen_point.function),
-            get_screen_point_arg: get_screen_point.data,
-            get_screen_point_destroy: Some(get_screen_point.drop),
-        };
-
-        unsafe { cef_wrapper_sys::create_browser(client_settings) };
-
-        receiver.await.expect("browser creation failed")
+    if result != 0 {
+        return Err(result);
     }
+
+    Ok(async move {
+        let _ = receiver.await;
+        drop(sender);
+    })
 }
 
 fn get_posix_args() -> (c_int, *mut *mut c_char) {

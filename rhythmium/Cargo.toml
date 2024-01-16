@@ -19,3 +19,5 @@ tokio.workspace = true
 wgpu.workspace = true
 winit.workspace = true
 futures.workspace = true
+rust_cef.workspace = true
+parking_lot = "0.12"

@@ -47,11 +47,11 @@ impl Client {
 }
 
 pub trait ClientConfig: Sized {
-    fn get_life_span_handler(&self) -> Option<CefArc<LifeSpanHandler>> {
+    fn get_life_span_handler(&mut self) -> Option<CefArc<LifeSpanHandler>> {
         None
     }
 
-    fn get_render_handler(&self) -> Option<CefArc<RenderHandler>> {
+    fn get_render_handler(&mut self) -> Option<CefArc<RenderHandler>> {
         None
     }
 }
@@ -61,7 +61,7 @@ pub(crate) trait ClientConfigExt: ClientConfig {
         ptr: *mut cef_client_t,
     ) -> *mut cef_life_span_handler_t {
         let rust_impl_ptr = CefArcFromRust::<Client, Self>::get_rust_impl_from_ptr(ptr.cast());
-        let rust_impl = &*rust_impl_ptr;
+        let rust_impl = &mut *rust_impl_ptr;
         let life_span_handler = rust_impl.get_life_span_handler();
 
         match life_span_handler {
@@ -76,7 +76,7 @@ pub(crate) trait ClientConfigExt: ClientConfig {
         ptr: *mut cef_client_t,
     ) -> *mut cef_render_handler_t {
         let rust_impl_ptr = CefArcFromRust::<Client, Self>::get_rust_impl_from_ptr(ptr.cast());
-        let rust_impl = &*rust_impl_ptr;
+        let rust_impl = &mut *rust_impl_ptr;
         let render_handler = rust_impl.get_render_handler();
 
         match render_handler {

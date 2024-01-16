@@ -1,6 +1,5 @@
 use std::{process::exit, sync::Arc};
 
-use cef_wrapper::CefApp;
 use scene::{
     image_view::{ImageFit, ImageViewBuilder},
     scene_view::SceneViewBuilder,
@@ -19,7 +18,7 @@ pub async fn main() {
     // in particular, it needs to run before the cef subprocess is launched.
     let event_loop = EventLoop::new().unwrap();
 
-    let app = match CefApp::new() {
+    let app = match cef_wrapper::init() {
         Ok(app) => app.await,
         Err(e) => exit(e),
     };
@@ -83,6 +82,6 @@ pub async fn main() {
         )),
     );
 
-    scene::view::run(event_loop, Box::new(WebViewBuilder::new(app))).await;
+    scene::view::run(event_loop, Box::new(WebViewBuilder::new())).await;
     // scene::view::run(event_loop, view_builder).await;
 }

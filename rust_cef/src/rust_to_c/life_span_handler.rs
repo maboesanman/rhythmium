@@ -30,7 +30,7 @@ impl LifeSpanHandler {
 }
 
 pub trait LifeSpanHandlerConfig: Sized {
-    fn on_after_created(&self, _browser: CefArc<Browser>) {}
+    fn on_after_created(&mut self, _browser: CefArc<Browser>) {}
 }
 
 pub(crate) trait LifeSpanHandlerConfigExt: LifeSpanHandlerConfig {
@@ -40,7 +40,7 @@ pub(crate) trait LifeSpanHandlerConfigExt: LifeSpanHandlerConfig {
     ) {
         let rust_impl_ptr =
             CefArcFromRust::<LifeSpanHandler, Self>::get_rust_impl_from_ptr(ptr.cast());
-        let rust_impl = &*rust_impl_ptr;
+        let rust_impl = &mut *rust_impl_ptr;
 
         let browser = browser.cast::<Browser>();
         let browser = CefArc::from_raw(browser);

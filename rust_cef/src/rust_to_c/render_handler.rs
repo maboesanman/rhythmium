@@ -47,10 +47,10 @@ impl RenderHandler {
 }
 
 pub trait RenderHandlerConfig: Sized {
-    fn get_view_rect(&self, browser: CefArc<Browser>) -> Option<Rect>;
+    fn get_view_rect(&mut self, browser: CefArc<Browser>) -> Option<Rect>;
 
     fn on_paint(
-        &self,
+        &mut self,
         _browser: CefArc<Browser>,
         _paint_element_type: PaintElementType,
         _dirty_rects: &[Rect],
@@ -60,12 +60,12 @@ pub trait RenderHandlerConfig: Sized {
     ) {
     }
 
-    fn get_screen_info(&self, _browser: CefArc<Browser>) -> Option<ScreenInfo> {
+    fn get_screen_info(&mut self, _browser: CefArc<Browser>) -> Option<ScreenInfo> {
         None
     }
 
     fn get_screen_point(
-        &self,
+        &mut self,
         _browser: CefArc<Browser>,
         _view_x: i32,
         _view_y: i32,
@@ -82,7 +82,7 @@ pub(crate) trait RenderHandlerConfigExt: RenderHandlerConfig {
     ) {
         let rust_impl_ptr =
             CefArcFromRust::<RenderHandler, Self>::get_rust_impl_from_ptr(ptr.cast());
-        let rust_impl = &*rust_impl_ptr;
+        let rust_impl = &mut *rust_impl_ptr;
 
         let browser = browser.cast::<Browser>();
         let browser = CefArc::from_raw(browser);
@@ -104,7 +104,7 @@ pub(crate) trait RenderHandlerConfigExt: RenderHandlerConfig {
     ) {
         let rust_impl_ptr =
             CefArcFromRust::<RenderHandler, Self>::get_rust_impl_from_ptr(ptr.cast());
-        let rust_impl = &*rust_impl_ptr;
+        let rust_impl = &mut *rust_impl_ptr;
 
         let browser = browser.cast::<Browser>();
         let browser = CefArc::from_raw(browser);
@@ -135,7 +135,7 @@ pub(crate) trait RenderHandlerConfigExt: RenderHandlerConfig {
     ) -> ::std::os::raw::c_int {
         let rust_impl_ptr =
             CefArcFromRust::<RenderHandler, Self>::get_rust_impl_from_ptr(ptr.cast());
-        let rust_impl = &*rust_impl_ptr;
+        let rust_impl = &mut *rust_impl_ptr;
 
         let browser = browser.cast::<Browser>();
         let browser = CefArc::from_raw(browser);
@@ -158,7 +158,7 @@ pub(crate) trait RenderHandlerConfigExt: RenderHandlerConfig {
     ) -> ::std::os::raw::c_int {
         let rust_impl_ptr =
             CefArcFromRust::<RenderHandler, Self>::get_rust_impl_from_ptr(ptr.cast());
-        let rust_impl = &*rust_impl_ptr;
+        let rust_impl = &mut *rust_impl_ptr;
 
         let browser = browser.cast::<Browser>();
         let browser = CefArc::from_raw(browser);
