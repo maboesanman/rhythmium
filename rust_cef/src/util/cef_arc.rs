@@ -169,12 +169,16 @@ impl<T: StartsWith<cef_base_ref_counted_t>> CefArc<T> {
         T: StartsWith<U>,
     {
         CefArc {
-            ptr: self.ptr.cast(),
+            ptr: self.into_non_null().cast(),
         }
     }
 
     pub(crate) fn into_raw(self) -> *mut T {
-        std::mem::ManuallyDrop::new(self).ptr.as_ptr()
+        self.into_non_null().as_ptr()
+    }
+
+    fn into_non_null(self) -> NonNull<T> {
+        std::mem::ManuallyDrop::new(self).ptr
     }
 
     pub(crate) unsafe fn from_raw(ptr: *mut T) -> Self {

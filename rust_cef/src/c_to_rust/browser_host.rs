@@ -8,6 +8,8 @@ use crate::{
 };
 use std::fmt::{Debug, Formatter};
 
+use super::browser::Browser;
+
 #[repr(transparent)]
 pub struct BrowserHost(pub(crate) cef_browser_host_t);
 
@@ -62,5 +64,30 @@ impl BrowserHost {
         };
 
         result != 0
+    }
+
+    pub fn create_browser_sync(
+        window_info: &WindowInfo,
+        client: CefArc<Client>,
+        url: &str,
+        browser_settings: &BrowserSettings,
+        // extra_info
+        // request_context
+    ) -> CefArc<Browser> {
+        let window_info = window_info.into();
+        let client = client.type_erase::<cef_client_t>().into_raw();
+        let url = str_into_cef_string_utf16(url);
+        let browser_settings = browser_settings.into();
+        unsafe {
+            let browser = cef_capi_sys::cef_browser_host_create_browser_sync(
+                &window_info,
+                client,
+                &url,
+                &browser_settings,
+                ptr::null_mut(),
+                ptr::null_mut(),
+            );
+            CefArc::from_raw(browser.cast())
+        }
     }
 }

@@ -1,13 +1,13 @@
 use std::{num::NonZeroU32, sync::Arc};
 
-use futures::{channel::oneshot::Sender, Future};
+use futures::channel::oneshot::Sender;
 use parking_lot::RwLock;
 use rust_cef::{
     c_to_rust::{browser::Browser, browser_host::BrowserHost},
     rust_to_c::{
         client::{Client, ClientConfig},
-        life_span_handler::{LifeSpanHandler, LifeSpanHandlerConfig},
-        render_handler::{self, RenderHandler, RenderHandlerConfig},
+        life_span_handler::LifeSpanHandlerConfig,
+        render_handler::{RenderHandler, RenderHandlerConfig},
     },
     structs::{geometry::Rect, screen_info::ScreenInfo},
     util::cef_arc::CefArc,
@@ -21,6 +21,12 @@ use super::{
 };
 
 pub struct WebViewBuilder {}
+
+impl Default for WebViewBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl WebViewBuilder {
     pub fn new() -> Self {
@@ -68,7 +74,7 @@ impl WebView {
             depth_or_array_layers: 1,
         };
 
-        let mut texture = device.create_texture(&wgpu::TextureDescriptor {
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("WebView Texture"),
             size: texture_size,
             mip_level_count: 1,
@@ -224,7 +230,7 @@ impl WebView {
             ..Default::default()
         };
 
-        let (client, browser_fut) = WebViewClient::new(
+        let client = WebViewClient::new(
             size.clone(),
             shared_wgpu_state.clone(),
             texture_bind_group_layout,
@@ -232,11 +238,13 @@ impl WebView {
             texture_bind_group.clone(),
         );
 
-        BrowserHost::create_browser(&window_info, client, "www.google.com", &browser_settings);
-
-        let browser = browser_fut.await;
+        let browser = BrowserHost::create_browser_sync(
+            &window_info,
+            client,
+            "www.google.com",
+            &browser_settings,
+        );
         let browser_host = browser.get_host();
-
         let current_scale_factor = shared_wgpu_state.window.scale_factor();
 
         Self {
@@ -337,7 +345,7 @@ impl Vertex {
 
 struct WebViewClient {
     render_handler: CefArc<RenderHandler>,
-    life_span_handler: CefArc<LifeSpanHandler>,
+    // life_span_handler: CefArc<LifeSpanHandler>,
 }
 
 impl WebViewClient {
@@ -347,9 +355,9 @@ impl WebViewClient {
         texture_bind_group_layout: Arc<wgpu::BindGroupLayout>,
         texture: wgpu::Texture,
         texture_bind_group: Arc<RwLock<wgpu::BindGroup>>,
-    ) -> (CefArc<Client>, impl Future<Output = CefArc<Browser>>) {
-        let (browser_sender, browser_receiver) = futures::channel::oneshot::channel();
-        let browser_receiver = async move { browser_receiver.await.unwrap() };
+    ) -> CefArc<Client> {
+        // let (browser_sender, browser_receiver) = futures::channel::oneshot::channel();
+        // let browser_receiver = async move { browser_receiver.await.unwrap() };
 
         let render_handler = RenderHandler::new(WebViewRenderHandler {
             size: size.clone(),
@@ -359,23 +367,22 @@ impl WebViewClient {
             texture_bind_group: texture_bind_group.clone(),
         });
 
-        let life_span_handler = LifeSpanHandler::new(WebViewLifeSpanHandler {
-            browser_sender: Some(browser_sender),
-        });
+        // let life_span_handler = LifeSpanHandler::new(WebViewLifeSpanHandler {
+        //     browser_sender: Some(browser_sender),
+        // });
 
-        let client = Client::new(Self {
+        // (client, browser_receiver)
+        Client::new(Self {
             render_handler,
-            life_span_handler,
-        });
-
-        (client, browser_receiver)
+            // life_span_handler,
+        })
     }
 }
 
 impl ClientConfig for WebViewClient {
-    fn get_life_span_handler(&mut self) -> Option<CefArc<LifeSpanHandler>> {
-        Some(self.life_span_handler.clone())
-    }
+    // fn get_life_span_handler(&mut self) -> Option<CefArc<LifeSpanHandler>> {
+    //     Some(self.life_span_handler.clone())
+    // }
 
     fn get_render_handler(&mut self) -> Option<CefArc<RenderHandler>> {
         Some(self.render_handler.clone())
@@ -406,8 +413,8 @@ impl RenderHandlerConfig for WebViewRenderHandler {
 
     fn on_paint(
         &mut self,
-        browser: CefArc<Browser>,
-        paint_element_type: rust_cef::enums::paint_element_type::PaintElementType,
+        _browser: CefArc<Browser>,
+        _paint_element_type: rust_cef::enums::paint_element_type::PaintElementType,
         dirty_rects: &[Rect],
         buffer: &[u8],
         width: usize,
@@ -521,7 +528,7 @@ impl RenderHandlerConfig for WebViewRenderHandler {
         }
     }
 
-    fn get_screen_info(&mut self, browser: CefArc<Browser>) -> Option<ScreenInfo> {
+    fn get_screen_info(&mut self, _browser: CefArc<Browser>) -> Option<ScreenInfo> {
         let device_scale_factor = self.shared_wgpu_state.window.scale_factor() as f32;
 
         let dummy_rect = Rect {
@@ -542,7 +549,7 @@ impl RenderHandlerConfig for WebViewRenderHandler {
 
     fn get_screen_point(
         &mut self,
-        browser: CefArc<Browser>,
+        _browser: CefArc<Browser>,
         view_x: i32,
         view_y: i32,
     ) -> Option<(i32, i32)> {
@@ -560,9 +567,11 @@ struct WebViewLifeSpanHandler {
 
 impl LifeSpanHandlerConfig for WebViewLifeSpanHandler {
     fn on_after_created(&mut self, browser: CefArc<Browser>) {
+        println!("Browser created");
         if let Some(sender) = self.browser_sender.take() {
             let result = sender.send(browser);
             if result.is_err() {
+                println!("Failed to send browser to WebView");
                 log::error!("Failed to send browser to WebView");
             }
         }

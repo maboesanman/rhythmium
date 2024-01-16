@@ -65,5 +65,5 @@ fn get_posix_args() -> (c_int, *mut *mut c_char) {
 }
 
 pub fn do_cef_message_loop_work() {
-    unsafe { cef_wrapper_sys::do_message_loop_work() }
+    unsafe { cef_capi_sys::cef_do_message_loop_work() }
 }

@@ -62,6 +62,7 @@ int try_start_subprocess(int argc, char* argv[], void (*app_ready)(void* app_rea
 
   // Specify CEF global settings here.
   CefSettings settings;
+  settings.windowless_rendering_enabled = true;
 
   #if !defined(CEF_USE_SANDBOX)
     settings.no_sandbox = true;
