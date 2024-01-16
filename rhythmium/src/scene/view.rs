@@ -30,7 +30,10 @@ pub trait ViewBuilder {
 }
 
 pub async fn run(event_loop: EventLoop<()>, view_builder: Box<dyn ViewBuilder>) {
-    let window = WindowBuilder::new().build(&event_loop).unwrap();
+    let window = WindowBuilder::new()
+        .with_title("Rhythmium")
+        .build(&event_loop).unwrap();
+
     let shared_wgpu_state = shared_wgpu_state::SharedWgpuState::new(window).await;
     let view = view_builder.build(
         shared_wgpu_state.clone(),
