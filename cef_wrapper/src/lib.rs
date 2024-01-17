@@ -1,6 +1,6 @@
 use core::future::Future;
 use futures::channel::oneshot::{self, Sender};
-use std::os::raw::{c_char, c_int, c_void};
+use std::{os::raw::{c_char, c_int, c_void}, ffi::CString};
 
 extern crate link_cplusplus;
 
@@ -54,9 +54,12 @@ pub fn init() -> Result<impl Future<Output = ()>, i32> {
 
 fn get_posix_args() -> (c_int, *mut *mut c_char) {
     // create a vector of zero terminated strings
-    let args = argv::iter()
-        .map(|arg| arg as *const _)
-        .collect::<Box<[_]>>();
+    let args: Box<[_]> = std::env::args()
+        .filter_map(|s| match CString::new(s) {
+            Ok(s) => Some(s.into_raw()),
+            Err(_) => None,
+        })
+        .collect();
 
     let argc = args.len() as c_int;
     let argv = Box::into_raw(args) as *mut *mut c_char;

@@ -2,9 +2,17 @@ use std::mem::ManuallyDrop;
 
 use cef_wrapper::cef_capi_sys::{cef_string_userfree_t, cef_string_utf16_t};
 
-const HEADER_BYTES: usize = std::mem::size_of::<usize>() >> 1;
+const HEADER_BYTES: usize = std::mem::size_of::<usize>();
 const HEADER_LENGTH: usize = HEADER_BYTES >> 1;
 
+/// The internal representation of a rust-originating cef_string_utf16_t.
+/// 
+/// This is a hack, because the destructor we pass to cef_string_utf16_t takes only a pointer to the data,
+/// and therefore needs to store the length of data somewhere recoverable by the destructor.
+/// we store it in the 8 bytes preceding the data, and set the str field of the cef_string_utf16_t to point to the data.
+/// 
+/// the destructor then recovers the length by subtracting HEADER_LENGTH from the pointer it is given,
+/// then casts to a Box<CefStr> and drops it.
 #[repr(C)]
 struct CefStr {
     // this is the length of the data, not the length of the header.

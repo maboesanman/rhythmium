@@ -241,7 +241,7 @@ impl WebView {
         let browser = BrowserHost::create_browser_sync(
             &window_info,
             client,
-            "www.google.com",
+            "http://webglsamples.org/aquarium/aquarium.html",
             &browser_settings,
         );
         let browser_host = browser.get_host();
@@ -345,7 +345,6 @@ impl Vertex {
 
 struct WebViewClient {
     render_handler: CefArc<RenderHandler>,
-    // life_span_handler: CefArc<LifeSpanHandler>,
 }
 
 impl WebViewClient {
@@ -356,9 +355,6 @@ impl WebViewClient {
         texture: wgpu::Texture,
         texture_bind_group: Arc<RwLock<wgpu::BindGroup>>,
     ) -> CefArc<Client> {
-        // let (browser_sender, browser_receiver) = futures::channel::oneshot::channel();
-        // let browser_receiver = async move { browser_receiver.await.unwrap() };
-
         let render_handler = RenderHandler::new(WebViewRenderHandler {
             size: size.clone(),
             shared_wgpu_state: shared_wgpu_state.clone(),
@@ -367,23 +363,13 @@ impl WebViewClient {
             texture_bind_group: texture_bind_group.clone(),
         });
 
-        // let life_span_handler = LifeSpanHandler::new(WebViewLifeSpanHandler {
-        //     browser_sender: Some(browser_sender),
-        // });
-
-        // (client, browser_receiver)
         Client::new(Self {
             render_handler,
-            // life_span_handler,
         })
     }
 }
 
 impl ClientConfig for WebViewClient {
-    // fn get_life_span_handler(&mut self) -> Option<CefArc<LifeSpanHandler>> {
-    //     Some(self.life_span_handler.clone())
-    // }
-
     fn get_render_handler(&mut self) -> Option<CefArc<RenderHandler>> {
         Some(self.render_handler.clone())
     }
@@ -558,22 +544,5 @@ impl RenderHandlerConfig for WebViewRenderHandler {
         let physical_position = logical_position.to_physical(scale_factor);
 
         Some((physical_position.x, physical_position.y))
-    }
-}
-
-struct WebViewLifeSpanHandler {
-    browser_sender: Option<Sender<CefArc<Browser>>>,
-}
-
-impl LifeSpanHandlerConfig for WebViewLifeSpanHandler {
-    fn on_after_created(&mut self, browser: CefArc<Browser>) {
-        println!("Browser created");
-        if let Some(sender) = self.browser_sender.take() {
-            let result = sender.send(browser);
-            if result.is_err() {
-                println!("Failed to send browser to WebView");
-                log::error!("Failed to send browser to WebView");
-            }
-        }
     }
 }
