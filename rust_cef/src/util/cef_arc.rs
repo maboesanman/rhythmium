@@ -186,6 +186,15 @@ impl<T: StartsWith<cef_base_ref_counted_t>> CefArc<T> {
             ptr: NonNull::new_unchecked(ptr),
         }
     }
+
+    pub fn try_get_mut(&mut self) -> Result<&mut T, &T> {
+        let base = unsafe { self.ptr.as_ref().get_start() };
+        if unsafe { base.has_one_ref.unwrap()(base as *const _ as *mut _) } != 0 {
+            Ok(unsafe { self.ptr.as_mut() })
+        } else {
+            Err(unsafe { self.ptr.as_ref() })
+        }
+    }
 }
 
 // impl<T: StartsWith<cef_base_ref_counted_t>> CefArc<T> {

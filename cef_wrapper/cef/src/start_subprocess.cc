@@ -16,6 +16,15 @@ int try_start_subprocess(int argc, char* argv[], void (*app_ready)(void* app_rea
     if (!InitMacProcess(argc, argv, false))
       return 1;
   #endif
+  
+  void* sandbox_info = nullptr;
+
+  #if defined(OS_WIN) && defined(CEF_USE_SANDBOX)
+    // Manage the life span of the sandbox information object. This is necessary
+    // for sandbox support on Windows. See cef_sandbox_win.h for complete details.
+    CefScopedSandboxInfo scoped_sandbox;
+    sandbox_info = scoped_sandbox.sandbox_info();
+  #endif
 
   // Provide CEF with command-line arguments.
   CefMainArgs main_args(argc, argv);
@@ -49,15 +58,6 @@ int try_start_subprocess(int argc, char* argv[], void (*app_ready)(void* app_rea
       // The sub-process has completed so return here.
       return exit_code;
     }
-  #endif
-  
-  void* sandbox_info = nullptr;
-
-  #if defined(OS_WIN) && defined(CEF_USE_SANDBOX)
-    // Manage the life span of the sandbox information object. This is necessary
-    // for sandbox support on Windows. See cef_sandbox_win.h for complete details.
-    CefScopedSandboxInfo scoped_sandbox;
-    sandbox_info = scoped_sandbox.sandbox_info();
   #endif
 
   // Specify CEF global settings here.

@@ -9,6 +9,10 @@ edition.workspace = true
 [lib]
 name = "rust_cef"
 
+[features]
+default = ["sandbox"]
+sandbox = []
+
 # [[bin]]
 # name = "mac_helper_process"
 
