@@ -6,11 +6,11 @@ const HEADER_BYTES: usize = std::mem::size_of::<usize>();
 const HEADER_LENGTH: usize = HEADER_BYTES >> 1;
 
 /// The internal representation of a rust-originating cef_string_utf16_t.
-/// 
+///
 /// This is a hack, because the destructor we pass to cef_string_utf16_t takes only a pointer to the data,
 /// and therefore needs to store the length of data somewhere recoverable by the destructor.
 /// we store it in the 8 bytes preceding the data, and set the str field of the cef_string_utf16_t to point to the data.
-/// 
+///
 /// the destructor then recovers the length by subtracting HEADER_LENGTH from the pointer it is given,
 /// then casts to a Box<CefStr> and drops it.
 #[repr(C)]

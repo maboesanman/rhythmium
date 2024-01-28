@@ -1,8 +1,17 @@
 use std::collections::HashMap;
 
-use cef_wrapper::cef_capi_sys::{cef_base_ref_counted_t, cef_command_line_t, cef_command_line_create, cef_main_args_t};
+use cef_wrapper::cef_capi_sys::{
+    cef_base_ref_counted_t, cef_command_line_create, cef_command_line_t, cef_main_args_t,
+};
 
-use crate::{util::{cef_arc::CefArc, starts_with::StartsWith, cef_string::{str_into_cef_string_utf16, cef_string_userfree_into_string}}, structs::main_args::{MainArgs, self}};
+use crate::{
+    structs::main_args::MainArgs,
+    util::{
+        cef_arc::CefArc,
+        cef_string::{cef_string_userfree_into_string, str_into_cef_string_utf16},
+        starts_with::StartsWith,
+    },
+};
 
 #[repr(transparent)]
 pub struct CommandLine(pub(crate) cef_command_line_t);
@@ -20,7 +29,11 @@ impl CommandLine {
     #[cfg(not(target_os = "windows"))]
     pub fn new_from_main_args(main_args: MainArgs) -> CefArc<Self> {
         let mut command_line = Self::new();
-        command_line.try_get_mut().map_err(|_| "Something went horribly wrong!").unwrap().init_from_argv(main_args);
+        command_line
+            .try_get_mut()
+            .map_err(|_| "Something went horribly wrong!")
+            .unwrap()
+            .init_from_argv(main_args);
         command_line
     }
 

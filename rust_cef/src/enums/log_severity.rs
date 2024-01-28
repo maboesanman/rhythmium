@@ -1,5 +1,9 @@
-use cef_wrapper::cef_capi_sys::{cef_log_severity_t_LOGSEVERITY_DEBUG, cef_log_severity_t_LOGSEVERITY_INFO, cef_log_severity_t_LOGSEVERITY_WARNING, cef_log_severity_t_LOGSEVERITY_ERROR, cef_log_severity_t_LOGSEVERITY_FATAL, cef_log_severity_t_LOGSEVERITY_DISABLE, cef_log_severity_t};
-
+use cef_wrapper::cef_capi_sys::{
+    cef_log_severity_t, cef_log_severity_t_LOGSEVERITY_DEBUG,
+    cef_log_severity_t_LOGSEVERITY_DISABLE, cef_log_severity_t_LOGSEVERITY_ERROR,
+    cef_log_severity_t_LOGSEVERITY_FATAL, cef_log_severity_t_LOGSEVERITY_INFO,
+    cef_log_severity_t_LOGSEVERITY_WARNING,
+};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Default)]
 #[repr(u32)]

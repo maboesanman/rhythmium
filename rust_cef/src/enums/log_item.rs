@@ -1,7 +1,9 @@
-
-
-use cef_wrapper::cef_capi_sys::{cef_log_items_t, cef_log_items_t_LOG_ITEMS_FLAG_PROCESS_ID, cef_log_items_t_LOG_ITEMS_FLAG_THREAD_ID, cef_log_items_t_LOG_ITEMS_FLAG_TIME_STAMP, cef_log_items_t_LOG_ITEMS_FLAG_TICK_COUNT, cef_log_items_t_LOG_ITEMS_DEFAULT, cef_log_items_t_LOG_ITEMS_NONE};
-use flagset::{FlagSet, flags};
+use cef_wrapper::cef_capi_sys::{
+    cef_log_items_t, cef_log_items_t_LOG_ITEMS_DEFAULT, cef_log_items_t_LOG_ITEMS_FLAG_PROCESS_ID,
+    cef_log_items_t_LOG_ITEMS_FLAG_THREAD_ID, cef_log_items_t_LOG_ITEMS_FLAG_TICK_COUNT,
+    cef_log_items_t_LOG_ITEMS_FLAG_TIME_STAMP, cef_log_items_t_LOG_ITEMS_NONE,
+};
+use flagset::{flags, FlagSet};
 
 flags! {
     pub enum LogItem: cef_log_items_t {
@@ -18,7 +20,8 @@ pub struct LogItems(FlagSet<LogItem>);
 
 impl Default for LogItems {
     fn default() -> Self {
-        let default_flags: FlagSet<LogItem> = unsafe { core::mem::transmute(cef_log_items_t_LOG_ITEMS_DEFAULT) };
+        let default_flags: FlagSet<LogItem> =
+            unsafe { core::mem::transmute(cef_log_items_t_LOG_ITEMS_DEFAULT) };
         Self(default_flags)
     }
 }
@@ -29,7 +32,8 @@ impl LogItems {
     }
 
     pub fn empty() -> Self {
-        let empty_flags: FlagSet<LogItem> = unsafe { core::mem::transmute(cef_log_items_t_LOG_ITEMS_NONE) };
+        let empty_flags: FlagSet<LogItem> =
+            unsafe { core::mem::transmute(cef_log_items_t_LOG_ITEMS_NONE) };
         Self(empty_flags)
     }
 }

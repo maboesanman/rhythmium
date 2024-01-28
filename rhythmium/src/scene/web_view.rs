@@ -1,12 +1,10 @@
 use std::{num::NonZeroU32, sync::Arc};
 
-use futures::channel::oneshot::Sender;
 use parking_lot::RwLock;
 use rust_cef::{
     c_to_rust::{browser::Browser, browser_host::BrowserHost},
     rust_to_c::{
         client::{Client, ClientConfig},
-        life_span_handler::LifeSpanHandlerConfig,
         render_handler::{RenderHandler, RenderHandlerConfig},
     },
     structs::{geometry::Rect, screen_info::ScreenInfo},
@@ -363,9 +361,7 @@ impl WebViewClient {
             texture_bind_group: texture_bind_group.clone(),
         });
 
-        Client::new(Self {
-            render_handler,
-        })
+        Client::new(Self { render_handler })
     }
 }
 

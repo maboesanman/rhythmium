@@ -1,6 +1,9 @@
 use cef_wrapper::cef_capi_sys::cef_settings_t;
 
-use crate::{util::{cef_string::str_into_cef_string_utf16, wrap_boolean::wrap_boolean}, enums::{log_item::{LogItem, LogItems}, log_severity::LogSeverity}};
+use crate::{
+    enums::{log_item::LogItems, log_severity::LogSeverity},
+    util::{cef_string::str_into_cef_string_utf16, wrap_boolean::wrap_boolean},
+};
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct Settings {
@@ -60,7 +63,9 @@ impl From<&Settings> for cef_settings_t {
             chrome_policy_id: wrap_string(&value.chrome_policy_id),
             chrome_runtime: wrap_boolean(value.chrome_runtime),
             command_line_args_disabled: wrap_boolean(value.command_line_args_disabled),
-            cookieable_schemes_exclude_defaults: wrap_boolean(value.cookieable_schemes_exclude_defaults),
+            cookieable_schemes_exclude_defaults: wrap_boolean(
+                value.cookieable_schemes_exclude_defaults,
+            ),
             cookieable_schemes_list: str_into_cef_string_utf16(&value.cookieable_schemes.join(",")),
             external_message_pump: wrap_boolean(value.external_message_pump),
             framework_dir_path: wrap_string(&value.framework_dir_path),
