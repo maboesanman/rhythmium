@@ -1,12 +1,11 @@
 use std::num::NonZeroU32;
 
-use cef_wrapper::cef_capi_sys::cef_browser_settings_t;
+use cef_wrapper::cef_capi_sys::{cef_browser_settings_t, cef_state_t_STATE_ENABLED, cef_state_t_STATE_DISABLED, cef_state_t_STATE_DEFAULT};
 
-use crate::{enums::state::State, util::cef_string::str_into_cef_string_utf16};
+use crate::{util::cef_string::str_into_cef_string_utf16};
 
 #[derive(Default)]
 pub struct BrowserSettings {
-    // pub size: Size,
     pub windowless_frame_rate: Option<NonZeroU32>,
 
     pub standard_font_family: Option<String>,
@@ -21,42 +20,34 @@ pub struct BrowserSettings {
     pub minimum_logical_font_size: Option<u32>,
 
     pub default_encoding: Option<String>,
-
-    pub remote_fonts: State,
-
-    pub javascript: State,
-
-    pub javascript_close_windows: State,
-
-    pub javascript_access_clipboard: State,
-
-    pub javascript_dom_paste: State,
-
-    pub image_loading: State,
-
-    pub image_shrink_standalone_to_fit: State,
-
-    pub text_area_resize: State,
-
-    pub tab_to_links: State,
-
-    pub local_storage: State,
-
-    pub databases: State,
-
-    pub webgl: State,
-
+    pub remote_fonts: Option<bool>,
+    pub javascript: Option<bool>,
+    pub javascript_close_windows: Option<bool>,
+    pub javascript_access_clipboard: Option<bool>,
+    pub javascript_dom_paste: Option<bool>,
+    pub image_loading: Option<bool>,
+    pub image_shrink_standalone_to_fit: Option<bool>,
+    pub text_area_resize: Option<bool>,
+    pub tab_to_links: Option<bool>,
+    pub local_storage: Option<bool>,
+    pub databases: Option<bool>,
+    pub webgl: Option<bool>,
     pub background_color: u32,
-
-    pub chrome_status_bubble: State,
-
-    pub chrome_zoom_bubble: State,
+    pub chrome_status_bubble: Option<bool>,
+    pub chrome_zoom_bubble: Option<bool>,
 }
 
 impl From<&BrowserSettings> for cef_browser_settings_t {
     fn from(value: &BrowserSettings) -> Self {
-        let wrap_string =
-            |s: &Option<String>| str_into_cef_string_utf16(s.as_deref().unwrap_or(""));
+        let wrap_string = {
+            |s: &Option<String>| str_into_cef_string_utf16(s.as_deref().unwrap_or(""))
+        };
+
+        let wrap_bool = |b: &Option<bool>| match b {
+            Some(true) => cef_state_t_STATE_ENABLED,
+            Some(false) => cef_state_t_STATE_DISABLED,
+            None => cef_state_t_STATE_DEFAULT,
+        };
 
         cef_browser_settings_t {
             size: std::mem::size_of::<cef_browser_settings_t>(),
@@ -72,21 +63,21 @@ impl From<&BrowserSettings> for cef_browser_settings_t {
             minimum_font_size: value.minimum_font_size.unwrap_or(0) as i32,
             minimum_logical_font_size: value.minimum_logical_font_size.unwrap_or(0) as i32,
             default_encoding: wrap_string(&value.default_encoding),
-            remote_fonts: value.remote_fonts.into(),
-            javascript: value.javascript.into(),
-            javascript_close_windows: value.javascript_close_windows.into(),
-            javascript_access_clipboard: value.javascript_access_clipboard.into(),
-            javascript_dom_paste: value.javascript_dom_paste.into(),
-            image_loading: value.image_loading.into(),
-            image_shrink_standalone_to_fit: value.image_shrink_standalone_to_fit.into(),
-            text_area_resize: value.text_area_resize.into(),
-            tab_to_links: value.tab_to_links.into(),
-            local_storage: value.local_storage.into(),
-            databases: value.databases.into(),
-            webgl: value.webgl.into(),
+            remote_fonts: wrap_bool(&value.remote_fonts),
+            javascript: wrap_bool(&value.javascript),
+            javascript_close_windows: wrap_bool(&value.javascript_close_windows),
+            javascript_access_clipboard: wrap_bool(&value.javascript_access_clipboard),
+            javascript_dom_paste: wrap_bool(&value.javascript_dom_paste),
+            image_loading: wrap_bool(&value.image_loading),
+            image_shrink_standalone_to_fit: wrap_bool(&value.image_shrink_standalone_to_fit),
+            text_area_resize: wrap_bool(&value.text_area_resize),
+            tab_to_links: wrap_bool(&value.tab_to_links),
+            local_storage: wrap_bool(&value.local_storage),
+            databases: wrap_bool(&value.databases),
+            webgl: wrap_bool(&value.webgl),
             background_color: value.background_color,
-            chrome_status_bubble: value.chrome_status_bubble.into(),
-            chrome_zoom_bubble: value.chrome_zoom_bubble.into(),
+            chrome_status_bubble: wrap_bool(&value.chrome_status_bubble),
+            chrome_zoom_bubble: wrap_bool(&value.chrome_zoom_bubble),
         }
     }
 }

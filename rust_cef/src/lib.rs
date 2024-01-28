@@ -10,3 +10,4 @@ pub mod enums;
 pub mod rust_to_c;
 pub mod structs;
 pub mod util;
+pub mod functions;

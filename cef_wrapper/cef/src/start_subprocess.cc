@@ -11,7 +11,7 @@
 #include "subprocess_util.h"
 
 // Entry point function for all processes.
-int try_start_subprocess(int argc, char* argv[], void (*app_ready)(void* app_ready_arg), void* app_ready_arg) {
+int try_start_subprocess(int argc, char* argv[]) {
   #if defined(OS_MACOSX)
     if (!InitMacProcess(argc, argv, false))
       return 1;
@@ -32,7 +32,7 @@ int try_start_subprocess(int argc, char* argv[], void (*app_ready)(void* app_rea
   CefRefPtr<CefApp> app;
   #if defined(OS_MACOSX)
     // macos fires them from the bundle, so we skip all this.
-    app = CreateBrowserProcessApp(app_ready, app_ready_arg);
+    app = CreateBrowserProcessApp();
   #else
     // Create a temporary CommandLine object.
     CefRefPtr<CefCommandLine> command_line = CreateCommandLine(main_args);
@@ -40,7 +40,7 @@ int try_start_subprocess(int argc, char* argv[], void (*app_ready)(void* app_rea
     // Create a CefApp of the correct process type.
     switch (GetProcessType(command_line)) {
       case PROCESS_TYPE_BROWSER:
-        app = CreateBrowserProcessApp(app_ready, app_ready_arg);
+        app = CreateBrowserProcessApp();
         break;
       case PROCESS_TYPE_RENDERER:
         app = CreateRendererProcessApp();

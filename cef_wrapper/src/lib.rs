@@ -27,32 +27,13 @@ mod cef_wrapper_sys {
 
 pub use cef_capi_sys::cef_rect_t as CefRect;
 
-pub fn init() -> Result<impl Future<Output = ()>, i32> {
-    let (sender, receiver) = oneshot::channel::<()>();
-
-    let mut sender = Box::new(Some(sender));
-
-    extern "C" fn app_ready(sender: *mut c_void) {
-        let sender = sender.cast::<Option<Sender<()>>>();
-        let sender = unsafe { sender.as_mut().unwrap() };
-        let sender = sender.take().expect("app_ready called twice");
-        sender.send(()).expect("app initialization failed");
+pub fn init() -> Result<(), i32> {
+    let (argc, argv) = get_posix_args();
+    let result = unsafe { cef_wrapper_sys::try_start_subprocess(argc, argv) };
+    match result {
+        0 => Ok(()),
+        e => Err(e),
     }
-
-    let sender_ptr = sender.as_mut() as *mut _ as *mut c_void;
-    let result = unsafe {
-        let (argc, argv) = get_posix_args();
-        cef_wrapper_sys::try_start_subprocess(argc, argv, Some(app_ready), sender_ptr)
-    };
-
-    if result != 0 {
-        return Err(result);
-    }
-
-    Ok(async move {
-        let _ = receiver.await;
-        drop(sender);
-    })
 }
 
 fn get_posix_args() -> (c_int, *mut *mut c_char) {

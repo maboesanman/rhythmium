@@ -19,7 +19,7 @@ pub async fn main() {
     let event_loop = EventLoop::new().unwrap();
 
     match cef_wrapper::init() {
-        Ok(app) => app.await,
+        Ok(app) => {} //app.await,
         Err(e) => exit(e),
     };
 
