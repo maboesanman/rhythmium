@@ -24,4 +24,5 @@ ProcessType GetProcessType(const CefRefPtr<CefCommandLine>& command_line);
 
 #if defined(OS_MACOSX)
 bool InitMacProcess(int argc, char* argv[], bool helper);
+bool InitMacMainProcess(int argc, char* argv[], bool helper);
 #endif

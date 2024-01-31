@@ -14,7 +14,7 @@
 // Entry point function for all processes.
 int try_start_subprocess(int argc, char* argv[]) {
   #if defined(OS_MACOSX)
-    if (!InitMacProcess(argc, argv, false))
+    if (!InitMacMainProcess(argc, argv, false))
       return 1;
   #endif
   
