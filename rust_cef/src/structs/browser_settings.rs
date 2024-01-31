@@ -1,8 +1,11 @@
 use std::num::NonZeroU32;
 
-use cef_wrapper::cef_capi_sys::{cef_browser_settings_t, cef_state_t_STATE_ENABLED, cef_state_t_STATE_DISABLED, cef_state_t_STATE_DEFAULT};
+use cef_wrapper::cef_capi_sys::{
+    cef_browser_settings_t, cef_state_t_STATE_DEFAULT, cef_state_t_STATE_DISABLED,
+    cef_state_t_STATE_ENABLED,
+};
 
-use crate::{util::cef_string::str_into_cef_string_utf16};
+use crate::util::cef_string::str_into_cef_string_utf16;
 
 #[derive(Default)]
 pub struct BrowserSettings {
@@ -39,9 +42,8 @@ pub struct BrowserSettings {
 
 impl From<&BrowserSettings> for cef_browser_settings_t {
     fn from(value: &BrowserSettings) -> Self {
-        let wrap_string = {
-            |s: &Option<String>| str_into_cef_string_utf16(s.as_deref().unwrap_or(""))
-        };
+        let wrap_string =
+            { |s: &Option<String>| str_into_cef_string_utf16(s.as_deref().unwrap_or("")) };
 
         let wrap_bool = |b: &Option<bool>| match b {
             Some(true) => cef_state_t_STATE_ENABLED,

@@ -1,5 +1,7 @@
 use std::process::exit;
 
+use cef_app::RhythmiumCefApp;
+use rust_cef::functions::initialize::initialize_from_env;
 use scene::{
     image_view::{ImageFit, ImageViewBuilder},
     scene_view::SceneViewBuilder,
@@ -8,6 +10,7 @@ use scene::{
 use taffy::prelude::*;
 use winit::event_loop::EventLoop;
 
+pub mod cef_app;
 pub mod scene;
 
 #[tokio::main]
@@ -18,10 +21,11 @@ pub async fn main() {
     // in particular, it needs to run before the cef subprocess is launched.
     let event_loop = EventLoop::new().unwrap();
 
-    match cef_wrapper::init() {
-        Ok(app) => {} //app.await,
-        Err(e) => exit(e),
-    };
+    if let Err(e) = cef_wrapper::init() {
+        exit(e);
+    }
+
+    initialize_from_env(&cef_app::get_settings(), RhythmiumCefApp::new());
 
     let mut taffy = Taffy::new();
 

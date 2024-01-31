@@ -46,12 +46,12 @@ impl Client {
     }
 }
 
-pub trait ClientConfig: Sized {
-    fn get_life_span_handler(&mut self) -> Option<CefArc<LifeSpanHandler>> {
+pub trait ClientConfig: Sized + Send + Sync {
+    fn get_life_span_handler(&self) -> Option<CefArc<LifeSpanHandler>> {
         None
     }
 
-    fn get_render_handler(&mut self) -> Option<CefArc<RenderHandler>> {
+    fn get_render_handler(&self) -> Option<CefArc<RenderHandler>> {
         None
     }
 }

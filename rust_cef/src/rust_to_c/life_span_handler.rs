@@ -29,8 +29,8 @@ impl LifeSpanHandler {
     }
 }
 
-pub trait LifeSpanHandlerConfig: Sized {
-    fn on_after_created(&mut self, _browser: CefArc<Browser>) {}
+pub trait LifeSpanHandlerConfig: Sized + Send + Sync {
+    fn on_after_created(&self, _browser: CefArc<Browser>) {}
 }
 
 pub(crate) trait LifeSpanHandlerConfigExt: LifeSpanHandlerConfig {

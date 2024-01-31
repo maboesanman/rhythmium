@@ -7,7 +7,7 @@ pub mod macros;
 
 pub mod c_to_rust;
 pub mod enums;
+pub mod functions;
 pub mod rust_to_c;
 pub mod structs;
 pub mod util;
-pub mod functions;

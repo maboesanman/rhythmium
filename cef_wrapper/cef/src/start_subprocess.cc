@@ -10,6 +10,7 @@
 #include "app_factory.h"
 #include "subprocess_util.h"
 
+
 // Entry point function for all processes.
 int try_start_subprocess(int argc, char* argv[]) {
   #if defined(OS_MACOSX)
@@ -25,6 +26,8 @@ int try_start_subprocess(int argc, char* argv[]) {
     CefScopedSandboxInfo scoped_sandbox;
     sandbox_info = scoped_sandbox.sandbox_info();
   #endif
+
+  return 0;
 
   // Provide CEF with command-line arguments.
   CefMainArgs main_args(argc, argv);

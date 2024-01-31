@@ -93,7 +93,7 @@ pub unsafe fn cef_string_userfree_into_string(cef_string: cef_string_userfree_t)
 pub unsafe fn cef_string_utf16_into_string(
     cef_string: *const cef_string_utf16_t,
 ) -> Option<String> {
-    let cef_string = unsafe { cef_string.as_ref() }.unwrap();
+    let cef_string = unsafe { cef_string.as_ref() }?;
     let bytes = unsafe { std::slice::from_raw_parts(cef_string.str_, cef_string.length) };
 
     let value = String::from_utf16_lossy(bytes);

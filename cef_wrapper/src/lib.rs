@@ -1,8 +1,6 @@
-use core::future::Future;
-use futures::channel::oneshot::{self, Sender};
 use std::{
     ffi::CString,
-    os::raw::{c_char, c_int, c_void},
+    os::raw::{c_char, c_int},
 };
 
 extern crate link_cplusplus;

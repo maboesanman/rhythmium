@@ -1,4 +1,4 @@
-use std::{ops::Deref, ptr::NonNull, sync::atomic::AtomicUsize};
+use std::{ops::Deref, ptr::NonNull, sync::Arc};
 
 use super::starts_with::{StartsWith, StartsWithExt as _};
 use cef_wrapper::cef_capi_sys::cef_base_ref_counted_t;
@@ -52,9 +52,6 @@ pub struct CefArcFromRust<VTable, RustImpl> {
     /// and still properly dropped.
     pub(crate) capi_v_table: VTable,
 
-    /// extra data needed by the smart pointer.
-    pub(crate) ref_count: AtomicUsize,
-
     /// the user defined rust type.
     pub rust_impl: RustImpl,
 }
@@ -78,7 +75,6 @@ impl<V: StartsWith<cef_base_ref_counted_t>, R> CefArcFromRust<V, R> {
 
         Self {
             capi_v_table,
-            ref_count: AtomicUsize::new(1),
             rust_impl,
         }
     }
@@ -90,6 +86,8 @@ impl<V: StartsWith<cef_base_ref_counted_t>, R> CefArcFromRust<V, R> {
 }
 
 mod c_callbacks {
+    use std::sync::Arc;
+
     use cef_wrapper::cef_capi_sys::cef_base_ref_counted_t;
 
     use crate::util::wrap_boolean::wrap_boolean;
@@ -97,50 +95,37 @@ mod c_callbacks {
     use super::CefArcFromRust;
 
     pub unsafe extern "C" fn add_ref_ptr<V, R>(ptr: *mut cef_base_ref_counted_t) {
-        let rust_type = ptr.cast::<CefArcFromRust<V, R>>().as_ref().unwrap();
-        rust_type
-            .ref_count
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let rust_type = ptr.cast::<CefArcFromRust<V, R>>();
+        Arc::increment_strong_count(rust_type);
     }
 
     pub unsafe extern "C" fn release_ptr<V, R>(ptr: *mut cef_base_ref_counted_t) -> i32 {
-        let rust_type = ptr.cast::<CefArcFromRust<V, R>>().as_ref().unwrap();
-        if rust_type
-            .ref_count
-            .fetch_sub(1, std::sync::atomic::Ordering::Release)
-            != 0
-        {
-            return 0;
-        }
+        let rust_type = ptr.cast::<CefArcFromRust<V, R>>();
+        let a = Arc::from_raw(rust_type);
+        let strong_count = Arc::strong_count(&a);
+        drop(a);
 
-        // this sanitize thing is just lifted from the standard library arc implementation.
-        #[cfg(not(sanitize = "thread"))]
-        std::sync::atomic::fence(std::sync::atomic::Ordering::Acquire);
-
-        #[cfg(sanitize = "thread")]
-        inner.ref_count.load(std::sync::atomic::Ordering::Acquire);
-
-        // we know this box came from rust_cef, so it is a CefType<V>.
-        _ = Box::from_raw(ptr.cast::<CefArcFromRust<V, R>>());
-
-        1
+        wrap_boolean(strong_count == 1)
     }
 
     pub unsafe extern "C" fn has_one_ref_ptr<V, R>(ptr: *mut cef_base_ref_counted_t) -> i32 {
-        let rust_type = ptr.cast::<CefArcFromRust<V, R>>().as_ref().unwrap();
-        wrap_boolean(
-            rust_type
-                .ref_count
-                .load(std::sync::atomic::Ordering::Acquire)
-                == 1,
-        )
+        let rust_type = ptr.cast::<CefArcFromRust<V, R>>();
+        let a = Arc::from_raw(rust_type);
+        let strong_count = Arc::strong_count(&a);
+        core::mem::forget(a);
+
+        wrap_boolean(strong_count == 1)
     }
 
     pub unsafe extern "C" fn has_at_least_one_ref_ptr<V, R>(
         ptr: *mut cef_base_ref_counted_t,
     ) -> i32 {
-        let prefix = ptr.cast::<CefArcFromRust<V, R>>().as_ref().unwrap();
-        wrap_boolean(prefix.ref_count.load(std::sync::atomic::Ordering::Acquire) >= 1)
+        let rust_type = ptr.cast::<CefArcFromRust<V, R>>();
+        let a = Arc::from_raw(rust_type);
+        let strong_count = Arc::strong_count(&a);
+        core::mem::forget(a);
+
+        wrap_boolean(strong_count >= 1)
     }
 }
 
@@ -197,28 +182,11 @@ impl<T: StartsWith<cef_base_ref_counted_t>> CefArc<T> {
     }
 }
 
-// impl<T: StartsWith<cef_base_ref_counted_t>> CefArc<T> {
-//     pub fn try_into_mut(self) -> Result<CefArcMut<T>, Self> {
-//         let base = unsafe { self.ptr.as_ref().get_start() };
-//         if unsafe { base.has_one_ref.unwrap()(base as *const _ as *mut _) } != 0 {
-//             Ok(CefArcMut(self))
-//         } else {
-//             Err(self)
-//         }
-//     }
-// }
-
-// impl<V: VTable<Kind = VTableKindArc>> From<CefArcMut<V>> for CefArc<V> {
-//     fn from(value: CefArcMut<V>) -> Self {
-//         value.0
-//     }
-// }
-
 impl<V: StartsWith<cef_base_ref_counted_t>, R> CefArc<CefArcFromRust<V, R>> {
     pub(crate) fn new(capi_v_table: V, rust_impl: R) -> Self {
         let inner = CefArcFromRust::new(capi_v_table, rust_impl);
-        let inner = Box::into_raw(Box::new(inner));
-        let ptr = unsafe { NonNull::new_unchecked(inner) };
+        let inner = Arc::into_raw(Arc::new(inner));
+        let ptr = unsafe { NonNull::new_unchecked(inner as *mut _) };
 
         Self { ptr }
     }

@@ -46,7 +46,8 @@ impl RenderHandler {
     }
 }
 
-pub trait RenderHandlerConfig: Sized {
+// these methods are all called on the ui thread, so they can take mutable references to self.
+pub trait RenderHandlerConfig: Sized + Send {
     fn get_view_rect(&mut self, browser: CefArc<Browser>) -> Option<Rect>;
 
     fn on_paint(

@@ -366,7 +366,7 @@ impl WebViewClient {
 }
 
 impl ClientConfig for WebViewClient {
-    fn get_render_handler(&mut self) -> Option<CefArc<RenderHandler>> {
+    fn get_render_handler(&self) -> Option<CefArc<RenderHandler>> {
         Some(self.render_handler.clone())
     }
 }
