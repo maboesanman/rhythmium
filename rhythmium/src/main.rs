@@ -8,24 +8,25 @@ use scene::{
     web_view::WebViewBuilder,
 };
 use taffy::prelude::*;
-use winit::event_loop::EventLoop;
+use winit::event_loop::{EventLoop, EventLoopBuilder};
 
 pub mod cef_app;
 pub mod scene;
 
-#[tokio::main]
-pub async fn main() {
+pub fn main() {
     env_logger::init();
 
     // the winit event loop needs to launch first.
     // in particular, it needs to run before the cef subprocess is launched.
-    let event_loop = EventLoop::new().unwrap();
+    let event_loop = EventLoopBuilder::<RhythmiumEvent>::with_user_event().build().unwrap();
+
+    let proxy = event_loop.create_proxy();
 
     if let Err(e) = cef_wrapper::init() {
         exit(e);
     }
 
-    initialize_from_env(&cef_app::get_settings(), RhythmiumCefApp::new());
+    initialize_from_env(&cef_app::get_settings(), RhythmiumCefApp::new(proxy));
 
     let mut taffy = Taffy::new();
 
@@ -89,6 +90,13 @@ pub async fn main() {
         ImageFit::SetWidth(scene::image_view::ImageJustification::End),
     );
 
-    scene::view::run(event_loop, Box::new(WebViewBuilder::new())).await;
+    scene::view::run(event_loop, Box::new(WebViewBuilder::new()));
     // scene::view::run(event_loop, Box::new(image_view_builder)).await;
+}
+
+#[derive(Debug, Clone)]
+pub enum RhythmiumEvent {
+    RenderFrame,
+    DoCefWorkNow,
+    DoCefWorkLater(u64),
 }

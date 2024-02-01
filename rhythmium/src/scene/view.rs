@@ -11,6 +11,8 @@ use winit::{
     window::WindowBuilder,
 };
 
+use crate::RhythmiumEvent;
+
 use super::{
     root_surface::RootSurface,
     shared_wgpu_state::{self, SharedWgpuState},
@@ -29,13 +31,13 @@ pub trait ViewBuilder {
     ) -> Box<dyn View>;
 }
 
-pub async fn run(event_loop: EventLoop<()>, view_builder: Box<dyn ViewBuilder>) {
+pub fn run(event_loop: EventLoop<RhythmiumEvent>, view_builder: Box<dyn ViewBuilder>) {
     let window = WindowBuilder::new()
         .with_title("Rhythmium")
         .build(&event_loop)
         .unwrap();
 
-    let shared_wgpu_state = shared_wgpu_state::SharedWgpuState::new(window).await;
+    let shared_wgpu_state = futures::executor::block_on(shared_wgpu_state::SharedWgpuState::new(window));
     let view = view_builder.build(
         shared_wgpu_state.clone(),
         shared_wgpu_state.window.inner_size(),
@@ -45,15 +47,12 @@ pub async fn run(event_loop: EventLoop<()>, view_builder: Box<dyn ViewBuilder>) 
     let mut view_surface = RootSurface::new(view, shared_wgpu_state.clone());
     view_surface.resize(size);
 
-    event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
+    event_loop.set_control_flow(winit::event_loop::ControlFlow::Wait);
     event_loop
         .run(move |event, window_target| {
             match event {
-                Event::NewEvents(StartCause::Poll) => {
-                    view_surface.render().unwrap();
-                }
                 Event::AboutToWait => {
-                    do_cef_message_loop_work();
+                    view_surface.render().unwrap();
                 }
                 Event::WindowEvent {
                     ref event,
@@ -77,6 +76,12 @@ pub async fn run(event_loop: EventLoop<()>, view_builder: Box<dyn ViewBuilder>) 
                     }
                     _ => {}
                 },
+                Event::UserEvent(RhythmiumEvent::DoCefWorkNow) => {
+                    do_cef_message_loop_work();
+                },
+                Event::UserEvent(RhythmiumEvent::DoCefWorkLater(t)) => {
+                    panic!()
+                }
                 _ => {}
             };
         })
