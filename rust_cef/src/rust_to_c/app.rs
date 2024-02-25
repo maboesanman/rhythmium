@@ -1,11 +1,12 @@
 use std::cell::UnsafeCell;
 
 use cef_wrapper::cef_capi_sys::{
-    cef_app_t, cef_base_ref_counted_t, cef_command_line_t, cef_string_t, cef_browser_process_handler_t,
+    cef_app_t, cef_base_ref_counted_t, cef_browser_process_handler_t, cef_command_line_t,
+    cef_string_t,
 };
 
 use crate::{
-    c_to_rust::{command_line::CommandLine, browser_host},
+    c_to_rust::command_line::CommandLine,
     util::{
         cef_arc::{uninit_arc_vtable, CefArc, CefArcFromRust},
         cef_string::cef_string_utf16_into_string,
@@ -62,7 +63,10 @@ pub trait AppConfig: Sized + Send + Sync {
     type BrowserProcessState: Send;
     type RenderProcessState: Send;
 
-    fn get_browser_process_handler(&self, browser_process_state: &Self::BrowserProcessState) -> Option<CefArc<BrowserProcessHandler>> {
+    fn get_browser_process_handler(
+        &self,
+        _browser_process_state: &Self::BrowserProcessState,
+    ) -> Option<CefArc<BrowserProcessHandler>> {
         None
     }
 
@@ -93,7 +97,6 @@ pub enum CustomSchemeProcessState<'a, C: AppConfig> {
 }
 
 pub(crate) trait AppConfigExt: AppConfig {
-
     unsafe extern "C" fn get_browser_process_handler_raw(
         ptr: *mut cef_app_t,
     ) -> *mut cef_browser_process_handler_t {

@@ -5,7 +5,7 @@ use rust_cef::functions::message_loop::do_message_loop_work;
 use wgpu::{CommandEncoder, TextureView};
 use winit::{
     dpi::PhysicalSize,
-    event::{ElementState, Event, KeyEvent, StartCause, WindowEvent},
+    event::{ElementState, Event, KeyEvent, WindowEvent},
     event_loop::EventLoop,
     keyboard::NamedKey,
     window::WindowBuilder,
@@ -37,7 +37,8 @@ pub fn run(event_loop: EventLoop<RhythmiumEvent>, view_builder: Box<dyn ViewBuil
         .build(&event_loop)
         .unwrap();
 
-    let shared_wgpu_state = futures::executor::block_on(shared_wgpu_state::SharedWgpuState::new(window));
+    let shared_wgpu_state =
+        futures::executor::block_on(shared_wgpu_state::SharedWgpuState::new(window));
     let view = view_builder.build(
         shared_wgpu_state.clone(),
         shared_wgpu_state.window.inner_size(),
@@ -78,17 +79,15 @@ pub fn run(event_loop: EventLoop<RhythmiumEvent>, view_builder: Box<dyn ViewBuil
                 },
                 Event::UserEvent(RhythmiumEvent::DoCefWorkNow) => {
                     do_message_loop_work();
-                },
-                Event::UserEvent(RhythmiumEvent::DoCefWorkLater(t)) => {
+                }
+                Event::UserEvent(RhythmiumEvent::DoCefWorkLater(_t)) => {
                     panic!()
-                },
-                Event::UserEvent(RhythmiumEvent::CatchUpOnCefWork) => {
-                    loop {
-                        let start = std::time::Instant::now();
-                        do_message_loop_work();
-                        if start.elapsed() < Duration::from_micros(500) {
-                            break;
-                        }
+                }
+                Event::UserEvent(RhythmiumEvent::CatchUpOnCefWork) => loop {
+                    let start = std::time::Instant::now();
+                    do_message_loop_work();
+                    if start.elapsed() < Duration::from_micros(500) {
+                        break;
                     }
                 },
                 _ => {}

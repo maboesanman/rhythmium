@@ -1,8 +1,13 @@
 use std::cell::UnsafeCell;
 
-use cef_wrapper::cef_capi_sys::{cef_browser_process_handler_t, cef_base_ref_counted_t, _cef_browser_process_handler_t};
+use cef_wrapper::cef_capi_sys::{
+    _cef_browser_process_handler_t, cef_base_ref_counted_t, cef_browser_process_handler_t,
+};
 
-use crate::util::{starts_with::StartsWith, cef_arc::{CefArc, CefArcFromRust, uninit_arc_vtable}};
+use crate::util::{
+    cef_arc::{uninit_arc_vtable, CefArc, CefArcFromRust},
+    starts_with::StartsWith,
+};
 
 #[repr(transparent)]
 pub struct BrowserProcessHandler(pub(crate) cef_browser_process_handler_t);
@@ -12,7 +17,10 @@ unsafe impl StartsWith<cef_base_ref_counted_t> for BrowserProcessHandler {}
 unsafe impl StartsWith<cef_base_ref_counted_t> for cef_browser_process_handler_t {}
 
 impl BrowserProcessHandler {
-    pub fn new<C: BrowserProcessHandlerConfig>(config: C, browser_process_state: C::BrowserProcessState) -> CefArc<Self> {
+    pub fn new<C: BrowserProcessHandlerConfig>(
+        config: C,
+        browser_process_state: C::BrowserProcessState,
+    ) -> CefArc<Self> {
         let v_table = BrowserProcessHandler(cef_browser_process_handler_t {
             base: uninit_arc_vtable(),
             on_schedule_message_pump_work: Some(C::on_schedule_message_pump_work_raw),
@@ -23,10 +31,14 @@ impl BrowserProcessHandler {
             get_default_client: None,
         });
 
-        CefArc::new(v_table, BrowserProcessHandlerWrapper {
-            shared: config,
-            browser_process_state: UnsafeCell::new(browser_process_state),
-        }).type_erase()
+        CefArc::new(
+            v_table,
+            BrowserProcessHandlerWrapper {
+                shared: config,
+                browser_process_state: UnsafeCell::new(browser_process_state),
+            },
+        )
+        .type_erase()
     }
 }
 
@@ -38,15 +50,13 @@ struct BrowserProcessHandlerWrapper<C: BrowserProcessHandlerConfig> {
 pub trait BrowserProcessHandlerConfig: Sized + Send + Sync {
     type BrowserProcessState: Sized + Send;
 
-    fn on_schedule_message_pump_work(&self, delay_ms: u64) {
-        
-    }
+    fn on_schedule_message_pump_work(&self, _delay_ms: u64) {}
 }
 
 pub(crate) trait BrowserProcessHandlerConfigExt: BrowserProcessHandlerConfig {
     unsafe extern "C" fn on_schedule_message_pump_work_raw(
         ptr: *mut _cef_browser_process_handler_t,
-        delay_ms: i64
+        delay_ms: i64,
     ) {
         let this = CefArcFromRust::<BrowserProcessHandler, BrowserProcessHandlerWrapper<Self>>::get_rust_impl_from_ptr(ptr.cast());
         let shared = &(*this).shared;
@@ -55,4 +65,4 @@ pub(crate) trait BrowserProcessHandlerConfigExt: BrowserProcessHandlerConfig {
     }
 }
 
-impl<T: BrowserProcessHandlerConfig> BrowserProcessHandlerConfigExt for T { }
+impl<T: BrowserProcessHandlerConfig> BrowserProcessHandlerConfigExt for T {}

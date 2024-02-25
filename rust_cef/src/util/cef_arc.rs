@@ -104,8 +104,11 @@ mod c_callbacks {
         let a = Arc::from_raw(rust_type);
         let strong_count = Arc::strong_count(&a);
         drop(a);
-        
-        debug_assert!(strong_count > 0, "release_ptr called on a CefArc with no references");
+
+        debug_assert!(
+            strong_count > 0,
+            "release_ptr called on a CefArc with no references"
+        );
 
         wrap_boolean(strong_count == 1)
     }

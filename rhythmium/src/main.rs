@@ -8,7 +8,7 @@ use scene::{
     web_view::WebViewBuilder,
 };
 use taffy::prelude::*;
-use winit::event_loop::{EventLoop, EventLoopBuilder};
+use winit::event_loop::EventLoopBuilder;
 
 pub mod cef_app;
 pub mod scene;
@@ -18,16 +18,18 @@ pub fn main() {
 
     // the winit event loop needs to launch first.
     // in particular, it needs to run before the cef subprocess is launched.
-    let event_loop = EventLoopBuilder::<RhythmiumEvent>::with_user_event().build().unwrap();
+    let event_loop = EventLoopBuilder::<RhythmiumEvent>::with_user_event()
+        .build()
+        .unwrap();
 
     let proxy = event_loop.create_proxy();
     let other_proxy = proxy.clone();
 
-    thread::spawn(move || {
-        loop {
-            other_proxy.send_event(RhythmiumEvent::CatchUpOnCefWork).unwrap();
-            thread::sleep(std::time::Duration::from_millis(50));
-        }
+    thread::spawn(move || loop {
+        other_proxy
+            .send_event(RhythmiumEvent::CatchUpOnCefWork)
+            .unwrap();
+        thread::sleep(std::time::Duration::from_millis(50));
     });
 
     if let Err(e) = initialize_from_env(&cef_app::get_settings(), || RhythmiumCefApp::new(proxy)) {

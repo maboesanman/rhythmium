@@ -7,7 +7,8 @@ use crate::{
 };
 
 pub fn initialize<F>(main_args: MainArgs, settings: &Settings, app_factory: F) -> Result<(), i32>
-    where F: FnOnce() -> CefArc<App>
+where
+    F: FnOnce() -> CefArc<App>,
 {
     init()?;
     unsafe {
@@ -22,7 +23,8 @@ pub fn initialize<F>(main_args: MainArgs, settings: &Settings, app_factory: F) -
 }
 
 pub fn initialize_from_env<F>(settings: &Settings, app_factory: F) -> Result<(), i32>
-    where F: FnOnce() -> CefArc<App>
+where
+    F: FnOnce() -> CefArc<App>,
 {
     let main_args = MainArgs::from_env();
     initialize(main_args, settings, app_factory)
