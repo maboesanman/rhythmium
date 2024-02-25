@@ -26,7 +26,7 @@ pub fn main() {
     thread::spawn(move || {
         loop {
             other_proxy.send_event(RhythmiumEvent::CatchUpOnCefWork).unwrap();
-            thread::sleep(std::time::Duration::from_millis(1000));
+            thread::sleep(std::time::Duration::from_millis(50));
         }
     });
 
