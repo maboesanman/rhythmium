@@ -1,7 +1,7 @@
 pub use core::fmt::Debug;
 use std::{sync::Arc, time::Duration};
 
-use cef_wrapper::do_cef_message_loop_work;
+use rust_cef::functions::message_loop::do_message_loop_work;
 use wgpu::{CommandEncoder, TextureView};
 use winit::{
     dpi::PhysicalSize,
@@ -77,7 +77,7 @@ pub fn run(event_loop: EventLoop<RhythmiumEvent>, view_builder: Box<dyn ViewBuil
                     _ => {}
                 },
                 Event::UserEvent(RhythmiumEvent::DoCefWorkNow) => {
-                    do_cef_message_loop_work();
+                    do_message_loop_work();
                 },
                 Event::UserEvent(RhythmiumEvent::DoCefWorkLater(t)) => {
                     panic!()
@@ -85,7 +85,7 @@ pub fn run(event_loop: EventLoop<RhythmiumEvent>, view_builder: Box<dyn ViewBuil
                 Event::UserEvent(RhythmiumEvent::CatchUpOnCefWork) => {
                     loop {
                         let start = std::time::Instant::now();
-                        do_cef_message_loop_work();
+                        do_message_loop_work();
                         if start.elapsed() < Duration::from_micros(500) {
                             break;
                         }

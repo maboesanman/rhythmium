@@ -7,7 +7,6 @@ edition.workspace = true
 [dependencies]
 anyhow.workspace = true
 bytemuck.workspace = true
-cef_wrapper.workspace = true
 env_logger.workspace = true
 image = { workspace = true, features = ["jpeg", "png"] }
 log.workspace = true

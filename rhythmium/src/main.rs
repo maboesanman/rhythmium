@@ -30,11 +30,9 @@ pub fn main() {
         }
     });
 
-    if let Err(e) = cef_wrapper::init() {
+    if let Err(e) = initialize_from_env(&cef_app::get_settings(), || RhythmiumCefApp::new(proxy)) {
         exit(e);
     }
-
-    initialize_from_env(&cef_app::get_settings(), RhythmiumCefApp::new(proxy));
 
     let mut taffy = Taffy::new();
 
