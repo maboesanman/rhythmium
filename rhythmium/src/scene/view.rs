@@ -1,5 +1,5 @@
 pub use core::fmt::Debug;
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use cef_wrapper::do_cef_message_loop_work;
 use wgpu::{CommandEncoder, TextureView};
@@ -81,7 +81,16 @@ pub fn run(event_loop: EventLoop<RhythmiumEvent>, view_builder: Box<dyn ViewBuil
                 },
                 Event::UserEvent(RhythmiumEvent::DoCefWorkLater(t)) => {
                     panic!()
-                }
+                },
+                Event::UserEvent(RhythmiumEvent::CatchUpOnCefWork) => {
+                    loop {
+                        let start = std::time::Instant::now();
+                        do_cef_message_loop_work();
+                        if start.elapsed() < Duration::from_micros(500) {
+                            break;
+                        }
+                    }
+                },
                 _ => {}
             };
         })

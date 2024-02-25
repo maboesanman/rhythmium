@@ -1,4 +1,4 @@
-use std::process::exit;
+use std::{process::exit, thread};
 
 use cef_app::RhythmiumCefApp;
 use rust_cef::functions::initialize::initialize_from_env;
@@ -21,6 +21,14 @@ pub fn main() {
     let event_loop = EventLoopBuilder::<RhythmiumEvent>::with_user_event().build().unwrap();
 
     let proxy = event_loop.create_proxy();
+    let other_proxy = proxy.clone();
+
+    thread::spawn(move || {
+        loop {
+            other_proxy.send_event(RhythmiumEvent::CatchUpOnCefWork).unwrap();
+            thread::sleep(std::time::Duration::from_millis(1000));
+        }
+    });
 
     if let Err(e) = cef_wrapper::init() {
         exit(e);
@@ -99,4 +107,5 @@ pub enum RhythmiumEvent {
     RenderFrame,
     DoCefWorkNow,
     DoCefWorkLater(u64),
+    CatchUpOnCefWork,
 }
