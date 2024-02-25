@@ -46,7 +46,7 @@ impl App {
             AppWrapper {
                 shared: config,
                 browser_process_state,
-                render_process_state,
+                _render_process_state: render_process_state,
             },
         )
         .type_erase()
@@ -56,7 +56,7 @@ impl App {
 struct AppWrapper<C: AppConfig> {
     shared: C,
     browser_process_state: UnsafeCell<C::BrowserProcessState>,
-    render_process_state: UnsafeCell<C::RenderProcessState>,
+    _render_process_state: UnsafeCell<C::RenderProcessState>,
 }
 
 pub trait AppConfig: Sized + Send + Sync {

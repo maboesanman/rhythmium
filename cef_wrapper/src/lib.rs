@@ -10,7 +10,9 @@ pub mod cef_capi_sys {
     #![allow(non_camel_case_types)]
     #![allow(non_snake_case)]
     #![allow(dead_code)]
-
+    #![allow(non_upper_case_globals)]
+    #![allow(clippy::type_complexity)]
+    
     include!(concat!(env!("OUT_DIR"), "/bindings_c.rs"));
 }
 
@@ -19,6 +21,8 @@ mod cef_wrapper_sys {
     #![allow(non_camel_case_types)]
     #![allow(non_snake_case)]
     #![allow(dead_code)]
+    #![allow(non_upper_case_globals)]
+    #![allow(clippy::type_complexity)]
 
     include!(concat!(env!("OUT_DIR"), "/bindings_cpp.rs"));
 }

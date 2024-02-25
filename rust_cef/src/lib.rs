@@ -1,6 +1,8 @@
 #![feature(cfg_sanitize)]
 #![feature(arbitrary_self_types)]
 #![feature(ptr_metadata)]
+#![allow(non_upper_case_globals)]
+#![allow(clippy::new_ret_no_self)]
 
 #[macro_use]
 pub mod macros;

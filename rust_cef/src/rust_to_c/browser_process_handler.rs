@@ -35,7 +35,7 @@ impl BrowserProcessHandler {
             v_table,
             BrowserProcessHandlerWrapper {
                 shared: config,
-                browser_process_state: UnsafeCell::new(browser_process_state),
+                _browser_process_state: UnsafeCell::new(browser_process_state),
             },
         )
         .type_erase()
@@ -44,7 +44,7 @@ impl BrowserProcessHandler {
 
 struct BrowserProcessHandlerWrapper<C: BrowserProcessHandlerConfig> {
     shared: C,
-    browser_process_state: UnsafeCell<C::BrowserProcessState>,
+    _browser_process_state: UnsafeCell<C::BrowserProcessState>,
 }
 
 pub trait BrowserProcessHandlerConfig: Sized + Send + Sync {

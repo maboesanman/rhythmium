@@ -1,3 +1,6 @@
+
+#![allow(dead_code)]
+
 use std::{
     ops::{Deref, DerefMut},
     ptr::NonNull,
