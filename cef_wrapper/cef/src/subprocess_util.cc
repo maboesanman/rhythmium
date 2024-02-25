@@ -63,6 +63,10 @@ bool InitMacProcess(int argc, char* argv[], bool helper) {
       return false;
   #endif
 
+  return InitMacMainProcess(argc, argv, helper);
+}
+
+bool InitMacMainProcess(int argc, char* argv[], bool helper) {
   CefScopedLibraryLoader library_loader;
   bool load_result = helper ? library_loader.LoadInHelper() : library_loader.LoadInMain();
   if (!load_result)

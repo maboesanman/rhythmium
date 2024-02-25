@@ -20,29 +20,12 @@
 
 // Entry point function for sub-processes.
 int main(int argc, char* argv[]) {
-  if(!InitMacProcess(argc, argv, true))
+  if(!InitMacMainProcess(argc, argv, true))
     return 1;
 
   // Provide CEF with command-line arguments.
   CefMainArgs main_args(argc, argv);
 
-  // Create a temporary CommandLine object.
-  CefRefPtr<CefCommandLine> command_line = CreateCommandLine(main_args);
-
-  // Create a CefApp of the correct process type. The browser process is handled
-  // by start_subprocess.cc.
-  CefRefPtr<CefApp> app;
-  switch (GetProcessType(command_line)) {
-    case PROCESS_TYPE_RENDERER:
-      app = CreateRendererProcessApp();
-      break;
-    case PROCESS_TYPE_OTHER:
-      app = CreateOtherProcessApp();
-      break;
-    default:
-      break;
-  }
-
   // Execute the sub-process.
-  return CefExecuteProcess(main_args, app, nullptr);
+  return CefExecuteProcess(main_args, nullptr, nullptr);
 }

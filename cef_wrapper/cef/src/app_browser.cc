@@ -8,19 +8,11 @@
 
 // Minimal implementation of CefApp for the browser process.
 class BrowserApp : public CefApp, public CefBrowserProcessHandler {
-  public: BrowserApp(void (*app_ready)(void* callback_arg), void* app_ready_arg) {
-    _app_ready = app_ready;
-    _app_ready_arg = app_ready_arg;
-  }
+  public: BrowserApp() { }
 
   BrowserApp(const BrowserApp&) = delete;
   BrowserApp& operator=(const BrowserApp&) = delete;
   ~BrowserApp() = default;
-
-  // CefApp methods:
-  CefRefPtr<CefBrowserProcessHandler> GetBrowserProcessHandler() override {
-    return this;
-  }
 
   void OnBeforeCommandLineProcessing(
       const CefString& process_type,
@@ -35,17 +27,10 @@ class BrowserApp : public CefApp, public CefBrowserProcessHandler {
     }
   }
 
-  // CefBrowserProcessHandler methods:
-  void OnContextInitialized() override {
-    _app_ready(this->_app_ready_arg);
-  }
-
  private:
   IMPLEMENT_REFCOUNTING(BrowserApp);
-  void (*_app_ready)(void* callback_arg);
-  void* _app_ready_arg;
 };
 
-CefRefPtr<CefApp> CreateBrowserProcessApp(void (*app_ready)(void* app_ready_arg), void* app_ready_arg) {
-  return new BrowserApp(app_ready, app_ready_arg);
+CefRefPtr<CefApp> CreateBrowserProcessApp() {
+  return new BrowserApp();
 }

@@ -10,12 +10,24 @@
 #include "app_factory.h"
 #include "subprocess_util.h"
 
+
 // Entry point function for all processes.
-int try_start_subprocess(int argc, char* argv[], void (*app_ready)(void* app_ready_arg), void* app_ready_arg) {
+int try_start_subprocess(int argc, char* argv[]) {
   #if defined(OS_MACOSX)
-    if (!InitMacProcess(argc, argv, false))
+    if (!InitMacMainProcess(argc, argv, false))
       return 1;
   #endif
+  
+  void* sandbox_info = nullptr;
+
+  #if defined(OS_WIN) && defined(CEF_USE_SANDBOX)
+    // Manage the life span of the sandbox information object. This is necessary
+    // for sandbox support on Windows. See cef_sandbox_win.h for complete details.
+    CefScopedSandboxInfo scoped_sandbox;
+    sandbox_info = scoped_sandbox.sandbox_info();
+  #endif
+
+  return 0;
 
   // Provide CEF with command-line arguments.
   CefMainArgs main_args(argc, argv);
@@ -23,7 +35,7 @@ int try_start_subprocess(int argc, char* argv[], void (*app_ready)(void* app_rea
   CefRefPtr<CefApp> app;
   #if defined(OS_MACOSX)
     // macos fires them from the bundle, so we skip all this.
-    app = CreateBrowserProcessApp(app_ready, app_ready_arg);
+    app = CreateBrowserProcessApp();
   #else
     // Create a temporary CommandLine object.
     CefRefPtr<CefCommandLine> command_line = CreateCommandLine(main_args);
@@ -31,7 +43,7 @@ int try_start_subprocess(int argc, char* argv[], void (*app_ready)(void* app_rea
     // Create a CefApp of the correct process type.
     switch (GetProcessType(command_line)) {
       case PROCESS_TYPE_BROWSER:
-        app = CreateBrowserProcessApp(app_ready, app_ready_arg);
+        app = CreateBrowserProcessApp();
         break;
       case PROCESS_TYPE_RENDERER:
         app = CreateRendererProcessApp();
@@ -50,18 +62,10 @@ int try_start_subprocess(int argc, char* argv[], void (*app_ready)(void* app_rea
       return exit_code;
     }
   #endif
-  
-  void* sandbox_info = nullptr;
-
-  #if defined(OS_WIN) && defined(CEF_USE_SANDBOX)
-    // Manage the life span of the sandbox information object. This is necessary
-    // for sandbox support on Windows. See cef_sandbox_win.h for complete details.
-    CefScopedSandboxInfo scoped_sandbox;
-    sandbox_info = scoped_sandbox.sandbox_info();
-  #endif
 
   // Specify CEF global settings here.
   CefSettings settings;
+  settings.windowless_rendering_enabled = true;
 
   #if !defined(CEF_USE_SANDBOX)
     settings.no_sandbox = true;

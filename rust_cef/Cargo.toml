@@ -1,0 +1,21 @@
+[package]
+name = "rust_cef"
+description = "A Safe Rust wrapper for the Chromium Embedded Framework"
+version.workspace = true
+edition.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "rust_cef"
+
+[features]
+default = ["sandbox"]
+sandbox = []
+
+# [[bin]]
+# name = "mac_helper_process"
+
+[dependencies]
+cef_wrapper.workspace = true
+flagset = "0.4.4"

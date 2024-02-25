@@ -20,4 +20,4 @@ CefRefPtr<CefApp> CreateRendererProcessApp();
 CefRefPtr<CefApp> CreateOtherProcessApp();
 
 // Called in the main process to create the CefApp for that process.
-CefRefPtr<CefApp> CreateBrowserProcessApp(void (*app_ready)(void* app_ready_arg), void* app_ready_arg);
+CefRefPtr<CefApp> CreateBrowserProcessApp();
