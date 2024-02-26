@@ -6,23 +6,38 @@ fn main() {
     println!("cargo:rerun-if-changed=cef/src");
     println!("cargo:rerun-if-changed=cef/cmake");
 
-    let cmake_target_dir = cmake::Config::new("./cef")
-        .generator("Ninja")
-        .build_target("cef_wrapper")
-        .build()
-        .join("build");
+    // build the c++ wrapper library (only used for the cef_load_library and cef_unload_library functions on macos)
+    #[cfg(target_os = "macos")]
+    {
+        let cmake_target_dir = cmake::Config::new("./cef")
+            .generator("Ninja")
+            .build_target("libcef_dll_wrapper")
+            .build()
+            .join("build");
+    
+        let lib_dir = cmake_target_dir.join("lib");
+    
+        println!("cargo:rustc-link-search=native={}", lib_dir.display());
+        println!("cargo:rustc-link-lib=static=cef_dll_wrapper");
+    }
 
-    let lib_dir = cmake_target_dir.join("lib");
-
-    println!("cargo:rustc-link-search=native={}", lib_dir.display());
-    println!("cargo:rustc-link-lib=static=cef_wrapper");
-    println!("cargo:rustc-link-lib=static=cef_dll_wrapper");
-
+    // copy the sandbox library to lib_dir
     #[cfg(any(target_os = "windows", target_os = "macos"))]
     {
+        let _ = cmake::Config::new("./cef")
+            .generator("Ninja")
+            .build_target("copy_cef_sandbox")
+            .build();
+    
         println!("cargo:rustc-link-lib=sandbox");
         println!("cargo:rustc-link-lib=static=cef_sandbox");
     }
+
+    let cmake_target_dir = cmake::Config::new("./cef")
+        .generator("Ninja")
+        .build_target("copy_cef_include")
+        .build()
+        .join("build");
 
     let include_dir = cmake_target_dir.join("include");
     let clang_include_arg = format!("-I{}", include_dir.display());
