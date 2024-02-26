@@ -5,7 +5,6 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-link-cplusplus = { version = "1.0", features = ["libc++"] }
 futures.workspace = true
 argv = "0.1"
 

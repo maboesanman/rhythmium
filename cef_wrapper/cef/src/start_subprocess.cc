@@ -16,6 +16,8 @@ int try_start_subprocess(int argc, char* argv[]) {
   #if defined(OS_MACOSX)
     if (!InitMacMainProcess(argc, argv, false))
       return 1;
+
+    return 0;
   #endif
   
   void* sandbox_info = nullptr;

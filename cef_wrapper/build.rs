@@ -29,18 +29,6 @@ fn main() {
 
     // set up bindgen for cmake library
     let bindings = bindgen::Builder::default()
-        .header("wrapper.hpp")
-        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
-        .generate()
-        .expect("Unable to generate bindings");
-
-    let out_path = Path::new(&std::env::var("OUT_DIR").unwrap()).join("bindings_cpp.rs");
-    bindings
-        .write_to_file(out_path)
-        .expect("Unable to write bindings");
-
-    // set up bindgen for cmake library
-    let bindings = bindgen::Builder::default()
         .header("wrapper.h")
         .clang_arg(clang_include_arg)
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))

@@ -4,6 +4,7 @@ members = [
   "rhythmium",
   "rust_cef",
   "cef_wrapper",
+  "cef_mac_helper",
 ]
 
 [workspace.package]
