@@ -8,9 +8,15 @@
 # Visit https://cef-builds.spotifycdn.com/index.html for the list of
 # supported platforms and versions.
 
-function(DownloadCEF platform version download_dir)
+
+function(DownloadCEF download_dir)
+  include(CEFVersion)
+  include(CEFPlatform)
+
+  message(STATUS "CEF ${CEF_VERSION} for ${CEF_PLATFORM}")
+
   # Specify the binary distribution type and download directory.
-  set(CEF_DISTRIBUTION "cef_binary_${version}_${platform}")
+  set(CEF_DISTRIBUTION "cef_binary_${CEF_VERSION}_${CEF_PLATFORM}")
   set(CEF_DOWNLOAD_DIR "${download_dir}")
 
   # The location where we expect the extracted binary distribution.
@@ -45,4 +51,5 @@ function(DownloadCEF platform version download_dir)
       WORKING_DIRECTORY ${CEF_DOWNLOAD_DIR}
       )
   endif()
+  
 endfunction()

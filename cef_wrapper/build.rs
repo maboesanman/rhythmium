@@ -9,7 +9,7 @@ fn main() {
     // build the c++ wrapper library (only used for the cef_load_library and cef_unload_library functions on macos)
     #[cfg(target_os = "macos")]
     {
-        let cmake_target_dir = cmake::Config::new("./cef")
+        let cmake_target_dir = cmake::Config::new(".")
             .generator("Ninja")
             .build_target("libcef_dll_wrapper")
             .build()
@@ -24,7 +24,7 @@ fn main() {
     // copy the sandbox library to lib_dir
     #[cfg(any(target_os = "windows", target_os = "macos"))]
     {
-        let _ = cmake::Config::new("./cef")
+        let _ = cmake::Config::new(".")
             .generator("Ninja")
             .build_target("copy_cef_sandbox")
             .build();
@@ -33,7 +33,7 @@ fn main() {
         println!("cargo:rustc-link-lib=static=cef_sandbox");
     }
 
-    let cmake_target_dir = cmake::Config::new("./cef")
+    let cmake_target_dir = cmake::Config::new(".")
         .generator("Ninja")
         .build_target("copy_cef_include")
         .build()

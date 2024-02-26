@@ -104,12 +104,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4668cab20f66d8d020e1fbc0ebe47217433c1b6c8f2040faf858554e394ace6"
 
 [[package]]
-name = "argv"
-version = "0.1.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2bd0874893eef471c233784c161df0aba8a277428ee3a9614182d108aa3161f"
-
-[[package]]
 name = "arrayref"
 version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -330,11 +324,9 @@ dependencies = [
 name = "cef_wrapper"
 version = "0.1.0"
 dependencies = [
- "argv",
  "bindgen",
  "cmake",
  "fs_extra",
- "futures",
  "regex",
 ]
 

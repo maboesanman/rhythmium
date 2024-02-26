@@ -4,10 +4,6 @@ description = "A Rhythm Game Client"
 version.workspace = true
 edition.workspace = true
 
-[dependencies]
-futures.workspace = true
-argv = "0.1"
-
 [build-dependencies]
 cmake = "0.1"
 regex = "1.10"
