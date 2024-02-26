@@ -67,6 +67,14 @@ pub fn get_settings() -> Settings {
         root_cache_path: Some(
             "/Users/mason/Source/github.com/maboesanman/rhythmium/cache_root".to_string(),
         ),
+        framework_dir_path: Some(
+            "/Users/mason/Source/github.com/maboesanman/rhythmium/build/lib/Frameworks/Chromium Embedded Framework.framework"
+                .to_string(),
+        ),
+        main_bundle_path: Some(
+            "/Users/mason/Source/github.com/maboesanman/rhythmium/build/lib/rhythmium_partial_bundle.app"
+                .to_string(),
+        ),
         ..Default::default()
     }
 }

@@ -8,9 +8,18 @@
       "type": "lldb",
       "request": "launch",
       "name": "Debug executable 'rhythmium'",
-      "program": "${workspaceFolder}/target/debug/bundle/rhythmium.app/Contents/MacOS/rhythmium",
+      "cargo": {
+        "args": [
+          "build",
+          "--bin=rhythmium",
+          "--package=rhythmium"
+        ],
+        "filter": {
+          "name": "rhythmium",
+          "kind": "bin"
+        }
+      },
       "args": [],
-      "preLaunchTask": "build",
       "cwd": "${workspaceFolder}"
     },
     {
@@ -26,6 +35,81 @@
         ],
         "filter": {
           "name": "rhythmium",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in library 'rust_cef'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--lib",
+          "--package=rust_cef"
+        ],
+        "filter": {
+          "name": "rust_cef",
+          "kind": "lib"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in library 'cef_wrapper'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--lib",
+          "--package=cef_wrapper"
+        ],
+        "filter": {
+          "name": "cef_wrapper",
+          "kind": "lib"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug executable 'cef_mac_helper'",
+      "cargo": {
+        "args": [
+          "build",
+          "--bin=cef_mac_helper",
+          "--package=cef_mac_helper"
+        ],
+        "filter": {
+          "name": "cef_mac_helper",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in executable 'cef_mac_helper'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--bin=cef_mac_helper",
+          "--package=cef_mac_helper"
+        ],
+        "filter": {
+          "name": "cef_mac_helper",
           "kind": "bin"
         }
       },

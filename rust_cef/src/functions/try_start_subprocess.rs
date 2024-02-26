@@ -11,6 +11,7 @@ pub fn try_start_subprocess(main_args: &MainArgs) {
     let framework_path = "Chromium Embedded Framework.framework/Chromium Embedded Framework";
     let from_main = "../Frameworks";
     let from_helper = "../../../";
+    let from_main = "/Users/mason/Source/github.com/maboesanman/rhythmium/build/lib/Frameworks";
 
     let path = parent_dir.join(from_main).join(framework_path);
 

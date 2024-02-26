@@ -62,6 +62,7 @@ if(OS_MAC)
 
   # Output path for the main app bundle.
   set(APP "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${BINARY_NAME}.app")
+  set(PARTIAL_BUNDLE "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/${BINARY_NAME}_partial_bundle.app")
 
   # Variables referenced from the main Info.plist file.
   set(EXECUTABLE_NAME "${BINARY_NAME}")
@@ -74,21 +75,29 @@ if(OS_MAC)
   string(REPLACE "\${PRODUCT_NAME}" "${PRODUCT_NAME}" _plist_contents ${_plist_contents})
   file(WRITE ${_main_info_plist} ${_plist_contents})
 
-  add_custom_target(${BINARY_NAME}_app ALL
+  add_custom_target(${BINARY_NAME}_partial_bundle ALL
     COMMAND ${CMAKE_COMMAND} -E make_directory
-            "${APP}/Contents/MacOS"
+            "${PARTIAL_BUNDLE}/Contents/MacOS"
+    COMMAND ${CMAKE_COMMAND} -E copy
+            "${_main_info_plist}"
+            "${PARTIAL_BUNDLE}/Contents/Info.plist"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/Frameworks"
+            "${PARTIAL_BUNDLE}/Contents/Frameworks"
+    VERBATIM)
+
+  add_dependencies(${BINARY_NAME}_partial_bundle macos_framework_dir)
+
+  add_custom_target(${BINARY_NAME}_app ALL
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${PARTIAL_BUNDLE}"
+            "${APP}"
     COMMAND ${CMAKE_COMMAND} -E copy
             "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${BINARY_NAME}"
             "${APP}/Contents/MacOS/${BINARY_NAME}"
-    COMMAND ${CMAKE_COMMAND} -E copy
-            "${_main_info_plist}"
-            "${APP}/Contents/Info.plist"
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/Frameworks"
-            "${APP}/Contents/Frameworks"
     VERBATIM)
 
-  add_dependencies(${BINARY_NAME}_app ${BINARY_NAME} macos_framework_dir)
+  add_dependencies(${BINARY_NAME}_app ${BINARY_NAME} ${BINARY_NAME}_partial_bundle)
 
   set(FRAMEWORKS_DIR "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/Frameworks")
 
