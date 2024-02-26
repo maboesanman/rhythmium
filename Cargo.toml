@@ -12,7 +12,6 @@ version = "0.1.0"
 edition = "2021"
 authors = ["Mason Boeman <masonboeman@gmail.com"]
 
-
 [workspace.dependencies]
 anyhow = "1.0.75"
 bytemuck = { version = "1.14.0", features = ["derive"] }

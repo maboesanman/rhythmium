@@ -6,6 +6,5 @@ edition.workspace = true
 
 [build-dependencies]
 cmake = "0.1"
-regex = "1.10"
-fs_extra.workspace = true
 bindgen = "0.69"
+regex = "1.10.3"

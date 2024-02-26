@@ -3,6 +3,7 @@ name = "rhythmium"
 description = "A Rhythm Game Client"
 version.workspace = true
 edition.workspace = true
+default-run = "rhythmium"
 
 [dependencies]
 anyhow.workspace = true

@@ -2,9 +2,19 @@ use std::path::Path;
 
 fn main() {
     // set up cmake build
-    println!("cargo:rerun-if-changed=cef/CMakeLists.txt");
-    println!("cargo:rerun-if-changed=cef/src");
-    println!("cargo:rerun-if-changed=cef/cmake");
+    println!("cargo:rerun-if-changed=CMakeLists.txt");
+    println!("cargo:rerun-if-changed=wrapper.h");
+    
+    let cef_dir = get_cef_dir();
+
+    let profile = std::env::var("PROFILE").unwrap();
+    let cef_target_dir = if profile == "debug" {
+        cef_dir.join("Debug")
+    } else {
+        cef_dir.join("Release")
+    };
+
+    println!("cargo:rustc-link-search=native={}", cef_target_dir.display());
 
     // build the c++ wrapper library (only used for the cef_load_library and cef_unload_library functions on macos)
     #[cfg(target_os = "macos")]
@@ -24,28 +34,13 @@ fn main() {
     // copy the sandbox library to lib_dir
     #[cfg(any(target_os = "windows", target_os = "macos"))]
     {
-        let _ = cmake::Config::new(".")
-            .generator("Ninja")
-            .build_target("copy_cef_sandbox")
-            .build();
-    
-        println!("cargo:rustc-link-lib=sandbox");
-        println!("cargo:rustc-link-lib=static=cef_sandbox");
+        println!("cargo:rustc-link-lib+verbatim=static+verbatim=cef_sandbox.a");
     }
 
-    let cmake_target_dir = cmake::Config::new(".")
-        .generator("Ninja")
-        .build_target("copy_cef_include")
-        .build()
-        .join("build");
-
-    let include_dir = cmake_target_dir.join("include");
-    let clang_include_arg = format!("-I{}", include_dir.display());
-
-    // set up bindgen for cmake library
+    // set up bindgen for capi
     let bindings = bindgen::Builder::default()
         .header("wrapper.h")
-        .clang_arg(clang_include_arg)
+        .clang_arg(format!("-I{}", cef_dir.display()))
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .generate()
         .expect("Unable to generate bindings");
@@ -54,4 +49,26 @@ fn main() {
     bindings
         .write_to_file(out_path)
         .expect("Unable to write bindings");
+}
+
+fn get_cef_dir() -> std::path::PathBuf {
+    // read version from CEFVersion.cmake
+    let current_dir = std::env::current_dir().unwrap();
+    let version_file = current_dir.join("../cmake/CEFVersion.cmake");
+    let version_file = std::fs::read_to_string(version_file).unwrap();
+
+    // regex to extract version
+    let re = regex::Regex::new(r#"set\(CEF_VERSION "([a-z0-9-\.\+]+)"\)"#).unwrap();
+    let version = re.captures(&version_file).unwrap().get(1).unwrap().as_str();
+
+    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+    let platform = "macosarm64";
+    #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+    let platform = "macosx64";
+    #[cfg(all(target_os = "windows", target_arch = "x86_64"))]
+    let platform = "windows64";
+    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+    let platform = "linux64";
+
+    current_dir.join(format!("../third_party/cef/cef_binary_{}_{}", version, platform))
 }

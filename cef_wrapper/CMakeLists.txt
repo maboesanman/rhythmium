@@ -36,27 +36,3 @@ find_package(CEF REQUIRED)
 
 # Include the libcef_dll_wrapper target (executes libcef_dll/CMakeLists.txt).
 add_subdirectory(${CEF_LIBCEF_DLL_WRAPPER_PATH} libcef_dll_wrapper)
-
-# Copy the CEF include directory.
-add_custom_target(copy_cef_include)
-
-add_custom_command(
-  TARGET copy_cef_include
-  POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E copy_directory
-          "${CEF_INCLUDE_PATH}/include"
-          "${CMAKE_INCLUDE_OUTPUT_DIRECTORY}/include"
-  VERBATIM
-)
-
-# Copy the sandbox library.
-add_custom_target(copy_cef_sandbox)
-
-add_custom_command(
-  TARGET copy_cef_include
-  POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E copy
-          "${CEF_INCLUDE_PATH}/Release/cef_sandbox.a"
-          "${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}/libcef_sandbox.a"
-  VERBATIM
-)
