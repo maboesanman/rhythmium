@@ -1,6 +1,7 @@
 use std::ffi::CString;
 
 use cef_wrapper::cef_wrapper_sys::cef_load_library;
+use rust_cef::{functions::cef_execute_process::execute_process, structs::main_args::MainArgs};
 
 
 #[cfg(not(target_os = "macos"))]
@@ -17,11 +18,9 @@ fn main() -> Result<(), i32> {
     let arg = CString::new(path.to_str().unwrap()).unwrap();
     let result = unsafe { cef_load_library(arg.as_ptr()) };
 
-    match result {
-        0 => Ok(()),
-        e => {
-            println!("Failed to load the CEF framework");
-            Err(e)
-        }
+    if result == 0 {
+        panic!("Failed to load the CEF framework");
     }
+
+    execute_process(MainArgs::from_env())
 }

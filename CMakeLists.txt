@@ -49,6 +49,7 @@ FetchContent_MakeAvailable(Corrosion)
 corrosion_import_crate(MANIFEST_PATH ${CMAKE_SOURCE_DIR}/Cargo.toml)
 
 if(OS_MAC)
+  set(INFO_PLIST ./resources/mac/Info.plist)
   set(HELPER_INFO_PLIST ./resources/mac/helper-Info.plist)
 
   add_custom_target(macos_framework_dir)
@@ -59,31 +60,46 @@ if(OS_MAC)
   set(HELPER_TARGET "${BINARY_NAME}_helper")
   set(HELPER_OUTPUT_NAME "${BINARY_NAME} Helper")
 
-  # # Output path for the main app bundle.
-  # set(APP "${TARGET_OUT_DIR}/${BINARY_NAME}.app")
+  # Output path for the main app bundle.
+  set(APP "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${BINARY_NAME}.app")
 
-  # # Variables referenced from the main Info.plist file.
-  # set(EXECUTABLE_NAME "${BINARY_NAME}")
-  # set(PRODUCT_NAME "${BINARY_NAME}")
+  # Variables referenced from the main Info.plist file.
+  set(EXECUTABLE_NAME "${BINARY_NAME}")
+  set(PRODUCT_NAME "${BINARY_NAME}")
 
-  # # main info.plist. this will likely be replaced by cpack eventually.
-  # set(_main_info_plist "${CMAKE_CURRENT_BINARY_DIR}/Info.plist")
-  # file(READ "${CMAKE_CURRENT_SOURCE_DIR}/${INFO_PLIST}" _plist_contents)
-  # string(REPLACE "\${EXECUTABLE_NAME}" "${EXECUTABLE_NAME}" _plist_contents ${_plist_contents})
-  # string(REPLACE "\${PRODUCT_NAME}" "${PRODUCT_NAME}" _plist_contents ${_plist_contents})
-  # file(WRITE ${_main_info_plist} ${_plist_contents})
+  # main info.plist. this will likely be replaced by cpack eventually.
+  set(_main_info_plist "${CMAKE_CURRENT_BINARY_DIR}/Info.plist")
+  file(READ "${CMAKE_CURRENT_SOURCE_DIR}/${INFO_PLIST}" _plist_contents)
+  string(REPLACE "\${EXECUTABLE_NAME}" "${EXECUTABLE_NAME}" _plist_contents ${_plist_contents})
+  string(REPLACE "\${PRODUCT_NAME}" "${PRODUCT_NAME}" _plist_contents ${_plist_contents})
+  file(WRITE ${_main_info_plist} ${_plist_contents})
 
-  # # Copy the Info.plist into the bundle.
-  # add_custom_command(
-  #   TARGET ${TARGET}
-  #   POST_BUILD
-  #   COMMAND ${CMAKE_COMMAND} -E copy
-  #           "${_main_info_plist}"
-  #           "${APP}/Contents/Info.plist"
-  #   VERBATIM
-  # )
+  add_custom_target(${BINARY_NAME}_app ALL
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+            "${APP}/Contents/MacOS"
+    COMMAND ${CMAKE_COMMAND} -E copy
+            "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${BINARY_NAME}"
+            "${APP}/Contents/MacOS/${BINARY_NAME}"
+    COMMAND ${CMAKE_COMMAND} -E copy
+            "${_main_info_plist}"
+            "${APP}/Contents/Info.plist"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/Frameworks"
+            "${APP}/Contents/Frameworks"
+    VERBATIM)
 
-  set(FRAMEWORKS_DIR "${TARGET_OUT_DIR}/Frameworks")
+  add_dependencies(${BINARY_NAME}_app ${BINARY_NAME} macos_framework_dir)
+
+  set(FRAMEWORKS_DIR "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/Frameworks")
+
+  # Create the Frameworks directory.
+  add_custom_command(
+    TARGET macos_framework_dir
+    POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+            "${FRAMEWORKS_DIR}"
+    VERBATIM
+  )
 
   # Copy the CEF framework into the Frameworks directory.
   add_custom_command(
@@ -92,15 +108,6 @@ if(OS_MAC)
     COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${CEF_BINARY_DIR}/Chromium Embedded Framework.framework"
             "${FRAMEWORKS_DIR}/Chromium Embedded Framework.framework"
-    VERBATIM
-  )
-
-  add_custom_command(
-    TARGET macos_framework_dir
-    POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${CEF_INCLUDE_PATH}/include"
-            "${CMAKE_INCLUDE_OUTPUT_DIRECTORY}/include"
     VERBATIM
   )
 
@@ -129,13 +136,13 @@ if(OS_MAC)
 
     add_custom_target(${_helper_target} ALL
       COMMAND ${CMAKE_COMMAND} -E make_directory
-              "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${_helper_output_name}.app"
+              "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/${_helper_output_name}.app"
       COMMAND ${CMAKE_COMMAND} -E copy
               "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/cef_mac_helper"
-              "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${_helper_output_name}.app/${_helper_output_name}"
+              "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/${_helper_output_name}.app/Contents/MacOS/${_helper_output_name}"
       COMMAND ${CMAKE_COMMAND} -E copy
               "${_helper_info_plist}"
-              "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${_helper_output_name}.app/Contents/Info.plist"
+              "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/${_helper_output_name}.app/Contents/Info.plist"
       VERBATIM
     )
     
@@ -147,7 +154,7 @@ if(OS_MAC)
       TARGET macos_framework_dir
       POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E copy_directory
-              "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${_helper_output_name}.app"
+              "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/${_helper_output_name}.app"
               "${FRAMEWORKS_DIR}/${_helper_output_name}.app"
       VERBATIM
     )
