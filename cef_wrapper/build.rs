@@ -29,12 +29,12 @@ fn main() {
     
         println!("cargo:rustc-link-search=native={}", lib_dir.display());
         println!("cargo:rustc-link-lib=static=cef_dll_wrapper");
+        println!("cargo:rustc-link-lib+verbatim=static+verbatim=cef_sandbox.a");
     }
 
-    // copy the sandbox library to lib_dir
-    #[cfg(any(target_os = "windows", target_os = "macos"))]
+    #[cfg(target_os = "linux")]
     {
-        println!("cargo:rustc-link-lib+verbatim=static+verbatim=cef_sandbox.a");
+        println!("cargo:rustc-link-lib=dylib=cef");
     }
 
     // set up bindgen for capi

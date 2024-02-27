@@ -68,7 +68,10 @@ impl From<&Settings> for cef_settings_t {
             ),
             cookieable_schemes_list: str_into_cef_string_utf16(&value.cookieable_schemes.join(",")),
             external_message_pump: wrap_boolean(value.external_message_pump),
+            #[cfg(target_os = "macos")]
             framework_dir_path: wrap_string(&value.framework_dir_path),
+            #[cfg(not(target_os = "macos"))]
+            framework_dir_path: str_into_cef_string_utf16(""),
             javascript_flags: wrap_string(&value.javascript_flags),
             locale: wrap_string(&value.locale),
 
@@ -79,7 +82,10 @@ impl From<&Settings> for cef_settings_t {
             log_file: wrap_string(&value.log_file),
             log_items: value.log_items.into(),
             log_severity: value.log_severity.into(),
+            #[cfg(target_os = "macos")]
             main_bundle_path: wrap_string(&value.main_bundle_path),
+            #[cfg(not(target_os = "macos"))]
+            main_bundle_path: str_into_cef_string_utf16(""),
             #[cfg(any(target_os = "windows", target_os = "linux"))]
             multi_threaded_message_loop: wrap_boolean(value.multi_threaded_message_loop),
             #[cfg(not(any(target_os = "windows", target_os = "linux")))]

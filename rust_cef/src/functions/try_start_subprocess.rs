@@ -1,5 +1,6 @@
 use std::ffi::{CStr, CString};
 
+#[cfg(target_os = "macos")]
 use cef_wrapper::cef_wrapper_sys::cef_load_library;
 
 use crate::structs::main_args::MainArgs;
@@ -25,10 +26,5 @@ pub fn try_start_subprocess(main_args: &MainArgs) {
 
 #[cfg(not(target_os = "macos"))]
 pub fn try_start_subprocess(main_args: &MainArgs) {
-    let args = main_args.into();
-    let result = unsafe { cef_load_library(args.argc, args.argv) };
-
-    if result == 0 {
-        panic!("Failed to start the CEF subprocess");
-    }
+    
 }
