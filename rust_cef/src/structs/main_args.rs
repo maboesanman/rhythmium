@@ -2,6 +2,7 @@ use std::ffi::{c_char, c_int, CString};
 
 use cef_wrapper::cef_capi_sys::cef_main_args_t;
 
+#[derive(Debug, Clone)]
 pub struct MainArgs {
     pub args: Vec<String>,
 }

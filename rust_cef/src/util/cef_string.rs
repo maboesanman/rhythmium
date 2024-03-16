@@ -74,6 +74,9 @@ pub fn str_into_cef_string_utf16(string: &str) -> cef_string_utf16_t {
 ///
 /// `cef_string` must be a valid pointer, and must not be dropped by anything else.
 pub unsafe fn cef_string_userfree_into_string(cef_string: cef_string_userfree_t) -> Option<String> {
+    if cef_string.is_null() {
+        return None;
+    }
     let boxed = unsafe { Box::from_raw(cef_string) };
     if boxed.str_.is_null() {
         return None;

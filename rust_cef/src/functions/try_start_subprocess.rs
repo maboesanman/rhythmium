@@ -26,5 +26,22 @@ pub fn try_start_subprocess(main_args: &MainArgs) {
 
 #[cfg(not(target_os = "macos"))]
 pub fn try_start_subprocess(main_args: &MainArgs) {
-    
+    use crate::{c_to_rust::command_line, functions::cef_execute_process::execute_process};
+
+    let command_line = command_line::CommandLine::new_from_main_args(main_args.clone());
+
+    match command_line.get_process_type() {
+        command_line::ProcessType::Browser => {
+            return;
+        },
+        command_line::ProcessType::Render => {},
+        command_line::ProcessType::Other => {},
+    }
+
+    match execute_process(main_args.clone()) {
+        Ok(_) => {},
+        Err(e) => {
+            std::process::exit(e);
+        },
+    }
 }

@@ -1,4 +1,4 @@
-use cef_wrapper::{cef_capi_sys::cef_initialize};
+use cef_wrapper::cef_capi_sys::cef_initialize;
 
 use crate::{
     rust_to_c::app::App,

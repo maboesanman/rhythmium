@@ -43,8 +43,8 @@ impl AppConfig for RhythmiumCefApp {
         process_type: Option<&str>,
         command_line: &mut CommandLine,
     ) {
-        println!("on_before_command_line_processing");
         if process_type.is_none() {
+            #[cfg(target_os = "macos")]
             command_line.append_switch("use-mock-keychain");
             command_line.append_switch_with_value("autoplay-policy", "no-user-gesture-required");
         }
@@ -54,7 +54,6 @@ impl AppConfig for RhythmiumCefApp {
         &self,
         _browser_process_state: &Self::BrowserProcessState,
     ) -> Option<CefArc<BrowserProcessHandler>> {
-        println!("get_browser_process_handler");
         Some(self.browser_process_handler.clone())
     }
 }
@@ -76,6 +75,10 @@ pub fn get_settings() -> Settings {
         main_bundle_path: Some(
             "/Users/mason/Source/github.com/maboesanman/rhythmium/build/lib/rhythmium_partial_bundle.app"
                 .to_string(),
+        ),
+        #[cfg(target_os = "linux")]
+        resources_dir_path: Some(
+            "/home/mboeman/Source/github.com/maboesanman/rhythmium/third_party/cef/cef_binary_121.3.2+gce31761+chromium-121.0.6167.75_linux64/Resources/".to_string(),
         ),
         ..Default::default()
     }
