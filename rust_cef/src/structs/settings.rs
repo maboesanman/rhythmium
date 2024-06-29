@@ -98,9 +98,9 @@ impl From<&Settings> for cef_settings_t {
             multi_threaded_message_loop: wrap_boolean(value.multi_threaded_message_loop),
             #[cfg(not(any(target_os = "windows", target_os = "linux")))]
             multi_threaded_message_loop: 0,
-            #[cfg(sandbox)]
+            #[cfg(feature = "sandbox")]
             no_sandbox: 0,
-            #[cfg(not(sandbox))]
+            #[cfg(not(feature = "sandbox"))]
             no_sandbox: 1,
             pack_loading_disabled: wrap_boolean(value.pack_loading_disabled),
             persist_session_cookies: wrap_boolean(value.persist_session_cookies),

@@ -10,7 +10,7 @@ edition.workspace = true
 name = "rust_cef"
 
 [features]
-default = ["sandbox"]
+default = []
 sandbox = []
 bundled = []
 

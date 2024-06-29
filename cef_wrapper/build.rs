@@ -22,6 +22,8 @@ fn main() {
     // build the c++ wrapper library (only used for the cef_load_library and cef_unload_library functions on macos)
     #[cfg(target_os = "macos")]
     {
+        // macos uses the cef_load_library and cef_unload_library functions to load the CEF framework,
+        // so we need to build the c++ wrapper library to provide these functions
         let cmake_target_dir = cmake::Config::new(".")
             .generator("Ninja")
             .build_target("libcef_dll_wrapper")

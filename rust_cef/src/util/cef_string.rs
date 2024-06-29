@@ -17,6 +17,8 @@ const HEADER_LENGTH: usize = HEADER_BYTES >> 1;
 struct CefStr {
     // this is the length of the data, not the length of the header.
     length: usize,
+
+    // this is the unsized u16 slice. because this is unsized, it must be the last field.
     data: [u16],
 }
 
@@ -60,7 +62,7 @@ impl CefStr {
         let start_ptr = unsafe { data.byte_sub(HEADER_BYTES) };
         let length = unsafe { *start_ptr.cast::<usize>() };
 
-        std::ptr::from_raw_parts_mut::<Self>(start_ptr.cast(), length + HEADER_LENGTH)
+        std::ptr::from_raw_parts_mut::<Self>(start_ptr, length + HEADER_LENGTH)
     }
 }
 
