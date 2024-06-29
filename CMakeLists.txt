@@ -7,9 +7,6 @@
 # For VS2022 and Xcode 12+ support.
 cmake_minimum_required(VERSION 3.21)
 
-# Only generate Debug and Release configuration types.
-set(CMAKE_CONFIGURATION_TYPES Debug Release)
-
 # Project name.
 project(cef_sys)
 
@@ -47,6 +44,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(Corrosion)
 
 corrosion_import_crate(MANIFEST_PATH ${CMAKE_SOURCE_DIR}/Cargo.toml)
+corrosion_set_features(rhythmium FEATURES "bundled")
 
 if(OS_MAC)
   set(INFO_PLIST ./resources/mac/Info.plist)
@@ -56,7 +54,6 @@ if(OS_MAC)
   add_dependencies(macos_framework_dir cef_mac_helper)
 
   set(BINARY_NAME "rhythmium")
-  # set(BINARY_NAME $ENV{CARGO_BIN_NAME})
   set(HELPER_TARGET "${BINARY_NAME}_helper")
   set(HELPER_OUTPUT_NAME "${BINARY_NAME} Helper")
 

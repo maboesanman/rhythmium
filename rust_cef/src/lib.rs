@@ -4,9 +4,6 @@
 #![allow(non_upper_case_globals)]
 #![allow(clippy::new_ret_no_self)]
 
-#[macro_use]
-pub mod macros;
-
 pub mod c_to_rust;
 pub mod enums;
 pub mod functions;

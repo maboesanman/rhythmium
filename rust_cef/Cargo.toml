@@ -12,6 +12,7 @@ name = "rust_cef"
 [features]
 default = ["sandbox"]
 sandbox = []
+bundled = []
 
 # [[bin]]
 # name = "mac_helper_process"

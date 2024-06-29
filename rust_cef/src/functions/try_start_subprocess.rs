@@ -1,4 +1,4 @@
-use std::ffi::{CStr, CString};
+use std::ffi::CString;
 
 #[cfg(target_os = "macos")]
 use cef_wrapper::cef_wrapper_sys::cef_load_library;
@@ -6,15 +6,17 @@ use cef_wrapper::cef_wrapper_sys::cef_load_library;
 use crate::structs::main_args::MainArgs;
 
 #[cfg(target_os = "macos")]
-pub fn try_start_subprocess(main_args: &MainArgs) {
+pub fn try_start_subprocess(_main_args: &MainArgs) {
     let exec_dir = std::env::current_exe().unwrap();
     let parent_dir = exec_dir.parent().unwrap();
-    let framework_path = "Chromium Embedded Framework.framework/Chromium Embedded Framework";
-    let from_main = "../Frameworks";
-    let from_helper = "../../../";
-    let from_main = "/Users/mason/Source/github.com/maboesanman/rhythmium/build/lib/Frameworks";
+    let rel_chromium_framework_path = "Chromium Embedded Framework.framework/Chromium Embedded Framework";
+    
+    #[cfg(bundled)]
+    let rel_cef_framework_path = "../Frameworks";
+    #[cfg(not(bundled))]
+    let rel_cef_framework_path = "../../build/lib/Frameworks";
 
-    let path = parent_dir.join(from_main).join(framework_path);
+    let path = parent_dir.join(rel_cef_framework_path).join(rel_chromium_framework_path);
 
     let arg = CString::new(path.to_str().unwrap()).unwrap();
     let result = unsafe { cef_load_library(arg.as_ptr()) };
@@ -33,15 +35,15 @@ pub fn try_start_subprocess(main_args: &MainArgs) {
     match command_line.get_process_type() {
         command_line::ProcessType::Browser => {
             return;
-        },
-        command_line::ProcessType::Render => {},
-        command_line::ProcessType::Other => {},
+        }
+        command_line::ProcessType::Render => {}
+        command_line::ProcessType::Other => {}
     }
 
     match execute_process(main_args.clone()) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => {
             std::process::exit(e);
-        },
+        }
     }
 }

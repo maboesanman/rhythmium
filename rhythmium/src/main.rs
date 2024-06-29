@@ -27,6 +27,9 @@ pub fn main() {
     let proxy = event_loop.create_proxy();
     let other_proxy = proxy.clone();
 
+    // this sends a "CatchUpOnCefWork" event every 50ms to the event loop.
+    // I'm not sure what situations I'm not calling the do_work function, but
+    // I'm missing something and I'm not sure what, so for now we just do a bunch of extra catch up work.
     thread::spawn(move || loop {
         other_proxy
             .send_event(RhythmiumEvent::CatchUpOnCefWork)
@@ -83,9 +86,9 @@ pub fn main() {
         view_tree: taffy,
     };
 
-    let mut view_builder = Box::new(SceneViewBuilder::new(scene));
+    let mut view_builder = SceneViewBuilder::new(scene);
 
-    // view_builder.add_view(back, Box::new(WebViewBuilder::new(app)));
+    view_builder.add_view(back, Box::new(WebViewBuilder::new()));
 
     view_builder.add_view(
         front,
@@ -94,14 +97,10 @@ pub fn main() {
             ImageFit::SetWidth(scene::image_view::ImageJustification::End),
         )),
     );
-
-    let _image_view_builder = ImageViewBuilder::new(
-        include_bytes!("../assets/pointing.png"),
-        ImageFit::SetWidth(scene::image_view::ImageJustification::End),
-    );
-
+    #[cfg(not(bundled))]
+    compile_error!("wuh oh");
     scene::view::run(event_loop, Box::new(WebViewBuilder::new()));
-    // scene::view::run(event_loop, Box::new(image_view_builder)).await;
+    // scene::view::run(event_loop, Box::new(view_builder));
 }
 
 #[derive(Debug, Clone)]

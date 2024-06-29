@@ -4,7 +4,7 @@ fn main() {
     // set up cmake build
     println!("cargo:rerun-if-changed=CMakeLists.txt");
     println!("cargo:rerun-if-changed=wrapper.h");
-    
+
     let cef_dir = get_cef_dir();
 
     let profile = std::env::var("PROFILE").unwrap();
@@ -14,7 +14,10 @@ fn main() {
         cef_dir.join("Release")
     };
 
-    println!("cargo:rustc-link-search=native={}", cef_target_dir.display());
+    println!(
+        "cargo:rustc-link-search=native={}",
+        cef_target_dir.display()
+    );
 
     // build the c++ wrapper library (only used for the cef_load_library and cef_unload_library functions on macos)
     #[cfg(target_os = "macos")]
@@ -24,9 +27,9 @@ fn main() {
             .build_target("libcef_dll_wrapper")
             .build()
             .join("build");
-    
+
         let lib_dir = cmake_target_dir.join("lib");
-    
+
         println!("cargo:rustc-link-search=native={}", lib_dir.display());
         println!("cargo:rustc-link-lib=static=cef_dll_wrapper");
         println!("cargo:rustc-link-lib+verbatim=static+verbatim=cef_sandbox.a");
@@ -70,5 +73,8 @@ fn get_cef_dir() -> std::path::PathBuf {
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
     let platform = "linux64";
 
-    current_dir.join(format!("../third_party/cef/cef_binary_{}_{}", version, platform))
+    current_dir.join(format!(
+        "../third_party/cef/cef_binary_{}_{}",
+        version, platform
+    ))
 }

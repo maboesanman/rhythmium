@@ -204,7 +204,7 @@ pub enum ProcessType {
 impl CommandLine {
     pub fn get_process_type(&self) -> ProcessType {
         let switch_value = self.get_switch_value("kProcessType");
-        match switch_value.as_ref().map(String::as_str) {
+        match switch_value.as_deref() {
             None => ProcessType::Browser,
             Some("kRendererProcess") => ProcessType::Render,
             #[cfg(target_os = "linux")]

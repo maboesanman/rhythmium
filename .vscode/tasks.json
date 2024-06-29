@@ -1,16 +1,43 @@
 {
   "tasks": [
     {
+      "label": "bundle",
       "type": "shell",
-      "command": "./build.sh",
+      "command": "./scripts/build.sh",
       "problemMatcher": [
         "$rustc"
       ],
       "group": {
         "kind": "build",
+        "isDefault": false
+      }
+    },
+    {
+      "label": "debug-build",
+      "type": "shell",
+      "command": "cargo build",
+      "problemMatcher": [
+        "$rustc"
+      ],
+      "group": {
+        "kind": "test",
         "isDefault": true
       },
-      "label": "build"
+      "dependsOn": [
+        "prep"
+      ]
+    },
+    {
+      "label": "prep",
+      "type": "shell",
+      "command": "./scripts/prep.sh",
+      "problemMatcher": [
+        "$rustc"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      }
     }
   ]
 }

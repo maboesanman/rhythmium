@@ -6,7 +6,7 @@ pub mod cef_capi_sys {
     #![allow(dead_code)]
     #![allow(non_upper_case_globals)]
     #![allow(clippy::type_complexity)]
-    
+
     include!(concat!(env!("OUT_DIR"), "/bindings_c.rs"));
 }
 

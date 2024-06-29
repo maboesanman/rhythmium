@@ -4,5 +4,8 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-rust_cef.workspace = true
+rust_cef ={ workspace = true, features = ["bundled"] }
 cef_wrapper.workspace = true
+
+[features]
+default = []
