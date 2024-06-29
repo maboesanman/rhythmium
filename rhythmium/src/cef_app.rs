@@ -59,26 +59,29 @@ impl AppConfig for RhythmiumCefApp {
 }
 
 pub fn get_settings() -> Settings {
+    let exec_dir = std::env::current_exe().unwrap();
+    #[cfg(not(feature = "bundled"))]
+    let parent_dir = exec_dir.parent().unwrap();
+
     Settings {
         windowless_rendering_enabled: true,
         external_message_pump: true,
         log_severity: LogSeverity::Debug,
+        #[cfg(not(feature = "bundled"))]
         root_cache_path: Some(
-            "/Users/mason/Source/github.com/maboesanman/rhythmium/cache_root".to_string(),
+            parent_dir.join("../../cache_root"),
         ),
-        #[cfg(target_os = "macos")]
+        #[cfg(all(target_os = "macos", not(feature = "bundled")))]
         framework_dir_path: Some(
-            "/Users/mason/Source/github.com/maboesanman/rhythmium/build/lib/Frameworks/Chromium Embedded Framework.framework"
-                .to_string(),
+            parent_dir.join("../../build/lib/Frameworks/Chromium Embedded Framework.framework"),
         ),
-        #[cfg(target_os = "macos")]
+        #[cfg(all(target_os = "macos", not(feature = "bundled")))]
         main_bundle_path: Some(
-            "/Users/mason/Source/github.com/maboesanman/rhythmium/build/lib/rhythmium_partial_bundle.app"
-                .to_string(),
+            parent_dir.join("../../build/lib/rhythmium_partial_bundle.app"),
         ),
-        #[cfg(target_os = "linux")]
+        #[cfg(all(target_os = "linux", not(feature = "bundled")))]
         resources_dir_path: Some(
-            "/home/mboeman/Source/github.com/maboesanman/rhythmium/third_party/cef/cef_binary_121.3.2+gce31761+chromium-121.0.6167.75_linux64/Resources/".to_string(),
+            parent_dir.join("../../third_party/cef/cef_binary_121.3.2+gce31761+chromium-121.0.6167.75_linux64/Resources/"),
         ),
         ..Default::default()
     }

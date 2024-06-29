@@ -97,8 +97,6 @@ pub fn main() {
             ImageFit::SetWidth(scene::image_view::ImageJustification::End),
         )),
     );
-    #[cfg(not(bundled))]
-    compile_error!("wuh oh");
     scene::view::run(event_loop, Box::new(WebViewBuilder::new()));
     // scene::view::run(event_loop, Box::new(view_builder));
 }

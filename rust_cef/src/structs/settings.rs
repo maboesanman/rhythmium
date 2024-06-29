@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use cef_wrapper::cef_capi_sys::cef_settings_t;
 
 use crate::{
@@ -9,8 +11,8 @@ use crate::{
 pub struct Settings {
     pub accept_languages: Vec<String>,
     pub background_color: u32,
-    pub browser_subprocess_path: Option<String>,
-    pub cache_path: Option<String>,
+    pub browser_subprocess_path: Option<PathBuf>,
+    pub cache_path: Option<PathBuf>,
     #[cfg(target_os = "windows")]
     pub chrome_app_icon_id: Option<usize>,
     pub chrome_policy_id: Option<String>,
@@ -20,16 +22,16 @@ pub struct Settings {
     pub cookieable_schemes: Vec<String>,
     pub external_message_pump: bool,
     #[cfg(target_os = "macos")]
-    pub framework_dir_path: Option<String>,
+    pub framework_dir_path: Option<PathBuf>,
     pub javascript_flags: Option<String>,
     pub locale: Option<String>,
     #[cfg(not(target_os = "macos"))]
-    pub locales_dir_path: Option<String>,
+    pub locales_dir_path: Option<PathBuf>,
     pub log_file: Option<String>,
     pub log_items: LogItems,
     pub log_severity: LogSeverity,
     #[cfg(target_os = "macos")]
-    pub main_bundle_path: Option<String>,
+    pub main_bundle_path: Option<PathBuf>,
     #[cfg(any(target_os = "windows", target_os = "linux"))]
     pub multi_threaded_message_loop: bool,
     // no_sandbox: bool,
@@ -37,8 +39,8 @@ pub struct Settings {
     pub persist_session_cookies: bool,
     pub persist_user_preferences: bool,
     pub remote_debugging_port: Option<u16>,
-    pub resources_dir_path: Option<String>,
-    pub root_cache_path: Option<String>,
+    pub resources_dir_path: Option<PathBuf>,
+    pub root_cache_path: Option<PathBuf>,
     pub uncaught_exception_stack_size: Option<u16>,
     pub user_agent: Option<String>,
     pub user_agent_product: Option<String>,
@@ -47,15 +49,21 @@ pub struct Settings {
 
 impl From<&Settings> for cef_settings_t {
     fn from(value: &Settings) -> Self {
-        let wrap_string =
-            |s: &Option<String>| str_into_cef_string_utf16(s.as_deref().unwrap_or(""));
+        let wrap_str = |s: Option<&str>| str_into_cef_string_utf16(s.unwrap_or(""));
+
+        let wrap_string = |s: &Option<String>| wrap_str(s.as_deref());
+
+        let wrap_pathbuf = |p: &Option<PathBuf>| match p.as_ref() {
+            Some(p) => str_into_cef_string_utf16(&p.canonicalize().unwrap().to_string_lossy()),
+            None => str_into_cef_string_utf16(""),
+        };
 
         cef_settings_t {
             size: std::mem::size_of::<cef_settings_t>(),
             accept_language_list: str_into_cef_string_utf16(&value.accept_languages.join(",")),
             background_color: value.background_color,
-            browser_subprocess_path: wrap_string(&value.browser_subprocess_path),
-            cache_path: wrap_string(&value.cache_path),
+            browser_subprocess_path: wrap_pathbuf(&value.browser_subprocess_path),
+            cache_path: wrap_pathbuf(&value.cache_path),
             #[cfg(target_os = "windows")]
             chrome_app_icon_id: value.chrome_app_icon_id,
             #[cfg(not(target_os = "windows"))]
@@ -69,7 +77,7 @@ impl From<&Settings> for cef_settings_t {
             cookieable_schemes_list: str_into_cef_string_utf16(&value.cookieable_schemes.join(",")),
             external_message_pump: wrap_boolean(value.external_message_pump),
             #[cfg(target_os = "macos")]
-            framework_dir_path: wrap_string(&value.framework_dir_path),
+            framework_dir_path: wrap_pathbuf(&value.framework_dir_path),
             #[cfg(not(target_os = "macos"))]
             framework_dir_path: str_into_cef_string_utf16(""),
             javascript_flags: wrap_string(&value.javascript_flags),
@@ -83,7 +91,7 @@ impl From<&Settings> for cef_settings_t {
             log_items: value.log_items.into(),
             log_severity: value.log_severity.into(),
             #[cfg(target_os = "macos")]
-            main_bundle_path: wrap_string(&value.main_bundle_path),
+            main_bundle_path: wrap_pathbuf(&value.main_bundle_path),
             #[cfg(not(target_os = "macos"))]
             main_bundle_path: str_into_cef_string_utf16(""),
             #[cfg(any(target_os = "windows", target_os = "linux"))]
@@ -98,8 +106,8 @@ impl From<&Settings> for cef_settings_t {
             persist_session_cookies: wrap_boolean(value.persist_session_cookies),
             persist_user_preferences: wrap_boolean(value.persist_user_preferences),
             remote_debugging_port: value.remote_debugging_port.unwrap_or(0) as i32,
-            resources_dir_path: wrap_string(&value.resources_dir_path),
-            root_cache_path: wrap_string(&value.root_cache_path),
+            resources_dir_path: wrap_pathbuf(&value.resources_dir_path),
+            root_cache_path: wrap_pathbuf(&value.root_cache_path),
             uncaught_exception_stack_size: value.uncaught_exception_stack_size.unwrap_or(0) as i32,
             user_agent_product: wrap_string(&value.user_agent_product),
             user_agent: wrap_string(&value.user_agent),

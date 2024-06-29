@@ -7,16 +7,22 @@ use crate::structs::main_args::MainArgs;
 
 #[cfg(target_os = "macos")]
 pub fn try_start_subprocess(_main_args: &MainArgs) {
+    #[cfg(feature = "bundled")]
+    try_start_subprocess_from_rel_cef_framework_path("../Frameworks");
+    #[cfg(not(feature = "bundled"))]
+    try_start_subprocess_from_rel_cef_framework_path("../../build/lib/Frameworks");
+}
+
+#[cfg(target_os = "macos")]
+pub fn try_start_subprocess_from_rel_cef_framework_path(rel_cef_framework_path: &str) {
     let exec_dir = std::env::current_exe().unwrap();
     let parent_dir = exec_dir.parent().unwrap();
-    let rel_chromium_framework_path = "Chromium Embedded Framework.framework/Chromium Embedded Framework";
-    
-    #[cfg(bundled)]
-    let rel_cef_framework_path = "../Frameworks";
-    #[cfg(not(bundled))]
-    let rel_cef_framework_path = "../../build/lib/Frameworks";
+    let rel_chromium_framework_path =
+        "Chromium Embedded Framework.framework/Chromium Embedded Framework";
 
-    let path = parent_dir.join(rel_cef_framework_path).join(rel_chromium_framework_path);
+    let path = parent_dir
+        .join(rel_cef_framework_path)
+        .join(rel_chromium_framework_path);
 
     let arg = CString::new(path.to_str().unwrap()).unwrap();
     let result = unsafe { cef_load_library(arg.as_ptr()) };
