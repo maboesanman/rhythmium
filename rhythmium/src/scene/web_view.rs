@@ -239,9 +239,9 @@ impl WebView {
         let browser = BrowserHost::create_browser_sync(
             &window_info,
             client,
-            "http://webglsamples.org/aquarium/aquarium.html",
+            // "http://webglsamples.org/aquarium/aquarium.html",
             // "https://www.google.com",
-            // "https://www.youtube.com/embed/DkHDLYPa71o?autoplay=1",
+            "https://www.youtube.com/embed/DkHDLYPa71o?autoplay=1",
             &browser_settings,
         );
         let browser_host = browser.get_host();

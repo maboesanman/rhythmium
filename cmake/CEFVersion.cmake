@@ -1,3 +1,3 @@
 
 # Specify the CEF distribution version.
-set(CEF_VERSION "121.3.2+gce31761+chromium-121.0.6167.75")
+set(CEF_VERSION "126.2.9+g169fea9+chromium-126.0.6478.127")
