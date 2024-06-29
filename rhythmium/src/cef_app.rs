@@ -59,6 +59,7 @@ impl AppConfig for RhythmiumCefApp {
 }
 
 pub fn get_settings() -> Settings {
+    #[cfg(not(feature = "bundled"))]
     let exec_dir = std::env::current_exe().unwrap();
     #[cfg(not(feature = "bundled"))]
     let parent_dir = exec_dir.parent().unwrap();
