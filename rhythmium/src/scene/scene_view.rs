@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use slotmap::DefaultKey;
-use wgpu::{util::DeviceExt, CommandEncoder, TextureView};
+use wgpu::{util::DeviceExt, CommandEncoder, PipelineCompilationOptions, TextureView};
 use winit::dpi::{LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize};
 
 use super::{
@@ -290,6 +290,7 @@ impl SceneView {
                 module: &shader,
                 entry_point: "vs_main",
                 buffers: &[Vertex::desc()],
+                compilation_options: PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
@@ -299,6 +300,7 @@ impl SceneView {
                     blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
+                compilation_options: PipelineCompilationOptions::default(),
             }),
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
@@ -316,6 +318,7 @@ impl SceneView {
                 alpha_to_coverage_enabled: false,
             },
             multiview: None,
+            cache: None,
         });
 
         let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {

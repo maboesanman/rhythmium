@@ -8,7 +8,7 @@ pub struct SharedWgpuState {
     pub adapter: wgpu::Adapter,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
-    pub window: winit::window::Window,
+    pub window: Arc<winit::window::Window>,
 }
 
 impl SharedWgpuState {
@@ -18,10 +18,12 @@ impl SharedWgpuState {
             ..Default::default()
         });
 
+        let window = Arc::new(window);
+
         // # Safety
         //
         // window needs to be dropped after surface.
-        let surface = unsafe { instance.create_surface(&window) }.unwrap();
+        let surface = instance.create_surface(window.clone()).unwrap();
 
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
@@ -36,8 +38,9 @@ impl SharedWgpuState {
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: None,
-                    features: wgpu::Features::empty(),
-                    limits: wgpu::Limits::default(),
+                    required_features: wgpu::Features::empty(),
+                    required_limits: wgpu::Limits::default(),
+                    memory_hints: wgpu::MemoryHints::default(),
                 },
                 None,
             )

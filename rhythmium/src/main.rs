@@ -5,12 +5,10 @@ use std::{process::exit, thread};
 use cef_app::RhythmiumCefApp;
 use rust_cef::functions::initialize::initialize_from_env;
 use scene::{
-    image_view::{ImageFit, ImageViewBuilder},
-    scene_view::SceneViewBuilder,
-    web_view::WebViewBuilder,
+    image_view::{ImageFit, ImageViewBuilder}, scene_view::SceneViewBuilder, view::ActiveView, web_view::WebViewBuilder
 };
 use taffy::prelude::*;
-use winit::event_loop::EventLoopBuilder;
+use winit::{event, event_loop::{EventLoop, EventLoopBuilder}};
 
 pub mod cef_app;
 pub mod scene;
@@ -20,12 +18,11 @@ pub fn main() {
 
     // the winit event loop needs to launch first.
     // in particular, it needs to run before the cef subprocess is launched.
-    let event_loop = EventLoopBuilder::<RhythmiumEvent>::with_user_event()
-        .build()
-        .unwrap();
+    let event_loop = EventLoop::<RhythmiumEvent>::with_user_event().build().unwrap();
 
     let proxy = event_loop.create_proxy();
     let other_proxy = proxy.clone();
+
 
     // this sends a "CatchUpOnCefWork" event every 50ms to the event loop.
     // I'm not sure what situations I'm not calling the do_work function, but
@@ -97,7 +94,12 @@ pub fn main() {
             ImageFit::SetWidth(scene::image_view::ImageJustification::End),
         )),
     );
-    scene::view::run(event_loop, Box::new(WebViewBuilder::new()));
+
+
+    let mut active_view = ActiveView::new(Box::new(WebViewBuilder::new()));
+
+    event_loop.run_app(&mut active_view).unwrap();
+    
     // scene::view::run(event_loop, Box::new(view_builder));
 }
 

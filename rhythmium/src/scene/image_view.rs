@@ -1,7 +1,7 @@
 use std::{borrow::Cow, sync::Arc};
 
 use image::GenericImageView;
-use wgpu::{util::DeviceExt, CommandEncoder, TextureView};
+use wgpu::{util::DeviceExt, CommandEncoder, PipelineCompilationOptions, TextureView};
 use winit::dpi::PhysicalSize;
 
 use super::{
@@ -143,6 +143,7 @@ impl ImageView {
                 module: &shader,
                 entry_point: "vs_main",
                 buffers: &[Vertex::desc()],
+                compilation_options: PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
@@ -152,6 +153,7 @@ impl ImageView {
                     blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
+                compilation_options: PipelineCompilationOptions::default(),
             }),
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
@@ -169,6 +171,7 @@ impl ImageView {
                 alpha_to_coverage_enabled: false,
             },
             multiview: None,
+            cache: None,
         });
 
         let vertex_buffer = get_vertex_buffer(

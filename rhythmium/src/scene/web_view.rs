@@ -10,7 +10,7 @@ use rust_cef::{
     structs::{geometry::Rect, screen_info::ScreenInfo},
     util::cef_arc::CefArc,
 };
-use wgpu::{util::DeviceExt, CommandEncoder, TextureView};
+use wgpu::{util::DeviceExt, CommandEncoder, PipelineCompilationOptions, TextureView};
 use winit::dpi::{LogicalPosition, LogicalSize, PhysicalSize};
 
 use super::{
@@ -151,6 +151,7 @@ impl WebView {
                 module: &shader,
                 entry_point: "vs_main",
                 buffers: &[Vertex::desc()],
+                compilation_options: PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
@@ -160,6 +161,7 @@ impl WebView {
                     blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
+                compilation_options: PipelineCompilationOptions::default(),
             }),
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
@@ -177,6 +179,7 @@ impl WebView {
                 alpha_to_coverage_enabled: false,
             },
             multiview: None,
+            cache: None,
         });
 
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
