@@ -4,7 +4,11 @@ use std::{sync::Arc, time::Duration};
 use rust_cef::functions::message_loop::do_message_loop_work;
 use wgpu::{CommandEncoder, TextureView};
 use winit::{
-    application::ApplicationHandler, dpi::{LogicalSize, PhysicalSize}, event::{WindowEvent}, event_loop::{ActiveEventLoop, EventLoop}, keyboard::NamedKey, window::{WindowAttributes}
+    application::ApplicationHandler,
+    dpi::{LogicalSize, PhysicalSize},
+    event::WindowEvent,
+    event_loop::ActiveEventLoop,
+    window::WindowAttributes,
 };
 
 use crate::RhythmiumEvent;
@@ -67,13 +71,18 @@ impl ActiveView {
             _ => return,
         };
 
-        let window = event_loop.create_window(WindowAttributes::default()
-        .with_title("Rhythmium")
-        .with_inner_size(LogicalSize::new(800, 600))).unwrap();
+        let window = event_loop
+            .create_window(
+                WindowAttributes::default()
+                    .with_title("Rhythmium")
+                    .with_inner_size(LogicalSize::new(800, 600)),
+            )
+            .unwrap();
 
         let size = window.inner_size();
 
-        let shared_wgpu_state = futures::executor::block_on(shared_wgpu_state::SharedWgpuState::new(window));
+        let shared_wgpu_state =
+            futures::executor::block_on(shared_wgpu_state::SharedWgpuState::new(window));
 
         let view = builder.build(shared_wgpu_state.clone(), size);
         let surface = RootSurface::new(view, shared_wgpu_state.clone());
@@ -107,49 +116,45 @@ impl ApplicationHandler<RhythmiumEvent> for ActiveView {
     fn window_event(
         &mut self,
         event_loop: &winit::event_loop::ActiveEventLoop,
-        window_id: winit::window::WindowId,
+        _window_id: winit::window::WindowId,
         event: WindowEvent,
     ) {
         match event {
             WindowEvent::RedrawRequested => {
                 println!("RedrawRequested");
                 self.assume_init_mut().surface.render().unwrap();
-            },
+            }
             WindowEvent::Resized(size) => {
                 println!("Resized");
                 let active_view_init = self.assume_init_mut();
                 active_view_init.surface.resize(size);
                 active_view_init.shared_wgpu_state.window.request_redraw();
-            },
+            }
             WindowEvent::CloseRequested => {
                 event_loop.exit();
-            },
+            }
             _ => {}
         }
     }
 
-    fn new_events(&mut self, event_loop: &winit::event_loop::ActiveEventLoop, cause: winit::event::StartCause) {
-        match cause {
-            winit::event::StartCause::Init => {
-                self.ready_init();
-            },
-
-            // winit::event::StartCause::ResumeTimeReached { start, requested_resume } => todo!(),
-            // winit::event::StartCause::WaitCancelled { start, requested_resume } => todo!(),
-            // winit::event::StartCause::Poll => todo!(),
-
-            _ => {}
+    fn new_events(
+        &mut self,
+        _event_loop: &winit::event_loop::ActiveEventLoop,
+        cause: winit::event::StartCause,
+    ) {
+        if cause == winit::event::StartCause::Init {
+            self.ready_init();
         }
     }
 
-    fn user_event(&mut self, event_loop: &ActiveEventLoop, event: RhythmiumEvent) {
+    fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: RhythmiumEvent) {
         match event {
             RhythmiumEvent::DoCefWorkNow => {
                 do_message_loop_work();
-            },
+            }
             RhythmiumEvent::DoCefWorkLater(_) => {
                 panic!()
-            },
+            }
             RhythmiumEvent::CatchUpOnCefWork => loop {
                 let start = std::time::Instant::now();
                 do_message_loop_work();
