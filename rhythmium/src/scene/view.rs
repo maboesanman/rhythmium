@@ -50,7 +50,8 @@ pub struct ActiveView {
 }
 
 impl ActiveView {
-    pub fn new(view_builder: Box<dyn ViewBuilder>) -> Self {
+    pub fn new(view_builder: impl ViewBuilder + 'static) -> Self {
+        let view_builder = Box::new(view_builder);
         Self {
             inner: ActiveViewInner::Uninitialized(view_builder),
         }
@@ -121,11 +122,13 @@ impl ApplicationHandler<RhythmiumEvent> for ActiveView {
     ) {
         match event {
             WindowEvent::RedrawRequested => {
-                println!("RedrawRequested");
-                self.assume_init_mut().surface.render().unwrap();
+                let active_view_init = self.assume_init_mut();
+                active_view_init.surface.render().unwrap();
+
+                // request the next frame right away.
+                active_view_init.shared_wgpu_state.window.request_redraw();
             }
             WindowEvent::Resized(size) => {
-                println!("Resized");
                 let active_view_init = self.assume_init_mut();
                 active_view_init.surface.resize(size);
                 active_view_init.shared_wgpu_state.window.request_redraw();
