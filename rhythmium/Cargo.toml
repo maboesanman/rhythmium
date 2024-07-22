@@ -12,11 +12,11 @@ env_logger.workspace = true
 futures.workspace = true
 image = { workspace = true, features = ["jpeg", "png"] }
 log.workspace = true
-parking_lot = "0.12"
-rand = "0.8.5"
+parking_lot.workspace = true
+rand.workspace = true
 rust_cef.workspace = true
 serde.workspace = true
-taffy = { version = "0.5.2", features = ["serde"] }
+taffy = { workspace = true, features = ["serde"] }
 tokio.workspace = true
 wgpu.workspace = true
 winit.workspace = true
