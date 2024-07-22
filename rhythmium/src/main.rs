@@ -42,7 +42,7 @@ pub fn main() {
         exit(e);
     }
 
-    let mut taffy = Taffy::new();
+    let mut taffy = TaffyTree::new();
 
     let front = taffy
         .new_leaf(Style {
@@ -57,10 +57,10 @@ pub fn main() {
             grid_row: line(1),
             grid_column: line(1),
             margin: Rect {
-                top: points(16.0),
-                bottom: points(16.0),
-                left: points(16.0),
-                right: points(16.0),
+                top: length(16.0),
+                bottom: length(16.0),
+                left: length(16.0),
+                right: length(16.0),
             },
             ..Default::default()
         })
@@ -78,7 +78,7 @@ pub fn main() {
                 },
                 ..Default::default()
             },
-            &[front, back],
+            &[back, front],
         )
         .unwrap();
 
@@ -99,7 +99,7 @@ pub fn main() {
         )),
     );
 
-    let mut active_view = ActiveView::new(WebViewBuilder::new());
+    let mut active_view = ActiveView::new(view_builder);
 
     event_loop.run_app(&mut active_view).unwrap();
 

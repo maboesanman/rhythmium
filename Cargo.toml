@@ -17,10 +17,10 @@ anyhow = "1.0.75"
 bytemuck = { version = "1.14.0", features = ["derive"] }
 cef_wrapper = { path = "./cef_wrapper" }
 rust_cef = { path = "./rust_cef" }
-env_logger = "0.10.1"
+env_logger = "0.11.3"
 futures = "0.3.29"
 image = "0.24.7"
-log = "0.4.20"
+log = "0.4.22"
 serde = { version = "1.0.193", features = ["derive"] }
 tokio = { version = "1.35.0", features = ["macros", "rt-multi-thread"] }
 wgpu = "22.0"

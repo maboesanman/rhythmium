@@ -68,6 +68,7 @@ pub fn get_settings() -> Settings {
         windowless_rendering_enabled: true,
         external_message_pump: true,
         log_severity: LogSeverity::Debug,
+        // chrome_runtime: true,
         #[cfg(not(feature = "bundled"))]
         root_cache_path: Some(
             parent_dir.join("../../cache_root"),
