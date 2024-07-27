@@ -99,7 +99,7 @@ pub fn main() {
         )),
     );
 
-    let mut active_view = ActiveView::new(view_builder);
+    let mut active_view = ActiveView::new(WebViewBuilder::new());
 
     event_loop.run_app(&mut active_view).unwrap();
 

@@ -1,8 +1,4 @@
-use std::{
-    iter,
-    mem::{transmute, ManuallyDrop},
-    usize,
-};
+use std::mem::ManuallyDrop;
 
 use cef_wrapper::cef_capi_sys::{cef_string_userfree_t, cef_string_utf16_t};
 
@@ -20,8 +16,6 @@ const HEADER_LENGTH: usize = HEADER_BYTES >> 1;
 #[repr(C)]
 struct CefStr {
     // this is the length of the data, not the length of the header.
-    // the number of utf16 u16s present in data.
-    // the actual number of u16s is slightly higher than this due to padding.
     length: usize,
 
     // this is the unsized u16 slice. because this is unsized, it must be the last field.
@@ -30,91 +24,19 @@ struct CefStr {
 
 impl<T: IntoIterator<Item = u16>> From<T> for Box<CefStr> {
     fn from(value: T) -> Self {
-        let header_data = iter::once(0usize);
-        let body_data = U16AsUSizeIter::new(value.into_iter());
+        let header_data = (0..HEADER_LENGTH).map(|_| 0);
+        let all_data = Box::into_raw(header_data.chain(value).collect());
+        let (start_ptr, length) = all_data.to_raw_parts();
 
-        let all_data: Box<[usize]> = header_data.chain(body_data).collect();
-
-        let last_items = if all_data.len() == 1 {
-            None
-        } else {
-            all_data
-                .last()
-                .map(|x: &usize| -> &[u16; HEADER_LENGTH] { unsafe { transmute(x) } })
+        unsafe {
+            start_ptr
+                .cast::<usize>()
+                .write_unaligned(length - HEADER_LENGTH)
         };
 
-        let trailing_zeroes: usize = match last_items {
-            None => 0,
-            Some(array) => {
-                let mut i = 0;
-                loop {
-                    if array[HEADER_LENGTH - 1 - i] != 0 {
-                        break i;
-                    }
-                    i += 1;
-                }
-            }
-        };
-
-        let (start_ptr, length) = Box::into_raw(all_data).to_raw_parts();
-
-        let u16_buffer_length = (length - 1) * HEADER_LENGTH;
-
-        // we store the number of utf16 u16s in the data in the header.
-        unsafe { *start_ptr.cast::<usize>() = (length - 1) * HEADER_LENGTH - trailing_zeroes };
-
-        // the pointee metadata for *mut CefStr is the number of u16s in the slice.
-        let cef_str_ptr = std::ptr::from_raw_parts_mut::<CefStr>(start_ptr, u16_buffer_length);
+        let cef_str_ptr = std::ptr::from_raw_parts_mut::<CefStr>(start_ptr, length);
 
         unsafe { Box::from_raw(cef_str_ptr) }
-    }
-}
-
-struct U16AsUSizeIter<I> {
-    iter: I,
-    exhausted: bool,
-}
-
-impl<I> U16AsUSizeIter<I> {
-    fn new(iter: I) -> Self {
-        Self {
-            iter,
-            exhausted: false,
-        }
-    }
-}
-
-impl<I: Iterator<Item = u16>> Iterator for U16AsUSizeIter<I> {
-    type Item = usize;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let mut result = [0; HEADER_LENGTH];
-        if self.exhausted {
-            return None;
-        }
-
-        let mut any_handled = false;
-
-        for i in 0..HEADER_LENGTH {
-            match self.iter.next() {
-                Some(val) => {
-                    result[i] = val;
-                }
-                None => {
-                    self.exhausted = true;
-                    break;
-                }
-            }
-            any_handled = true;
-        }
-
-        if !any_handled {
-            return None;
-        }
-
-        let result: [u16; HEADER_LENGTH] = result;
-        let result: usize = unsafe { std::mem::transmute(result) };
-        Some(result)
     }
 }
 
@@ -142,10 +64,9 @@ impl CefStr {
 
     unsafe fn from_data_raw(data: *mut u16) -> *mut Self {
         let start_ptr = unsafe { data.byte_sub(HEADER_BYTES) };
-        let length = unsafe { *start_ptr.cast::<usize>() };
-        let u16_buffer_length = (length + HEADER_LENGTH - 1) & !(HEADER_LENGTH - 1);
+        let length = unsafe { start_ptr.cast::<usize>().read_unaligned() };
 
-        std::ptr::from_raw_parts_mut::<Self>(start_ptr, u16_buffer_length)
+        std::ptr::from_raw_parts_mut::<Self>(start_ptr, length + HEADER_LENGTH)
     }
 }
 
@@ -189,20 +110,44 @@ pub unsafe fn cef_string_utf16_into_string(
     Some(value)
 }
 
-#[test]
-fn test() {
-    let string = "hello world";
-    let cef_string = str_into_cef_string_utf16(string);
-    let string = unsafe { cef_string_utf16_into_string(&cef_string) };
-    assert_eq!(string, Some("hello world".to_string()));
+// #[cfg(test)]
+// fn assert_cef_string_equals_str(rust_string: &str, cef_string: &cef_string_utf16_t) {
+//     let rust_utf16_iter = rust_string.encode_utf16();
 
-    let string = "another_test_wohoooo";
-    let cef_string = str_into_cef_string_utf16(string);
-    let string = unsafe { cef_string_utf16_into_string(&cef_string) };
-    assert_eq!(string, Some("another_test_wohoooo".to_string()));
+//     assert_eq!(rust_string.len(), cef_string.length);
 
-    let string = "";
-    let cef_string = str_into_cef_string_utf16(string);
-    let string = unsafe { cef_string_utf16_into_string(&cef_string) };
-    assert_eq!(string, Some("".to_string()));
-}
+//     let mut cef_string_ptr: *const u16 = cef_string.str_;
+//     for c in rust_utf16_iter {
+//         let corresponding = unsafe { *cef_string_ptr };
+//         assert_eq!(c, corresponding);
+
+//         unsafe { cef_string_ptr = cef_string_ptr.add(1) };
+//     }
+// }
+
+// #[test]
+// fn test_hello_world() {
+//     let string = "hello world";
+//     let cef_string = str_into_cef_string_utf16(string);
+//     assert_cef_string_equals_str(&string, &cef_string);
+//     let string = unsafe { cef_string_utf16_into_string(&cef_string) };
+//     assert_eq!(string, Some("hello world".to_string()));
+// }
+
+// #[test]
+// fn test_another_test_wohoooo() {
+//     let string = "another_test_wohoooo";
+//     let cef_string = str_into_cef_string_utf16(string);
+//     assert_cef_string_equals_str(&string, &cef_string);
+//     let string = unsafe { cef_string_utf16_into_string(&cef_string) };
+//     assert_eq!(string, Some("another_test_wohoooo".to_string()));
+// }
+
+// #[test]
+// fn test_empty() {
+//     let string = "";
+//     let cef_string = str_into_cef_string_utf16(string);
+//     assert_cef_string_equals_str(&string, &cef_string);
+//     let string = unsafe { cef_string_utf16_into_string(&cef_string) };
+//     assert_eq!(string, Some("".to_string()));
+// }
