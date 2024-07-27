@@ -195,3 +195,21 @@ impl CommandLine {
         unsafe { prepend_wrapper(self_ptr, &wrapper) }
     }
 }
+
+pub enum ProcessType {
+    Browser,
+    Render,
+    Other,
+}
+impl CommandLine {
+    pub fn get_process_type(&self) -> ProcessType {
+        let switch_value = self.get_switch_value("kProcessType");
+        match switch_value.as_deref() {
+            None => ProcessType::Browser,
+            Some("kRendererProcess") => ProcessType::Render,
+            #[cfg(target_os = "linux")]
+            Some("kZygoteProcess") => ProcessType::Render,
+            Some(_) => ProcessType::Other,
+        }
+    }
+}

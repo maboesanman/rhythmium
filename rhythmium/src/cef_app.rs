@@ -43,8 +43,8 @@ impl AppConfig for RhythmiumCefApp {
         process_type: Option<&str>,
         command_line: &mut CommandLine,
     ) {
-        println!("on_before_command_line_processing");
         if process_type.is_none() {
+            #[cfg(target_os = "macos")]
             command_line.append_switch("use-mock-keychain");
             command_line.append_switch_with_value("autoplay-policy", "no-user-gesture-required");
         }
@@ -54,18 +54,36 @@ impl AppConfig for RhythmiumCefApp {
         &self,
         _browser_process_state: &Self::BrowserProcessState,
     ) -> Option<CefArc<BrowserProcessHandler>> {
-        println!("get_browser_process_handler");
         Some(self.browser_process_handler.clone())
     }
 }
 
 pub fn get_settings() -> Settings {
+    #[cfg(not(feature = "bundled"))]
+    let exec_dir = std::env::current_exe().unwrap();
+    #[cfg(not(feature = "bundled"))]
+    let parent_dir = exec_dir.parent().unwrap();
+
     Settings {
         windowless_rendering_enabled: true,
         external_message_pump: true,
         log_severity: LogSeverity::Debug,
+        // chrome_runtime: true,
+        #[cfg(not(feature = "bundled"))]
         root_cache_path: Some(
-            "/Users/mason/Source/github.com/maboesanman/rhythmium/cache_root".to_string(),
+            parent_dir.join("../../cache_root"),
+        ),
+        #[cfg(all(target_os = "macos", not(feature = "bundled")))]
+        framework_dir_path: Some(
+            parent_dir.join("../../build/lib/Frameworks/Chromium Embedded Framework.framework"),
+        ),
+        #[cfg(all(target_os = "macos", not(feature = "bundled")))]
+        main_bundle_path: Some(
+            parent_dir.join("../../build/lib/rhythmium_partial_bundle.app"),
+        ),
+        #[cfg(all(target_os = "linux", not(feature = "bundled")))]
+        resources_dir_path: Some(
+            parent_dir.join("../../third_party/cef/cef_binary_121.3.2+gce31761+chromium-121.0.6167.75_linux64/Resources/"),
         ),
         ..Default::default()
     }

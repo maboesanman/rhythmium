@@ -1,6 +1,6 @@
 use std::ptr;
 
-use cef_wrapper::cef_capi_sys::cef_window_info_t;
+use cef_wrapper::cef_capi_sys::{cef_runtime_style_t_CEF_RUNTIME_STYLE_ALLOY, cef_window_info_t};
 
 use crate::util::{cef_string, wrap_boolean::wrap_boolean};
 
@@ -23,11 +23,19 @@ impl From<&WindowInfo> for cef_window_info_t {
         cef_window_info_t {
             window_name: cef_string::str_into_cef_string_utf16(&val.window_name),
             bounds: val.bounds.into(),
-            hidden: wrap_boolean(val.hidden),
-            parent_view: ptr::null_mut(),
+            #[cfg(target_os = "linux")]
+            parent_window: 0,
             windowless_rendering_enabled: wrap_boolean(val.windowless_rendering_enabled),
             shared_texture_enabled: wrap_boolean(false),
             external_begin_frame_enabled: wrap_boolean(val.external_begin_frame_enabled),
+            #[cfg(target_os = "linux")]
+            window: 0,
+            runtime_style: cef_runtime_style_t_CEF_RUNTIME_STYLE_ALLOY,
+            #[cfg(target_os = "macos")]
+            hidden: wrap_boolean(val.hidden),
+            #[cfg(target_os = "macos")]
+            parent_view: ptr::null_mut(),
+            #[cfg(target_os = "macos")]
             view: ptr::null_mut(),
         }
     }

@@ -17,6 +17,8 @@ const HEADER_LENGTH: usize = HEADER_BYTES >> 1;
 struct CefStr {
     // this is the length of the data, not the length of the header.
     length: usize,
+
+    // this is the unsized u16 slice. because this is unsized, it must be the last field.
     data: [u16],
 }
 
@@ -26,7 +28,11 @@ impl<T: IntoIterator<Item = u16>> From<T> for Box<CefStr> {
         let all_data = Box::into_raw(header_data.chain(value).collect());
         let (start_ptr, length) = all_data.to_raw_parts();
 
-        unsafe { *start_ptr.cast::<usize>() = length - HEADER_LENGTH };
+        unsafe {
+            start_ptr
+                .cast::<usize>()
+                .write_unaligned(length - HEADER_LENGTH)
+        };
 
         let cef_str_ptr = std::ptr::from_raw_parts_mut::<CefStr>(start_ptr, length);
 
@@ -58,9 +64,9 @@ impl CefStr {
 
     unsafe fn from_data_raw(data: *mut u16) -> *mut Self {
         let start_ptr = unsafe { data.byte_sub(HEADER_BYTES) };
-        let length = unsafe { *start_ptr.cast::<usize>() };
+        let length = unsafe { start_ptr.cast::<usize>().read_unaligned() };
 
-        std::ptr::from_raw_parts_mut::<Self>(start_ptr.cast(), length + HEADER_LENGTH)
+        std::ptr::from_raw_parts_mut::<Self>(start_ptr, length + HEADER_LENGTH)
     }
 }
 
@@ -74,6 +80,9 @@ pub fn str_into_cef_string_utf16(string: &str) -> cef_string_utf16_t {
 ///
 /// `cef_string` must be a valid pointer, and must not be dropped by anything else.
 pub unsafe fn cef_string_userfree_into_string(cef_string: cef_string_userfree_t) -> Option<String> {
+    if cef_string.is_null() {
+        return None;
+    }
     let boxed = unsafe { Box::from_raw(cef_string) };
     if boxed.str_.is_null() {
         return None;
@@ -100,3 +109,45 @@ pub unsafe fn cef_string_utf16_into_string(
 
     Some(value)
 }
+
+// #[cfg(test)]
+// fn assert_cef_string_equals_str(rust_string: &str, cef_string: &cef_string_utf16_t) {
+//     let rust_utf16_iter = rust_string.encode_utf16();
+
+//     assert_eq!(rust_string.len(), cef_string.length);
+
+//     let mut cef_string_ptr: *const u16 = cef_string.str_;
+//     for c in rust_utf16_iter {
+//         let corresponding = unsafe { *cef_string_ptr };
+//         assert_eq!(c, corresponding);
+
+//         unsafe { cef_string_ptr = cef_string_ptr.add(1) };
+//     }
+// }
+
+// #[test]
+// fn test_hello_world() {
+//     let string = "hello world";
+//     let cef_string = str_into_cef_string_utf16(string);
+//     assert_cef_string_equals_str(&string, &cef_string);
+//     let string = unsafe { cef_string_utf16_into_string(&cef_string) };
+//     assert_eq!(string, Some("hello world".to_string()));
+// }
+
+// #[test]
+// fn test_another_test_wohoooo() {
+//     let string = "another_test_wohoooo";
+//     let cef_string = str_into_cef_string_utf16(string);
+//     assert_cef_string_equals_str(&string, &cef_string);
+//     let string = unsafe { cef_string_utf16_into_string(&cef_string) };
+//     assert_eq!(string, Some("another_test_wohoooo".to_string()));
+// }
+
+// #[test]
+// fn test_empty() {
+//     let string = "";
+//     let cef_string = str_into_cef_string_utf16(string);
+//     assert_cef_string_equals_str(&string, &cef_string);
+//     let string = unsafe { cef_string_utf16_into_string(&cef_string) };
+//     assert_eq!(string, Some("".to_string()));
+// }

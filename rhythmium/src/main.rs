@@ -7,10 +7,11 @@ use rust_cef::functions::initialize::initialize_from_env;
 use scene::{
     image_view::{ImageFit, ImageViewBuilder},
     scene_view::SceneViewBuilder,
+    view::ActiveView,
     web_view::WebViewBuilder,
 };
 use taffy::prelude::*;
-use winit::event_loop::EventLoopBuilder;
+use winit::event_loop::EventLoop;
 
 pub mod cef_app;
 pub mod scene;
@@ -20,13 +21,16 @@ pub fn main() {
 
     // the winit event loop needs to launch first.
     // in particular, it needs to run before the cef subprocess is launched.
-    let event_loop = EventLoopBuilder::<RhythmiumEvent>::with_user_event()
+    let event_loop = EventLoop::<RhythmiumEvent>::with_user_event()
         .build()
         .unwrap();
 
     let proxy = event_loop.create_proxy();
     let other_proxy = proxy.clone();
 
+    // this sends a "CatchUpOnCefWork" event every 50ms to the event loop.
+    // I'm not sure what situations I'm not calling the do_work function, but
+    // I'm missing something and I'm not sure what, so for now we just do a bunch of extra catch up work.
     thread::spawn(move || loop {
         other_proxy
             .send_event(RhythmiumEvent::CatchUpOnCefWork)
@@ -38,7 +42,7 @@ pub fn main() {
         exit(e);
     }
 
-    let mut taffy = Taffy::new();
+    let mut taffy = TaffyTree::new();
 
     let front = taffy
         .new_leaf(Style {
@@ -53,10 +57,10 @@ pub fn main() {
             grid_row: line(1),
             grid_column: line(1),
             margin: Rect {
-                top: points(16.0),
-                bottom: points(16.0),
-                left: points(16.0),
-                right: points(16.0),
+                top: length(16.0),
+                bottom: length(16.0),
+                left: length(16.0),
+                right: length(16.0),
             },
             ..Default::default()
         })
@@ -74,7 +78,7 @@ pub fn main() {
                 },
                 ..Default::default()
             },
-            &[front, back],
+            &[back, front],
         )
         .unwrap();
 
@@ -83,9 +87,9 @@ pub fn main() {
         view_tree: taffy,
     };
 
-    let mut view_builder = Box::new(SceneViewBuilder::new(scene));
+    let mut view_builder = SceneViewBuilder::new(scene);
 
-    // view_builder.add_view(back, Box::new(WebViewBuilder::new(app)));
+    view_builder.add_view(back, Box::new(WebViewBuilder::new()));
 
     view_builder.add_view(
         front,
@@ -95,13 +99,11 @@ pub fn main() {
         )),
     );
 
-    let _image_view_builder = ImageViewBuilder::new(
-        include_bytes!("../assets/pointing.png"),
-        ImageFit::SetWidth(scene::image_view::ImageJustification::End),
-    );
+    let mut active_view = ActiveView::new(WebViewBuilder::new());
 
-    scene::view::run(event_loop, Box::new(WebViewBuilder::new()));
-    // scene::view::run(event_loop, Box::new(image_view_builder)).await;
+    event_loop.run_app(&mut active_view).unwrap();
+
+    // scene::view::run(event_loop, Box::new(view_builder));
 }
 
 #[derive(Debug, Clone)]

@@ -5,32 +5,16 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "Debug Rhythmium",
       "type": "lldb",
       "request": "launch",
-      "name": "Debug executable 'rhythmium'",
-      "program": "${workspaceFolder}/target/debug/bundle/rhythmium.app/Contents/MacOS/rhythmium",
+      "program": "${workspaceFolder}/target/debug/rhythmium",
       "args": [],
-      "preLaunchTask": "build",
-      "cwd": "${workspaceFolder}"
-    },
-    {
-      "type": "lldb",
-      "request": "launch",
-      "name": "Debug unit tests in executable 'rhythmium'",
-      "cargo": {
-        "args": [
-          "test",
-          "--no-run",
-          "--bin=rhythmium",
-          "--package=rhythmium"
-        ],
-        "filter": {
-          "name": "rhythmium",
-          "kind": "bin"
-        }
-      },
-      "args": [],
-      "cwd": "${workspaceFolder}"
+      "cwd": "${workspaceFolder}",
+      "sourceLanguages": ["rust"],
+      "preLaunchTask": "debug-build",
+      "stopOnEntry": false,
+      "internalConsoleOptions": "openOnSessionStart"
     }
   ]
 }

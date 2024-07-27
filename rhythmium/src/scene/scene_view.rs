@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
-use slotmap::DefaultKey;
-use wgpu::{util::DeviceExt, CommandEncoder, TextureView};
+use taffy::NodeId;
+use wgpu::{util::DeviceExt, CommandEncoder, PipelineCompilationOptions, TextureView};
 use winit::dpi::{LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize};
 
 use super::{
@@ -15,7 +15,7 @@ pub struct SceneView {
     size: PhysicalSize<u32>,
 
     scene: Scene,
-    views: HashMap<DefaultKey, SceneSubView>,
+    views: HashMap<NodeId, SceneSubView>,
 
     index_buffer: wgpu::Buffer,
 
@@ -26,7 +26,7 @@ pub struct SceneView {
 
 pub struct SceneViewBuilder {
     scene: Scene,
-    views: HashMap<DefaultKey, Box<dyn ViewBuilder>>,
+    views: HashMap<NodeId, Box<dyn ViewBuilder>>,
 }
 
 impl SceneViewBuilder {
@@ -37,7 +37,7 @@ impl SceneViewBuilder {
         }
     }
 
-    pub fn add_view(&mut self, key: DefaultKey, view: Box<dyn ViewBuilder>) {
+    pub fn add_view(&mut self, key: NodeId, view: Box<dyn ViewBuilder>) {
         self.views.insert(key, view);
     }
 }
@@ -236,7 +236,7 @@ impl View for SceneView {
 impl SceneView {
     pub fn new(
         scene: Scene,
-        views: HashMap<DefaultKey, Box<dyn View>>,
+        views: HashMap<NodeId, Box<dyn View>>,
         size: PhysicalSize<u32>,
         shared_wgpu_state: Arc<SharedWgpuState>,
     ) -> Self {
@@ -290,6 +290,7 @@ impl SceneView {
                 module: &shader,
                 entry_point: "vs_main",
                 buffers: &[Vertex::desc()],
+                compilation_options: PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
@@ -299,6 +300,7 @@ impl SceneView {
                     blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
+                compilation_options: PipelineCompilationOptions::default(),
             }),
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
@@ -316,6 +318,7 @@ impl SceneView {
                 alpha_to_coverage_enabled: false,
             },
             multiview: None,
+            cache: None,
         });
 
         let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {

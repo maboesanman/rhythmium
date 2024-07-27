@@ -100,7 +100,6 @@ pub(crate) trait AppConfigExt: AppConfig {
     unsafe extern "C" fn get_browser_process_handler_raw(
         ptr: *mut cef_app_t,
     ) -> *mut cef_browser_process_handler_t {
-        println!("get_browser_process_handler_raw");
         let rust_impl_ptr =
             CefArcFromRust::<App, AppWrapper<Self>>::get_rust_impl_from_ptr(ptr.cast());
         let rust_impl = &*rust_impl_ptr;

@@ -3,20 +3,24 @@ name = "rhythmium"
 description = "A Rhythm Game Client"
 version.workspace = true
 edition.workspace = true
+default-run = "rhythmium"
 
 [dependencies]
 anyhow.workspace = true
 bytemuck.workspace = true
 env_logger.workspace = true
+futures.workspace = true
 image = { workspace = true, features = ["jpeg", "png"] }
 log.workspace = true
-rand = "0.8.5"
+parking_lot.workspace = true
+rand.workspace = true
+rust_cef.workspace = true
 serde.workspace = true
-slotmap = "1.0.7"
-taffy = { version = "0.3.18", features = ["serde"] }
+taffy = { workspace = true, features = ["serde"] }
 tokio.workspace = true
 wgpu.workspace = true
 winit.workspace = true
-futures.workspace = true
-rust_cef.workspace = true
-parking_lot = "0.12"
+
+[features]
+default = []
+bundled = ["rust_cef/bundled"]

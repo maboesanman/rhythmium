@@ -29,6 +29,7 @@ impl BrowserProcessHandler {
             on_before_child_process_launch: None,
             on_already_running_app_relaunch: None,
             get_default_client: None,
+            get_default_request_context_handler: None,
         });
 
         CefArc::new(

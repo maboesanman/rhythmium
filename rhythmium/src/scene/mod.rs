@@ -1,7 +1,6 @@
 use core::fmt::Debug;
 use std::collections::VecDeque;
 
-use slotmap::DefaultKey;
 use taffy::{geometry::Point, prelude::*};
 
 pub mod image_view;
@@ -13,8 +12,8 @@ pub mod view;
 pub mod web_view;
 
 pub struct Scene {
-    pub view_tree: Taffy,
-    pub root: DefaultKey,
+    pub view_tree: TaffyTree,
+    pub root: NodeId,
 }
 
 impl Debug for Scene {
@@ -25,7 +24,7 @@ impl Debug for Scene {
 
 impl Scene {
     #[must_use]
-    pub fn new(view_tree: Taffy, root: DefaultKey) -> Self {
+    pub fn new(view_tree: TaffyTree, root: NodeId) -> Self {
         Self { view_tree, root }
     }
 
@@ -42,7 +41,7 @@ impl Scene {
     }
 
     #[must_use]
-    pub fn get_layout(&self) -> impl '_ + IntoIterator<Item = (Size<f32>, Point<f32>, DefaultKey)> {
+    pub fn get_layout(&self) -> impl '_ + IntoIterator<Item = (Size<f32>, Point<f32>, NodeId)> {
         LayoutIter {
             scene: self,
             queue: VecDeque::from(vec![(self.root, Point { x: 0.0, y: 0.0 })]),
@@ -52,11 +51,11 @@ impl Scene {
 
 struct LayoutIter<'a> {
     scene: &'a Scene,
-    queue: VecDeque<(DefaultKey, Point<f32>)>,
+    queue: VecDeque<(NodeId, Point<f32>)>,
 }
 
 impl Iterator for LayoutIter<'_> {
-    type Item = (Size<f32>, Point<f32>, DefaultKey);
+    type Item = (Size<f32>, Point<f32>, NodeId);
 
     fn next(&mut self) -> Option<Self::Item> {
         let (key, location) = self.queue.pop_front()?;

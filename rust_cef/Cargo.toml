@@ -10,11 +10,9 @@ edition.workspace = true
 name = "rust_cef"
 
 [features]
-default = ["sandbox"]
+default = []
 sandbox = []
-
-# [[bin]]
-# name = "mac_helper_process"
+bundled = []
 
 [dependencies]
 cef_wrapper.workspace = true

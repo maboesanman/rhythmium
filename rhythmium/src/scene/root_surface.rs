@@ -6,7 +6,7 @@ use super::{shared_wgpu_state::SharedWgpuState, view::View};
 
 pub struct RootSurface {
     view: Box<dyn View>,
-    surface: wgpu::Surface,
+    surface: wgpu::Surface<'static>,
     config: wgpu::SurfaceConfiguration,
     shared_wgpu_state: Arc<SharedWgpuState>,
 }
@@ -18,7 +18,7 @@ impl RootSurface {
         let window = &shared_wgpu_state.window;
         let adapter = &shared_wgpu_state.adapter;
 
-        let surface = unsafe { instance.create_surface(&window) }.unwrap();
+        let surface = instance.create_surface(window.clone()).unwrap();
 
         let surface_capabilities = surface.get_capabilities(adapter);
 
@@ -37,6 +37,7 @@ impl RootSurface {
             present_mode: wgpu::PresentMode::Fifo,
             alpha_mode: surface_capabilities.alpha_modes[0],
             view_formats: vec![],
+            desired_maximum_frame_latency: 1,
         };
 
         Self {
