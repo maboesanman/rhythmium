@@ -1,5 +1,7 @@
-#![feature(cfg_sanitize)]
+#![feature(allocator_api)]
 #![feature(arbitrary_self_types)]
+#![feature(cfg_sanitize)]
+#![feature(iter_collect_into)]
 #![feature(ptr_metadata)]
 #![allow(non_upper_case_globals)]
 #![allow(clippy::new_ret_no_self)]
