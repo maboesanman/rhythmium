@@ -1,7 +1,3 @@
-#![allow(incomplete_features)]
-#![feature(async_fn_in_trait)]
-#![deny(unsafe_op_in_unsafe_fn)]
-
 use std::ptr::NonNull;
 
 use context::{HandleInputContext, HandleScheduleContext, InitContext, InterpolateContext};
@@ -9,7 +5,6 @@ use context::{HandleInputContext, HandleScheduleContext, InitContext, Interpolat
 pub mod context;
 // pub mod evaluate_to;
 pub mod expire_handle;
-// pub mod schedule_storage;
 pub mod single_input_state;
 pub mod step;
 // mod test;
@@ -114,7 +109,10 @@ pub trait TransposerInputEventHandler<I: TransposerInput<Base = Self>>: Transpos
     }
 
     /// Filter out events you know you can't do anything with.
-    /// This reduces the amount of events you have to remember for rollback to work
+    /// This reduces the amount of events you have to remember for rollback to work.
+    ///
+    /// Note that this has access to very little information. This is meant to be an
+    /// optimization, which is why the default implementation is to simply always return `true`
     fn can_handle(_time: Self::Time, _event: &I::InputEvent) -> bool {
         true
     }

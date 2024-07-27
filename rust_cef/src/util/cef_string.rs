@@ -1,4 +1,8 @@
-use std::{iter, mem::{transmute, ManuallyDrop}, usize};
+use std::{
+    iter,
+    mem::{transmute, ManuallyDrop},
+    usize,
+};
 
 use cef_wrapper::cef_capi_sys::{cef_string_userfree_t, cef_string_utf16_t};
 
@@ -30,13 +34,13 @@ impl<T: IntoIterator<Item = u16>> From<T> for Box<CefStr> {
         let body_data = U16AsUSizeIter::new(value.into_iter());
 
         let all_data: Box<[usize]> = header_data.chain(body_data).collect();
-        
+
         let last_items = if all_data.len() == 1 {
             None
         } else {
-            all_data.last().map(|x: &usize| -> &[u16; HEADER_LENGTH] {
-                unsafe { transmute(x) }
-            })
+            all_data
+                .last()
+                .map(|x: &usize| -> &[u16; HEADER_LENGTH] { unsafe { transmute(x) } })
         };
 
         let trailing_zeroes: usize = match last_items {
@@ -73,7 +77,10 @@ struct U16AsUSizeIter<I> {
 
 impl<I> U16AsUSizeIter<I> {
     fn new(iter: I) -> Self {
-        Self { iter, exhausted: false }
+        Self {
+            iter,
+            exhausted: false,
+        }
     }
 }
 
@@ -102,7 +109,7 @@ impl<I: Iterator<Item = u16>> Iterator for U16AsUSizeIter<I> {
         }
 
         if !any_handled {
-            return None
+            return None;
         }
 
         let result: [u16; HEADER_LENGTH] = result;
@@ -182,7 +189,6 @@ pub unsafe fn cef_string_utf16_into_string(
     Some(value)
 }
 
-
 #[test]
 fn test() {
     let string = "hello world";
@@ -190,12 +196,10 @@ fn test() {
     let string = unsafe { cef_string_utf16_into_string(&cef_string) };
     assert_eq!(string, Some("hello world".to_string()));
 
-
     let string = "another_test_wohoooo";
     let cef_string = str_into_cef_string_utf16(string);
     let string = unsafe { cef_string_utf16_into_string(&cef_string) };
     assert_eq!(string, Some("another_test_wohoooo".to_string()));
-
 
     let string = "";
     let cef_string = str_into_cef_string_utf16(string);

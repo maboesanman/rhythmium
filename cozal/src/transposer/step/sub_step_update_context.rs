@@ -2,6 +2,7 @@ use core::future::Future;
 use core::pin::Pin;
 
 use archery::SharedPointerKind;
+use rand_chacha::rand_core::CryptoRngCore;
 
 use super::time::SubStepTime;
 use super::transposer_metadata::TransposerMetaData;
@@ -64,7 +65,7 @@ impl<'update, T: Transposer, P: SharedPointerKind> SubStepUpdateContext<'update,
     }
 }
 
-impl<'update, T: Transposer, P: SharedPointerKind> InputStateContext<'update, T>
+impl<'update, T: Transposer, P: SharedPointerKind> InputStateContextRaw<'update, T>
     for SubStepUpdateContext<'update, T, P>
 {
     fn get_input_state_manager(&mut self) -> &'update T::InputStateManager {
@@ -146,7 +147,7 @@ impl<'update, T: Transposer, P: SharedPointerKind> EmitEventContext<T>
 impl<'update, T: Transposer, P: SharedPointerKind> RngContext
     for SubStepUpdateContext<'update, T, P>
 {
-    fn get_rng(&mut self) -> &mut dyn rand::RngCore {
+    fn get_rng(&mut self) -> &mut dyn CryptoRngCore {
         &mut self.metadata.rng
     }
 }

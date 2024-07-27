@@ -1,6 +1,7 @@
 #![feature(hash_raw_entry)]
 #![feature(waker_getters)]
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unused)]
 
 pub mod dummy_waker;
 pub mod extended_entry;
