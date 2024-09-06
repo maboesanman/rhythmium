@@ -7,7 +7,7 @@ use crate::transposer::step::InputState;
 use crate::transposer::{StateRetriever, Transposer, TransposerInput};
 
 /// This is the manager that transposers should use when they have a single input.
-pub type SingleInputStateManager<I> = dyn StateRetriever<I>;
+pub type SingleInputStateManager<'update, I> = dyn StateRetriever<'update, I>;
 
 /// This is ONE VALID IMPLEMENTATION that backs the SingleInputStateManager.
 /// Transposer can depend on SingleInputStateManager, but the specific choice of runtime
@@ -15,17 +15,18 @@ pub type SingleInputStateManager<I> = dyn StateRetriever<I>;
 pub struct SingleInputState<I: TransposerInput> {
     inner: RwLock<SingleInputStateInner<I>>,
 }
+
 enum SingleInputStateInner<I: TransposerInput> {
     Empty,
-    Requested(Vec<Sender<NonNull<I::InputState>>>),
+    Requested(Vec<Sender<&'static I::InputState>>),
     Full(Box<I::InputState>),
 }
 
 // SAFETY: the NonNull returned from get_input_state will always last until the enum is dropped
 // because we never go from Full to Empty or Requested.
-unsafe impl<I: TransposerInput> StateRetriever<I> for SingleInputState<I> {
-    fn get_input_state(&self) -> Receiver<NonNull<I::InputState>> {
-        let (send, recv) = channel();
+unsafe impl<'cx, I: TransposerInput> StateRetriever<'cx, I> for SingleInputState<I> {
+    fn get_input_state(&mut self, _: I) -> Receiver<&'cx I::InputState> {
+        let (send, recv) = channel::<&'cx I::InputState>();
         let read = self.inner.read();
 
         match &*read {
@@ -63,13 +64,13 @@ impl<
         }
     }
 
-    fn get_provider(&self) -> &<I::Base as Transposer>::InputStateManager {
+    fn get_provider(&mut self) -> &<I::Base as Transposer>::InputStateManager<'static> {
         self
     }
 }
 
 impl<I: TransposerInput> SingleInputState<I> {
-    pub fn set_state(&self, state: I::InputState) -> Result<(), I::InputState> {
+    fn set_input_state(&self, _: I, state: I::InputState) -> Result<(), I::InputState> {
         let mut inner = self.inner.write();
         let senders = match core::mem::replace(&mut *inner, SingleInputStateInner::Empty) {
             SingleInputStateInner::Empty => Vec::new(),

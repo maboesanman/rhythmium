@@ -9,17 +9,26 @@ use crate::transposer::context::ExpireEventError;
 use crate::transposer::expire_handle::ExpireHandle;
 use crate::transposer::Transposer;
 
+/// TransposerMetaData is a struct that holds all the data that is needed to run a transposer, besides
+/// the actual transposer struct. Essentially this is all the stuff that the various Contexts provide
+/// access to, apart from inputs.
 pub struct TransposerMetaData<T: Transposer, P: SharedPointerKind> {
-    // this has index 0 while processing inputs, which is technically wrong, but should never be accessible.
+    /// this has index 0 while processing inputs, which is technically wrong, but should never be accessible.
     pub last_updated: SubStepTime<T::Time>,
 
+    /// A collection of (time, payload) for each scheduled event, indexed by time.
     pub schedule: rpds::RedBlackTreeMap<ScheduledTime<T::Time>, T::Scheduled, P>,
 
+    /// A map of ExpireHandle->ScheduledTime (kept in sync with backward)
     pub expire_handles_forward: rpds::HashTrieMap<ExpireHandle, ScheduledTime<T::Time>, P>,
+
+    /// A map of ScheduledTime->ExpireHandle (kept in sync with forward)
     pub expire_handles_backward: rpds::RedBlackTreeMap<ScheduledTime<T::Time>, ExpireHandle, P>,
 
+    /// The source of new ExpireHandles
     pub expire_handle_factory: ExpireHandleFactory,
 
+    /// The deterministic source of entropy.
     pub rng: BlockRng<ChaCha12Core>,
 }
 

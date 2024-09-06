@@ -6,31 +6,31 @@ use archery::SharedPointerKind;
 use futures_core::Future;
 use type_erased_vec::TypeErasedVec;
 
-use super::sub_step_update_context::SubStepUpdateContext;
+use super::{sub_step_update_context::SubStepUpdateContext, InputState};
 use crate::transposer::{Transposer, TransposerInput, TransposerInputEventHandler};
 
-pub struct StepInputs<T: Transposer, P: SharedPointerKind> {
+pub struct StepInputs<T: Transposer, P: SharedPointerKind, Is> {
     pub time: T::Time,
 
     // these btreesets are all of different values. they are transmuted before use.
-    inputs: BTreeMap<u64, StepInputsEntry<T, P>>,
+    inputs: BTreeMap<u64, StepInputsEntry<T, P, Is>>,
 }
 
-type HandlerFunction<T, P> = for<'a> fn(
+type HandlerFunction<T, P, Is> = for<'a> fn(
     time: <T as Transposer>::Time,
     &'a mut T,
-    &'a mut SubStepUpdateContext<'_, T, P>,
+    &'a mut SubStepUpdateContext<'_, T, P, Is>,
     &'a TypeErasedVec,
 ) -> Pin<Box<dyn 'a + Future<Output = ()>>>;
 
-struct StepInputsEntry<T: Transposer, P: SharedPointerKind> {
+struct StepInputsEntry<T: Transposer, P: SharedPointerKind, Is> {
     // keep this sorted
     values: TypeErasedVec,
     input_type_id: TypeId,
-    handler: HandlerFunction<T, P>,
+    handler: HandlerFunction<T, P, Is>,
 }
 
-impl<T: Transposer, P: SharedPointerKind> StepInputsEntry<T, P> {
+impl<T: Transposer, P: SharedPointerKind, Is: InputState<T>> StepInputsEntry<T, P, Is> {
     fn new<I: TransposerInput<Base = T>>() -> Self
     where
         T: TransposerInputEventHandler<I>,
@@ -70,8 +70,8 @@ impl<T: Transposer, P: SharedPointerKind> StepInputsEntry<T, P> {
     }
 }
 
-impl<T: Transposer, P: SharedPointerKind> StepInputs<T, P> {
-    pub async fn handle(&self, transposer: &mut T, cx: &mut SubStepUpdateContext<'_, T, P>) {
+impl<T: Transposer, P: SharedPointerKind, Is: InputState<T>> StepInputs<T, P, Is> {
+    pub async fn handle(&self, transposer: &mut T, cx: &mut SubStepUpdateContext<'_, T, P, Is>) {
         for (_, i) in self.inputs.iter() {
             (i.handler)(self.time, transposer, cx, &i.values).await;
         }

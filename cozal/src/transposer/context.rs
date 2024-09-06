@@ -11,7 +11,7 @@ use crate::transposer::{StateRetriever, TransposerInput};
 /// This trait is a supertrait of all the context functionality available to the `Transposer::init` function
 pub trait InitContext<'a, T: Transposer>:
     CurrentTimeContext<T>
-    + InputStateContextRaw<'a, T>
+    + InputStateManagerContext<'a, T>
     + ScheduleEventContext<T>
     + EmitEventContext<T>
     + RngContext
@@ -22,7 +22,7 @@ pub trait InitContext<'a, T: Transposer>:
 pub trait HandleScheduleContext<'a, T: Transposer>:
     CurrentTimeContext<T>
     + LastUpdatedTimeContext<T>
-    + InputStateContextRaw<'a, T>
+    + InputStateManagerContext<'a, T>
     + ScheduleEventContext<T>
     + ExpireEventContext<T>
     + EmitEventContext<T>
@@ -32,7 +32,7 @@ pub trait HandleScheduleContext<'a, T: Transposer>:
 
 /// This trait is a supertrait of all the context functionality available to the `Transposer::interpolate` function
 pub trait InterpolateContext<'a, T: Transposer>:
-    CurrentTimeContext<T> + LastUpdatedTimeContext<T> + InputStateContextRaw<'a, T>
+    CurrentTimeContext<T> + LastUpdatedTimeContext<T> + InputStateManagerContext<'a, T>
 {
 }
 
@@ -40,7 +40,7 @@ pub trait InterpolateContext<'a, T: Transposer>:
 pub trait HandleInputContext<'a, T: Transposer>:
     CurrentTimeContext<T>
     + LastUpdatedTimeContext<T>
-    + InputStateContextRaw<'a, T>
+    + InputStateManagerContext<'a, T>
     + ScheduleEventContext<T>
     + ExpireEventContext<T>
     + EmitEventContext<T>
@@ -66,36 +66,37 @@ pub trait LastUpdatedTimeContext<T: Transposer> {
 
 /// A trait for accessing the InputStateManager. Not called directly by the user.
 #[doc(hidden)]
-pub trait InputStateContextRaw<'a, T: Transposer> {
+pub trait InputStateManagerContext<'a, T: Transposer> {
     #[doc(hidden)]
-    fn get_input_state_manager(&mut self) -> &'a T::InputStateManager;
+    fn get_input_state_manager(&mut self) -> &mut T::InputStateManager<'a>;
 }
 
 /// A trait for requesting input state from one of the inputs of this transposer.
-pub trait InputStateContext<'a, T: Transposer>: InputStateContextRaw<'a, T> {
+pub trait InputStateContext<'a, T: Transposer>: InputStateManagerContext<'a, T> {
     /// get the input state from one of the inputs of this transposer at the current time.
     /// only the specific input state you've requested will be retrieved.
     ///
     /// once the resulting future is awaited, the system will retrieve the input state for the given time from the input soure.
     #[must_use]
-    async fn get_input_state<I: TransposerInput<Base = T>>(&mut self) -> &'a I::InputState
+    async fn get_input_state<I: TransposerInput<Base = T>>(&mut self, input: I) -> &'a I::InputState
     where
-        T::InputStateManager: 'a + StateRetriever<I>;
+        T::InputStateManager<'a>: StateRetriever<'a, I>;
 }
 
-impl<'a, T: Transposer, C: InputStateContextRaw<'a, T> + ?Sized> InputStateContext<'a, T> for C {
+impl<'a, T: Transposer, C: InputStateManagerContext<'a, T> + ?Sized> InputStateContext<'a, T> for C {
     #[must_use]
-    async fn get_input_state<I: TransposerInput<Base = T>>(&mut self) -> &'a I::InputState
+    async fn get_input_state<I: TransposerInput<Base = T>>(&mut self, input: I) -> &'a I::InputState
     where
-        T::InputStateManager: 'a + StateRetriever<I>,
+        T::InputStateManager<'a>: StateRetriever<'a, I>
     {
-        let ptr: NonNull<_> = self
-            .get_input_state_manager()
-            .get_input_state()
-            .await
-            .unwrap();
+        let manager = self.get_input_state_manager();
+        let fut = manager.get_input_state(input);
 
-        unsafe { ptr.as_ref() }
+        // it is unsound to hold references to the input state manager over await points,
+        // so we make extra sure that the reference is dropped before we await the future.
+        drop(manager);
+
+        fut.await.unwrap()
     }
 }
 

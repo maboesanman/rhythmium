@@ -22,7 +22,7 @@ impl Transposer for TestTransposer {
 
     type OutputEvent = ();
 
-    type InputStateManager = NoInputManager;
+    type InputStateManager<'a> = NoInputManager;
 
     async fn init(&mut self, cx: &mut dyn InitContext<'_, Self>) {
         self.counter = 0;

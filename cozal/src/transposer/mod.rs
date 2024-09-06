@@ -1,11 +1,14 @@
-use std::ptr::NonNull;
+use std::{future::Future, ptr::NonNull};
+use std::hash::Hash;
 
 use context::{HandleInputContext, HandleScheduleContext, InitContext, InterpolateContext};
+use futures_channel::oneshot::Receiver;
 
 pub mod context;
 // pub mod evaluate_to;
 pub mod expire_handle;
-pub mod single_input_state;
+// pub mod single_input_state;
+// pub mod multi_input_state;
 pub mod step;
 // mod test;
 
@@ -44,7 +47,8 @@ pub trait Transposer: Clone {
     type Scheduled: Clone;
 
     /// The type used to request input state. This is only passed as a shared reference.
-    type InputStateManager: ?Sized;
+    /// expect this to be dyn StateRetriever<'cx, Input1> + StateRetriever<'cx, Input2> + ...
+    type InputStateManager<'cx>: ?Sized;
 
     /// The function to initialize your transposer's events.
     ///
@@ -80,7 +84,7 @@ pub trait Transposer: Clone {
     async fn interpolate(&self, cx: &mut dyn InterpolateContext<'_, Self>) -> Self::OutputState;
 }
 
-pub trait TransposerInput: 'static + Sized {
+pub trait TransposerInput: 'static + Sized + Hash + Eq + Copy {
     type Base: TransposerInputEventHandler<Self>;
     type InputEvent;
     type InputState;
@@ -132,6 +136,6 @@ pub trait TransposerInputEventHandler<I: TransposerInput<Base = Self>>: Transpos
 ///
 /// the `NonNull<I::InputState>` returned by the reciever should be considered a `&'_ I::InputState`
 /// (it would be &'_ but it's not really possible to implement that)
-pub unsafe trait StateRetriever<I: TransposerInput> {
-    fn get_input_state(&self) -> futures_channel::oneshot::Receiver<NonNull<I::InputState>>;
+pub unsafe trait StateRetriever<'context, I: TransposerInput> {
+    fn get_input_state(&mut self, input: I) -> Receiver<&'context I::InputState>;
 }

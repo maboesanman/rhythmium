@@ -13,10 +13,15 @@ mod test;
 use core::future::Future;
 use core::pin::Pin;
 use core::task::{Context, Waker};
+use std::cell::{RefCell, UnsafeCell};
+use std::marker::PhantomPinned;
+use std::ptr::NonNull;
+use std::rc::Rc;
 
 use archery::{ArcTK, SharedPointer, SharedPointerKind};
 use futures_channel::{mpsc, oneshot};
 use futures_util::{FutureExt, StreamExt};
+use interpolation::new_interpolation;
 pub use interpolation::Interpolation;
 use step_inputs::StepInputs;
 use time::ScheduledTime;
@@ -24,9 +29,9 @@ use wrapped_transposer::WrappedTransposer;
 
 use crate::transposer::Transposer;
 
-enum StepData<T: Transposer, P: SharedPointerKind> {
+enum StepData<T: Transposer, P: SharedPointerKind, Is> {
     Init(T::Time),
-    Input(StepInputs<T, P>),
+    Input(StepInputs<T, P, Is>),
     Scheduled(ScheduledTime<T::Time>),
 }
 
@@ -51,9 +56,12 @@ impl<T: Transposer, P: SharedPointerKind> Default for StepStatus<T, P> {
 }
 
 pub struct Step<T: Transposer, Is: InputState<T>, P: SharedPointerKind = ArcTK> {
-    data: SharedPointer<StepData<T, P>, P>,
-    input_state: SharedPointer<Is, P>,
     status: StepStatus<T, P>,
+    data: SharedPointer<StepData<T, P, Is>, P>,
+    
+    // this is considered the owner of the input state.
+    // we are responsible for dropping it.
+    input_state: NonNull<UnsafeCell<Is>>,
     event_count: usize,
     can_produce_events: bool,
 
@@ -65,21 +73,19 @@ pub struct Step<T: Transposer, Is: InputState<T>, P: SharedPointerKind = ArcTK> 
 
 /// this type holds the lazy state values for all inputs.
 /// all the lazy population logic is left to the instantiator of step.
-pub trait InputState<T: Transposer> {
-    fn new() -> Self;
-    fn get_provider(&self) -> &T::InputStateManager;
+pub trait InputState<T: Transposer>: Default + 'static {
+    fn get_provider(&mut self) -> &mut T::InputStateManager<'static>;
 }
 
-pub struct NoInput;
+#[derive(Default)]
+pub struct NoInput(NoInputManager);
+
+#[derive(Default)]
 pub struct NoInputManager;
 
-impl<T: Transposer<InputStateManager = NoInputManager>> InputState<T> for NoInput {
-    fn new() -> Self {
-        NoInput
-    }
-
-    fn get_provider(&self) -> &<T as Transposer>::InputStateManager {
-        &NoInputManager
+impl<T: Transposer<InputStateManager<'static> = NoInputManager>> InputState<T> for NoInput {
+    fn get_provider(&mut self) -> &mut T::InputStateManager<'static> {
+        &mut self.0
     }
 }
 
@@ -96,26 +102,44 @@ impl<T: Transposer, Is: InputState<T>, P: SharedPointerKind> Drop for Step<T, Is
                 let future: SaturationFuture<'static, T, P> = future;
                 // SAFETY: the future here can only hold things that the step is already generic over and contains.
                 // this means that this lifetime forging to 'static is ok.
-                let future: SaturationFuture<'_, T, P> = unsafe { core::mem::transmute(future) };
-
-                drop(future);
+                let _: SaturationFuture<'_, T, P> = unsafe { core::mem::transmute(future) };
             }
             StepStatus::Saturated {
                 wrapped_transposer: _,
             } => {}
         }
+
+        Self::drop_input_state(self.input_state);
     }
 }
 
 impl<T: Transposer, Is: InputState<T>, P: SharedPointerKind> Step<T, Is, P> {
+    fn new_input_state() -> NonNull<UnsafeCell<Is>> {
+        let input_state = Box::new(UnsafeCell::new(Is::default()));
+        NonNull::from(Box::leak(input_state))
+    }
+
+    fn drop_input_state(ptr: NonNull<UnsafeCell<Is>>) {
+        let _ = unsafe { Box::from_raw(ptr.as_ptr()) };
+    }
+
+    pub fn get_input_state_mut(&mut self) -> &mut Is {
+        let input_state: NonNull<UnsafeCell<Is>> = self.input_state;
+        let input_state: &UnsafeCell<Is> = unsafe { input_state.as_ref() };
+        let input_state: *mut Is = input_state.get();
+        let input_state: &mut Is = unsafe { input_state.as_mut() }.unwrap();
+
+        input_state
+    }
+
     pub fn new_init(transposer: T, start_time: T::Time, rng_seed: [u8; 32]) -> Self {
-        let input_state = SharedPointer::new(Is::new());
+        let input_state = Self::new_input_state();
         let (output_sender, output_reciever) = mpsc::channel(1);
         let future = WrappedTransposer::<T, P>::init::<Is>(
             transposer,
             rng_seed,
             start_time,
-            input_state.clone(),
+            input_state,
             0,
             output_sender,
         );
@@ -145,7 +169,7 @@ impl<T: Transposer, Is: InputState<T>, P: SharedPointerKind> Step<T, Is, P> {
 
     pub fn next_unsaturated(
         &self,
-        next_inputs: &mut Option<StepInputs<T, P>>,
+        next_inputs: &mut Option<StepInputs<T, P, Is>>,
     ) -> Result<Option<Self>, NextUnsaturatedErr> {
         let wrapped_transposer = match &self.status {
             StepStatus::Saturated { wrapped_transposer } => wrapped_transposer,
@@ -169,7 +193,7 @@ impl<T: Transposer, Is: InputState<T>, P: SharedPointerKind> Step<T, Is, P> {
 
         Ok(Some(Self {
             data: SharedPointer::new(data),
-            input_state: SharedPointer::new(Is::new()),
+            input_state: Self::new_input_state(),
             status: StepStatus::Unsaturated,
             event_count: 0,
             can_produce_events: true,
@@ -285,7 +309,9 @@ impl<T: Transposer, Is: InputState<T>, P: SharedPointerKind> Step<T, Is, P> {
 
     pub fn desaturate(&mut self) {
         self.status = StepStatus::Unsaturated;
-        self.input_state = SharedPointer::new(Is::new());
+
+        Self::drop_input_state(self.input_state);
+        self.input_state = Self::new_input_state();
     }
 
     pub fn poll(&mut self, waker: &Waker) -> Result<StepPoll<T>, PollErr> {
@@ -320,7 +346,7 @@ impl<T: Transposer, Is: InputState<T>, P: SharedPointerKind> Step<T, Is, P> {
         Ok(StepPoll::Pending)
     }
 
-    pub fn interpolate(&self, time: T::Time) -> Result<Interpolation<T, Is, P>, InterpolateErr> {
+    pub fn interpolate(&self, time: T::Time) -> Result<impl Interpolation<Is, T::OutputState>, InterpolateErr> {
         let wrapped_transposer = match &self.status {
             StepStatus::Saturated { wrapped_transposer } => wrapped_transposer.clone(),
             _ => return Err(InterpolateErr::NotSaturated),
@@ -331,11 +357,7 @@ impl<T: Transposer, Is: InputState<T>, P: SharedPointerKind> Step<T, Is, P> {
             return Err(InterpolateErr::TimePast);
         }
 
-        Ok(Interpolation::new(time, wrapped_transposer))
-    }
-
-    pub fn get_input_state(&self) -> &Is {
-        &self.input_state
+        Ok(new_interpolation(time, wrapped_transposer))
     }
 
     pub fn get_time(&self) -> T::Time {
