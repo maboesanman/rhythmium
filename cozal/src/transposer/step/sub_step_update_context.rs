@@ -1,9 +1,7 @@
 use core::future::Future;
 use core::pin::Pin;
-use std::borrow::BorrowMut;
-use std::cell::{RefCell, UnsafeCell};
+use std::cell::UnsafeCell;
 use std::ptr::NonNull;
-use std::rc::Rc;
 
 use archery::SharedPointerKind;
 use rand_chacha::rand_core::CryptoRngCore;
@@ -41,11 +39,13 @@ impl<'update, T: Transposer, P: SharedPointerKind, Is: InputState<T>> HandleInpu
     for SubStepUpdateContext<'update, T, P, Is>
 {
 }
-impl<'update, T: Transposer, P: SharedPointerKind, Is: InputState<T>> HandleScheduleContext<'update, T>
-    for SubStepUpdateContext<'update, T, P, Is>
+impl<'update, T: Transposer, P: SharedPointerKind, Is: InputState<T>>
+    HandleScheduleContext<'update, T> for SubStepUpdateContext<'update, T, P, Is>
 {
 }
-impl<'update, T: Transposer, P: SharedPointerKind, Is: InputState<T>> SubStepUpdateContext<'update, T, P, Is> {
+impl<'update, T: Transposer, P: SharedPointerKind, Is: InputState<T>>
+    SubStepUpdateContext<'update, T, P, Is>
+{
     // SAFETY: need to gurantee the metadata pointer outlives this object.
     pub fn new(
         time: SubStepTime<T::Time>,
@@ -63,8 +63,8 @@ impl<'update, T: Transposer, P: SharedPointerKind, Is: InputState<T>> SubStepUpd
     }
 }
 
-impl<'update, T: Transposer, P: SharedPointerKind, Is: InputState<T>> InputStateManagerContext<'update, T>
-    for SubStepUpdateContext<'update, T, P, Is>
+impl<'update, T: Transposer, P: SharedPointerKind, Is: InputState<T>>
+    InputStateManagerContext<'update, T> for SubStepUpdateContext<'update, T, P, Is>
 {
     fn get_input_state_manager(&mut self) -> &mut T::InputStateManager<'update> {
         let input_state: NonNull<UnsafeCell<Is>> = self.shared_step_state;
@@ -73,7 +73,8 @@ impl<'update, T: Transposer, P: SharedPointerKind, Is: InputState<T>> InputState
         let input_state: &mut Is = unsafe { input_state.as_mut() }.unwrap();
 
         let input_state_manager: &mut T::InputStateManager<'static> = input_state.get_provider();
-        let input_state_manager: &mut T::InputStateManager<'update> = unsafe { core::mem::transmute(input_state_manager) };
+        let input_state_manager: &mut T::InputStateManager<'update> =
+            unsafe { core::mem::transmute(input_state_manager) };
 
         input_state_manager
     }

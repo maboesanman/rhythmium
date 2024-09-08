@@ -1,8 +1,17 @@
-use std::{any::Any, cell::UnsafeCell, future::Future, pin::Pin, ptr::NonNull, task::{Context, Poll, Waker}};
+use std::{
+    cell::UnsafeCell,
+    future::Future,
+    pin::Pin,
+    ptr::NonNull,
+    task::{Context, Poll, Waker},
+};
 
 use archery::{SharedPointer, SharedPointerKind};
 
-use crate::transposer::{step::{wrapped_transposer::WrappedTransposer, InputState}, Transposer};
+use crate::transposer::{
+    step::{wrapped_transposer::WrappedTransposer, InputState},
+    Transposer,
+};
 
 use super::{PollErr, StartSaturateErr, SubStep};
 
@@ -25,11 +34,17 @@ enum InitSubStepStatus<T: Transposer, P: SharedPointerKind, Fut> {
         future: Fut,
     },
     Saturated {
-        wrapped_transposer: SharedPointer<WrappedTransposer<T, P>, P>
+        wrapped_transposer: SharedPointer<WrappedTransposer<T, P>, P>,
     },
 }
 
-impl<T: Transposer, P: SharedPointerKind, S: InputState<T>, Fut: Future<Output = SharedPointer<WrappedTransposer<T, P>, P>>> SubStep<T, P, S> for InitSubStepStatus<T, P, Fut> {
+impl<
+        T: Transposer,
+        P: SharedPointerKind,
+        S: InputState<T>,
+        Fut: Future<Output = SharedPointer<WrappedTransposer<T, P>, P>>,
+    > SubStep<T, P, S> for InitSubStepStatus<T, P, Fut>
+{
     fn is_init(&self) -> bool {
         true
     }
@@ -50,7 +65,9 @@ impl<T: Transposer, P: SharedPointerKind, S: InputState<T>, Fut: Future<Output =
         match self {
             InitSubStepStatus::Unsaturated { start_time } => *start_time,
             InitSubStepStatus::Saturating { start_time, .. } => *start_time,
-            InitSubStepStatus::Saturated { wrapped_transposer } => wrapped_transposer.metadata.last_updated.time,
+            InitSubStepStatus::Saturated { wrapped_transposer } => {
+                wrapped_transposer.metadata.last_updated.time
+            }
         }
     }
 
@@ -60,7 +77,7 @@ impl<T: Transposer, P: SharedPointerKind, S: InputState<T>, Fut: Future<Output =
             false => std::cmp::Ordering::Less,
         }
     }
-    
+
     fn start_saturate(
         self: Pin<&mut Self>,
         wrapped_transposer: SharedPointer<WrappedTransposer<T, P>, P>,
@@ -76,7 +93,7 @@ impl<T: Transposer, P: SharedPointerKind, S: InputState<T>, Fut: Future<Output =
             _ => Err(StartSaturateErr::NotUnsaturated),
         }
     }
-    
+
     fn poll(self: Pin<&mut Self>, waker: &Waker) -> Result<Poll<()>, super::PollErr> {
         let this = unsafe { self.get_unchecked_mut() };
 
@@ -89,7 +106,7 @@ impl<T: Transposer, P: SharedPointerKind, S: InputState<T>, Fut: Future<Output =
                     Poll::Ready(wrapped_transposer) => wrapped_transposer,
                     Poll::Pending => return Ok(Poll::Pending),
                 }
-            },
+            }
             InitSubStepStatus::Saturated { .. } => return Err(PollErr::NotSaturating),
         };
 
@@ -97,15 +114,17 @@ impl<T: Transposer, P: SharedPointerKind, S: InputState<T>, Fut: Future<Output =
 
         Ok(Poll::Ready(()))
     }
-    
+
     fn get_finished_transposer(&self) -> Option<&SharedPointer<WrappedTransposer<T, P>, P>> {
         match self {
             InitSubStepStatus::Saturated { wrapped_transposer } => Some(wrapped_transposer),
             _ => None,
         }
     }
-    
-    fn take_finished_transposer(self: Pin<&mut Self>) -> Option<SharedPointer<WrappedTransposer<T, P>, P>> {
+
+    fn take_finished_transposer(
+        self: Pin<&mut Self>,
+    ) -> Option<SharedPointer<WrappedTransposer<T, P>, P>> {
         let this = unsafe { self.get_unchecked_mut() };
 
         let start_time = <Self as SubStep<T, P, S>>::get_time(this);
@@ -126,12 +145,6 @@ fn new_init_sub_step_internal<T: Transposer, P: SharedPointerKind, S: InputState
 ) -> InitSubStepStatus<T, P, impl Future<Output = SharedPointer<WrappedTransposer<T, P>, P>>> {
     InitSubStepStatus::Saturating {
         start_time,
-        future: WrappedTransposer::init(
-            transposer,
-            rng_seed,
-            start_time,
-            shared_step_state,
-            0,
-        ),
+        future: WrappedTransposer::init(transposer, rng_seed, start_time, shared_step_state, 0),
     }
 }

@@ -19,7 +19,9 @@ pub struct StepInterpolateContext<'update, T: Transposer, P: SharedPointerKind, 
     input_state: NonNull<UnsafeCell<Is>>,
 }
 
-impl<'update, T: Transposer, P: SharedPointerKind, Is: InputState<T>> StepInterpolateContext<'update, T, P, Is> {
+impl<'update, T: Transposer, P: SharedPointerKind, Is: InputState<T>>
+    StepInterpolateContext<'update, T, P, Is>
+{
     pub fn new(
         interpolation_time: T::Time,
         metadata: &'update TransposerMetaData<T, P>,
@@ -38,8 +40,8 @@ impl<'update, T: Transposer, P: SharedPointerKind, Is: InputState<T>> Interpolat
 {
 }
 
-impl<'update, T: Transposer, P: SharedPointerKind, Is: InputState<T>> InputStateManagerContext<'update, T>
-    for StepInterpolateContext<'update, T, P, Is>
+impl<'update, T: Transposer, P: SharedPointerKind, Is: InputState<T>>
+    InputStateManagerContext<'update, T> for StepInterpolateContext<'update, T, P, Is>
 {
     fn get_input_state_manager(&mut self) -> &mut T::InputStateManager<'update> {
         let input_state: NonNull<UnsafeCell<Is>> = self.input_state;
@@ -48,7 +50,8 @@ impl<'update, T: Transposer, P: SharedPointerKind, Is: InputState<T>> InputState
         let input_state: &mut Is = unsafe { input_state.as_mut() }.unwrap();
 
         let input_state_manager: &mut T::InputStateManager<'static> = input_state.get_provider();
-        let input_state_manager: &mut T::InputStateManager<'update> = unsafe { core::mem::transmute(input_state_manager) };
+        let input_state_manager: &mut T::InputStateManager<'update> =
+            unsafe { core::mem::transmute(input_state_manager) };
 
         input_state_manager
     }

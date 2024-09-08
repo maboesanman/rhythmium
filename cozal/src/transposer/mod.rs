@@ -1,4 +1,3 @@
-use std::{future::Future, ptr::NonNull};
 use std::hash::Hash;
 
 use context::{HandleInputContext, HandleScheduleContext, InitContext, InterpolateContext};
@@ -88,7 +87,7 @@ pub trait Transposer {
 }
 
 /// This represents an input that your transposer expects to be present.
-/// This can be a zero-sized type, or a type that contains data. 
+/// This can be a zero-sized type, or a type that contains data.
 pub trait TransposerInput: 'static + Sized + Hash + Eq + Copy + Ord {
     type Base: TransposerInputEventHandler<Self>;
     type InputEvent: Ord;
@@ -104,12 +103,7 @@ pub trait TransposerInput: 'static + Sized + Hash + Eq + Copy + Ord {
 }
 
 pub trait TransposerInputEventHandler<I: TransposerInput<Base = Self>>: Transposer {
-
-    async fn register_inputs(
-        &mut self,
-        cx: &mut dyn InitContext<'_, Self>,
-        inputs: &[I],
-    );
+    async fn register_inputs(&mut self, cx: &mut dyn InitContext<'_, Self>, inputs: &[I]);
 
     /// The function to respond to input.
     ///

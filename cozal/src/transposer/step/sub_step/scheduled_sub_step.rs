@@ -1,8 +1,18 @@
-use std::{any::{Any, TypeId}, cell::UnsafeCell, future::Future, marker::PhantomData, pin::Pin, ptr::NonNull, task::{Context, Poll, Waker}};
+use std::{
+    cell::UnsafeCell,
+    future::Future,
+    marker::PhantomData,
+    pin::Pin,
+    ptr::NonNull,
+    task::{Context, Poll, Waker},
+};
 
 use archery::{SharedPointer, SharedPointerKind};
 
-use crate::transposer::{step::{time::ScheduledTime, wrapped_transposer::WrappedTransposer, InputState}, Transposer};
+use crate::transposer::{
+    step::{wrapped_transposer::WrappedTransposer, InputState},
+    Transposer,
+};
 
 use super::{PollErr, StartSaturateErr, SubStep};
 
@@ -28,7 +38,7 @@ enum ScheduledSubStepStatus<T: Transposer, P: SharedPointerKind, S, Fut> {
 }
 
 impl<T, P, S, Fut> SubStep<T, P, S> for ScheduledSubStepStatus<T, P, S, Fut>
-where 
+where
     T: Transposer + Clone,
     P: SharedPointerKind,
     S: InputState<T>,
@@ -53,7 +63,9 @@ where
         match self {
             ScheduledSubStepStatus::Unsaturated { time, .. } => *time,
             ScheduledSubStepStatus::Saturating { time, .. } => *time,
-            ScheduledSubStepStatus::Saturated { wrapped_transposer, .. } => wrapped_transposer.metadata.last_updated.time,
+            ScheduledSubStepStatus::Saturated {
+                wrapped_transposer, ..
+            } => wrapped_transposer.metadata.last_updated.time,
         }
     }
 
@@ -63,7 +75,7 @@ where
             false => std::cmp::Ordering::Greater,
         }
     }
-    
+
     fn start_saturate(
         self: Pin<&mut Self>,
         transposer: SharedPointer<WrappedTransposer<T, P>, P>,
@@ -81,7 +93,12 @@ where
             return Err(StartSaturateErr::SubStepTimeIsPast);
         }
 
-        let future = shared_pointer_update::<T, P, S>(transposer, time, shared_step_state, outputs_to_swallow);
+        let future = shared_pointer_update::<T, P, S>(
+            transposer,
+            time,
+            shared_step_state,
+            outputs_to_swallow,
+        );
 
         // debug_assert_eq!(TypeId::of::<Fut>(), future.type_id());
 
@@ -97,7 +114,7 @@ where
 
         Ok(())
     }
-    
+
     fn poll(self: Pin<&mut Self>, waker: &Waker) -> Result<Poll<()>, super::PollErr> {
         let this = unsafe { self.get_unchecked_mut() };
 
@@ -110,7 +127,7 @@ where
                     Poll::Ready(wrapped_transposer) => wrapped_transposer,
                     Poll::Pending => return Ok(Poll::Pending),
                 }
-            },
+            }
             ScheduledSubStepStatus::Saturated { .. } => return Err(PollErr::NotSaturating),
         };
 
@@ -118,20 +135,28 @@ where
 
         Ok(Poll::Ready(()))
     }
-    
+
     fn get_finished_transposer(&self) -> Option<&SharedPointer<WrappedTransposer<T, P>, P>> {
         match self {
             ScheduledSubStepStatus::Saturated { wrapped_transposer } => Some(wrapped_transposer),
             _ => None,
         }
     }
-    
-    fn take_finished_transposer(self: Pin<&mut Self>) -> Option<SharedPointer<WrappedTransposer<T, P>, P>> {
+
+    fn take_finished_transposer(
+        self: Pin<&mut Self>,
+    ) -> Option<SharedPointer<WrappedTransposer<T, P>, P>> {
         let this = unsafe { self.get_unchecked_mut() };
 
         let time = <Self as SubStep<T, P, S>>::get_time(this);
 
-        match core::mem::replace(this, ScheduledSubStepStatus::Unsaturated { time, phantom: PhantomData }) {
+        match core::mem::replace(
+            this,
+            ScheduledSubStepStatus::Unsaturated {
+                time,
+                phantom: PhantomData,
+            },
+        ) {
             ScheduledSubStepStatus::Unsaturated { .. } => None,
             ScheduledSubStepStatus::Saturating { .. } => None,
             ScheduledSubStepStatus::Saturated { wrapped_transposer } => Some(wrapped_transposer),
@@ -146,14 +171,20 @@ async fn shared_pointer_update<T: Transposer + Clone, P: SharedPointerKind, S: I
     outputs_to_swallow: usize,
 ) -> SharedPointer<WrappedTransposer<T, P>, P> {
     let transposer_mut = SharedPointer::make_mut(&mut wrapped_transposer);
-    transposer_mut.handle_scheduled(time, shared_step_state, outputs_to_swallow).await;
+    transposer_mut
+        .handle_scheduled(time, shared_step_state, outputs_to_swallow)
+        .await;
     wrapped_transposer
 }
 
-fn new_scheduled_sub_step_internal<T: Transposer + Clone, P: SharedPointerKind, S: InputState<T>>(
+fn new_scheduled_sub_step_internal<
+    T: Transposer + Clone,
+    P: SharedPointerKind,
+    S: InputState<T>,
+>(
     time: T::Time,
-) -> ScheduledSubStepStatus<T, P, S, impl Future<Output = SharedPointer<WrappedTransposer<T, P>, P>>> {
-
+) -> ScheduledSubStepStatus<T, P, S, impl Future<Output = SharedPointer<WrappedTransposer<T, P>, P>>>
+{
     // This is a trick to get the compiler to understand the type of the future.
     #[allow(unreachable_code)]
     if false {
@@ -164,12 +195,12 @@ fn new_scheduled_sub_step_internal<T: Transposer + Clone, P: SharedPointerKind, 
                 unreachable!(),
                 unreachable!(),
                 unreachable!(),
-            )
-        }
+            ),
+        };
     }
 
     ScheduledSubStepStatus::Unsaturated {
         time,
-        phantom: PhantomData
+        phantom: PhantomData,
     }
 }

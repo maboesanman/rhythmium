@@ -1,6 +1,5 @@
 use core::future::Future;
 use core::pin::Pin;
-use std::ptr::NonNull;
 
 use rand_chacha::rand_core::CryptoRngCore;
 
@@ -78,16 +77,21 @@ pub trait InputStateContext<'a, T: Transposer>: InputStateManagerContext<'a, T> 
     ///
     /// once the resulting future is awaited, the system will retrieve the input state for the given time from the input soure.
     #[must_use]
-    async fn get_input_state<I: TransposerInput<Base = T>>(&mut self, input: I) -> &'a I::InputState
+    async fn get_input_state<I: TransposerInput<Base = T>>(
+        &mut self,
+        input: I,
+    ) -> &'a I::InputState
     where
         T::InputStateManager<'a>: StateRetriever<'a, I>;
 }
 
-impl<'a, T: Transposer, C: InputStateManagerContext<'a, T> + ?Sized> InputStateContext<'a, T> for C {
+impl<'a, T: Transposer, C: InputStateManagerContext<'a, T> + ?Sized> InputStateContext<'a, T>
+    for C
+{
     #[must_use]
     async fn get_input_state<I: TransposerInput<Base = T>>(&mut self, input: I) -> &'a I::InputState
     where
-        T::InputStateManager<'a>: StateRetriever<'a, I>
+        T::InputStateManager<'a>: StateRetriever<'a, I>,
     {
         let manager = self.get_input_state_manager();
         let fut = manager.get_input_state(input);

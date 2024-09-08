@@ -63,7 +63,7 @@ impl<T: Transposer, P: SharedPointerKind, Is: InputState<T>> StepInputsEntry<T, 
         }
 
         // SAFETY: this matches the type because I has a TypeId that matches the one that created it.
-        let mut set = unsafe { self.values.get_mut() };
+        let set = unsafe { self.values.get_mut() };
 
         // let i =
         //     set.partition_point(|existing| T::sort_input_events(time, &input, existing).is_lt());

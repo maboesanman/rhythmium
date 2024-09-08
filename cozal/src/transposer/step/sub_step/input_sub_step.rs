@@ -1,8 +1,20 @@
-use std::{any::TypeId, cell::UnsafeCell, cmp::Ordering, future::Future, marker::{PhantomData, PhantomPinned}, pin::Pin, ptr::{self, NonNull}, task::{Context, Poll, Waker}};
+use std::{
+    any::TypeId,
+    cell::UnsafeCell,
+    cmp::Ordering,
+    future::Future,
+    marker::{PhantomData, PhantomPinned},
+    pin::Pin,
+    ptr::NonNull,
+    task::{Context, Poll, Waker},
+};
 
 use archery::{SharedPointer, SharedPointerKind};
 
-use crate::transposer::{step::{wrapped_transposer::WrappedTransposer, InputState}, Transposer, TransposerInput, TransposerInputEventHandler};
+use crate::transposer::{
+    step::{wrapped_transposer::WrappedTransposer, InputState},
+    Transposer, TransposerInput, TransposerInputEventHandler,
+};
 
 use super::{PollErr, StartSaturateErr, SubStep};
 
@@ -29,14 +41,14 @@ struct InputSubStepData<T: Transposer, I: TransposerInput<Base = T>> {
 enum InputSubStepStatus<T: Transposer, P: SharedPointerKind, S, Fut> {
     Unsaturated {
         time: T::Time,
-        phantom: PhantomData<fn(S)>
+        phantom: PhantomData<fn(S)>,
     },
     Saturating {
         time: T::Time,
         future: Fut,
     },
     Saturated {
-        wrapped_transposer: SharedPointer<WrappedTransposer<T, P>, P>
+        wrapped_transposer: SharedPointer<WrappedTransposer<T, P>, P>,
     },
 }
 
@@ -78,7 +90,9 @@ where
         match &self.status {
             InputSubStepStatus::Unsaturated { time, .. } => *time,
             InputSubStepStatus::Saturating { time, .. } => *time,
-            InputSubStepStatus::Saturated { wrapped_transposer } => wrapped_transposer.metadata.last_updated.time,
+            InputSubStepStatus::Saturated { wrapped_transposer } => {
+                wrapped_transposer.metadata.last_updated.time
+            }
         }
     }
 
@@ -112,7 +126,7 @@ where
 
         self.data.input_event.cmp(&other.data.input_event)
     }
-    
+
     fn start_saturate(
         self: Pin<&mut Self>,
         transposer: SharedPointer<WrappedTransposer<T, P>, P>,
@@ -134,12 +148,12 @@ where
         let input_event = NonNull::from(&this.data.input_event);
 
         let future = shared_pointer_update::<T, P, I, S>(
-            transposer, 
+            transposer,
             time,
             input,
             input_event,
-            shared_step_state, 
-            outputs_to_swallow
+            shared_step_state,
+            outputs_to_swallow,
         );
 
         // // debug_assert_eq!(TypeId::of::<Fut>(), future.type_id());
@@ -156,7 +170,7 @@ where
 
         Ok(())
     }
-    
+
     fn poll(self: Pin<&mut Self>, waker: &Waker) -> Result<Poll<()>, super::PollErr> {
         let this = unsafe { self.get_unchecked_mut() };
 
@@ -169,7 +183,7 @@ where
                     Poll::Ready(wrapped_transposer) => wrapped_transposer,
                     Poll::Pending => return Ok(Poll::Pending),
                 }
-            },
+            }
             InputSubStepStatus::Saturated { .. } => return Err(PollErr::NotSaturating),
         };
 
@@ -177,20 +191,30 @@ where
 
         Ok(Poll::Ready(()))
     }
-    
+
     fn get_finished_transposer(&self) -> Option<&SharedPointer<WrappedTransposer<T, P>, P>> {
         match self.status {
-            InputSubStepStatus::Saturated { ref wrapped_transposer } => Some(wrapped_transposer),
+            InputSubStepStatus::Saturated {
+                ref wrapped_transposer,
+            } => Some(wrapped_transposer),
             _ => None,
         }
     }
-    
-    fn take_finished_transposer(self: std::pin::Pin<&mut Self>) -> Option<SharedPointer<WrappedTransposer<T, P>, P>> {
+
+    fn take_finished_transposer(
+        self: std::pin::Pin<&mut Self>,
+    ) -> Option<SharedPointer<WrappedTransposer<T, P>, P>> {
         let this = unsafe { self.get_unchecked_mut() };
 
         let time = <Self as SubStep<T, P, S>>::get_time(this);
 
-        match core::mem::replace(&mut this.status, InputSubStepStatus::Unsaturated { time, phantom: PhantomData }) {
+        match core::mem::replace(
+            &mut this.status,
+            InputSubStepStatus::Unsaturated {
+                time,
+                phantom: PhantomData,
+            },
+        ) {
             InputSubStepStatus::Unsaturated { .. } => None,
             InputSubStepStatus::Saturating { .. } => None,
             InputSubStepStatus::Saturated { wrapped_transposer } => Some(wrapped_transposer),
@@ -215,7 +239,15 @@ where
     let transposer_mut = SharedPointer::make_mut(&mut wrapped_transposer);
     let input = unsafe { input.as_ref() };
     let input_event = unsafe { input_event.as_ref() };
-    transposer_mut.handle_input(time, input, input_event, shared_step_state, outputs_to_swallow).await;
+    transposer_mut
+        .handle_input(
+            time,
+            input,
+            input_event,
+            shared_step_state,
+            outputs_to_swallow,
+        )
+        .await;
     wrapped_transposer
 }
 
@@ -243,15 +275,18 @@ where
                     unreachable!(),
                     unreachable!(),
                     unreachable!(),
-                )
+                ),
             },
             data: unreachable!(),
             _pinned: unreachable!(),
-        }
+        };
     }
 
     InputSubStep {
-        status: InputSubStepStatus::Unsaturated { time, phantom: PhantomData },
+        status: InputSubStepStatus::Unsaturated {
+            time,
+            phantom: PhantomData,
+        },
         data: InputSubStepData { input, input_event },
         _pinned: PhantomPinned,
     }
