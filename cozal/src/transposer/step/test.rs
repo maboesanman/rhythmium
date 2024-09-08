@@ -29,7 +29,7 @@ impl Transposer for TestTransposer {
         cx.schedule_event(1, ()).unwrap();
     }
 
-    async fn handle_scheduled(
+    async fn handle_scheduled_event(
         &mut self,
         _payload: Self::Scheduled,
         cx: &mut dyn HandleScheduleContext<'_, Self>,

@@ -43,7 +43,7 @@ impl<T: Transposer, P: SharedPointerKind, Is: InputState<T>> StepInputsEntry<T, 
                 let set = unsafe { set.get::<I::InputEvent>() };
                 Box::pin(async move {
                     for i in set.iter() {
-                        T::handle_input(t, i, cx).await;
+                        T::handle_input_event(t, i, cx).await;
                         cx.metadata.last_updated.time = time;
                         cx.metadata.last_updated.index += 1;
                     }
@@ -63,8 +63,9 @@ impl<T: Transposer, P: SharedPointerKind, Is: InputState<T>> StepInputsEntry<T, 
         // SAFETY: this matches the type because I has a TypeId that matches the one that created it.
         let mut set = unsafe { self.values.get_mut() };
 
-        let i =
-            set.partition_point(|existing| T::sort_input_events(time, &input, existing).is_lt());
+        // let i =
+        //     set.partition_point(|existing| T::sort_input_events(time, &input, existing).is_lt());
+        let i = todo!();
 
         set.insert(i, input);
     }

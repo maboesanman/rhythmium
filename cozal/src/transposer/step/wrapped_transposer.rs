@@ -18,7 +18,8 @@ pub struct WrappedTransposer<T: Transposer, P: SharedPointerKind> {
     pub metadata: TransposerMetaData<T, P>,
 }
 
-impl<T: Transposer, P: SharedPointerKind> Clone for WrappedTransposer<T, P> {
+impl<T: Transposer, P: SharedPointerKind> Clone for WrappedTransposer<T, P>
+where T: Clone {
     fn clone(&self) -> Self {
         Self {
             transposer: self.transposer.clone(),
@@ -139,7 +140,7 @@ impl<T: Transposer, P: SharedPointerKind> WrappedTransposer<T, P> {
 
         while context.metadata.get_next_scheduled_time().map(|s| s.time) == Some(time.time) {
             let (_, e) = context.metadata.pop_first_event().unwrap();
-            self.transposer.handle_scheduled(e, &mut context).await;
+            self.transposer.handle_scheduled_event(e, &mut context).await;
             context.metadata.last_updated = time;
             time.index += 1;
         }

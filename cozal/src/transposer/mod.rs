@@ -22,7 +22,7 @@ pub mod step;
 ///
 /// The name comes from the idea that we are converting a stream of events into another stream of events,
 /// perhaps in the way a stream of music notes can be *transposed* into another stream of music notes.
-pub trait Transposer: Clone {
+pub trait Transposer {
     /// The type used as the 'time' for events. This must be Ord and Copy because it is frequently used for comparisons,
     /// and it must be [`Default`] because the default value is used for the timestamp of events emitted.
     /// by the init function.
@@ -58,7 +58,9 @@ pub trait Transposer: Clone {
     ///
     /// `cx` is a context object for performing additional operations.
     /// For more information on `cx` see the [`InitContext`] documentation.
-    async fn init(&mut self, _cx: &mut dyn InitContext<'_, Self>) {}
+    async fn init(&mut self, cx: &mut dyn InitContext<'_, Self>) {
+        let _ = cx;
+    }
 
     /// The function to respond to internally scheduled events.
     ///
@@ -66,11 +68,13 @@ pub trait Transposer: Clone {
     ///
     /// `cx` is a context object for performing additional operations like scheduling events.
     /// For more information on `cx` see the [`UpdateContext`] documentation.
-    async fn handle_scheduled(
+    async fn handle_scheduled_event(
         &mut self,
-        _payload: Self::Scheduled,
-        _cx: &mut dyn HandleScheduleContext<'_, Self>,
+        payload: Self::Scheduled,
+        cx: &mut dyn HandleScheduleContext<'_, Self>,
     ) {
+        let _ = payload;
+        let _ = cx;
     }
 
     /// The function to interpolate between states
@@ -84,10 +88,15 @@ pub trait Transposer: Clone {
     async fn interpolate(&self, cx: &mut dyn InterpolateContext<'_, Self>) -> Self::OutputState;
 }
 
-pub trait TransposerInput: 'static + Sized + Hash + Eq + Copy {
+/// This represents an input that your transposer expects to be present.
+/// This can be a zero-sized type, or a type that contains data. 
+pub trait TransposerInput: 'static + Sized + Hash + Eq + Copy + Ord {
     type Base: TransposerInputEventHandler<Self>;
-    type InputEvent;
+    type InputEvent: Ord;
     type InputState;
+
+    /// This function is called to determine if all the required inputs are present.
+    fn satisfied(inputs: &[Self]) -> bool;
 
     /// This MUST be unique for each input that shares a base.
     ///
@@ -96,6 +105,13 @@ pub trait TransposerInput: 'static + Sized + Hash + Eq + Copy {
 }
 
 pub trait TransposerInputEventHandler<I: TransposerInput<Base = Self>>: Transposer {
+
+    async fn register_inputs(
+        &mut self,
+        cx: &mut dyn InitContext<'_, Self>,
+        inputs: &[I],
+    );
+
     /// The function to respond to input.
     ///
     /// `inputs` is the collection of payloads of input events that occurred at time `time`.
@@ -105,11 +121,13 @@ pub trait TransposerInputEventHandler<I: TransposerInput<Base = Self>>: Transpos
     ///
     /// `cx` is a context object for performing additional operations like scheduling events.
     /// For more information on `cx` see the [`UpdateContext`] documentation.
-    async fn handle_input(
+    async fn handle_input_event(
         &mut self,
-        _events: &I::InputEvent,
-        _cx: &mut dyn HandleInputContext<'_, Self>,
+        event: &I::InputEvent,
+        cx: &mut dyn HandleInputContext<'_, Self>,
     ) {
+        let _ = event;
+        let _ = cx;
     }
 
     /// Filter out events you know you can't do anything with.
@@ -117,18 +135,10 @@ pub trait TransposerInputEventHandler<I: TransposerInput<Base = Self>>: Transpos
     ///
     /// Note that this has access to very little information. This is meant to be an
     /// optimization, which is why the default implementation is to simply always return `true`
-    fn can_handle(_time: Self::Time, _event: &I::InputEvent) -> bool {
+    fn can_handle(time: Self::Time, event: &I::InputEvent) -> bool {
+        let _ = time;
+        let _ = event;
         true
-    }
-
-    /// Sort the inputs so their order can be deterministic.
-    /// this is only used if they are both the same time.
-    fn sort_input_events(
-        _time: Self::Time,
-        _this: &I::InputEvent,
-        _other: &I::InputEvent,
-    ) -> std::cmp::Ordering {
-        std::cmp::Ordering::Equal
     }
 }
 

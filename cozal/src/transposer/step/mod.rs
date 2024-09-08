@@ -6,6 +6,7 @@ mod sub_step_update_context;
 mod time;
 mod transposer_metadata;
 mod wrapped_transposer;
+mod sub_step;
 
 #[cfg(test)]
 mod test;
@@ -209,7 +210,9 @@ impl<T: Transposer, Is: InputState<T>, P: SharedPointerKind> Step<T, Is, P> {
         self.next_unsaturated(&mut None)
     }
 
-    pub fn saturate_take(&mut self, prev: &mut Self) -> Result<(), SaturateTakeErr> {
+    pub fn saturate_take(&mut self, prev: &mut Self) -> Result<(), SaturateTakeErr>
+    where T: Clone 
+    {
         #[cfg(debug_assertions)]
         if self.uuid_prev != Some(prev.uuid_self) {
             return Err(SaturateTakeErr::IncorrectPrevious);
@@ -260,7 +263,8 @@ impl<T: Transposer, Is: InputState<T>, P: SharedPointerKind> Step<T, Is, P> {
         }
     }
 
-    fn saturate(&mut self, mut wrapped_transposer: SharedPointer<WrappedTransposer<T, P>, P>) {
+    fn saturate(&mut self, mut wrapped_transposer: SharedPointer<WrappedTransposer<T, P>, P>)
+    where T: Clone{
         let (output_sender, output_reciever) = mpsc::channel(1);
 
         self.status = StepStatus::Saturating {
