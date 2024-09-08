@@ -35,21 +35,23 @@ impl<T: Transposer, P: SharedPointerKind, Is: InputState<T>> StepInputsEntry<T, 
     where
         T: TransposerInputEventHandler<I>,
     {
-        Self {
-            values: TypeErasedVec::new::<I::InputEvent>(),
-            input_type_id: TypeId::of::<I>(),
-            handler: |time, t, cx, set| {
-                // SAFETY: this came from the assignment to values, which erased the I::InputEvent type
-                let set = unsafe { set.get::<I::InputEvent>() };
-                Box::pin(async move {
-                    for i in set.iter() {
-                        T::handle_input_event(t, i, cx).await;
-                        cx.metadata.last_updated.time = time;
-                        cx.metadata.last_updated.index += 1;
-                    }
-                })
-            },
-        }
+        // Self {
+        //     values: TypeErasedVec::new::<I::InputEvent>(),
+        //     input_type_id: TypeId::of::<I>(),
+        //     handler: |time, t, cx, set| {
+        //         // SAFETY: this came from the assignment to values, which erased the I::InputEvent type
+        //         let set = unsafe { set.get::<I::InputEvent>() };
+        //         Box::pin(async move {
+        //             for i in set.iter() {
+        //                 T::handle_input_event(t, i, cx).await;
+        //                 cx.metadata.last_updated.time = time;
+        //                 cx.metadata.last_updated.index += 1;
+        //             }
+        //         })
+        //     },
+        // }
+
+        todo!()
     }
 
     fn add_input<I: TransposerInput<Base = T>>(&mut self, time: T::Time, input: I::InputEvent)

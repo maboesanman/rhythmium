@@ -73,8 +73,7 @@ pub trait Transposer {
         payload: Self::Scheduled,
         cx: &mut dyn HandleScheduleContext<'_, Self>,
     ) {
-        let _ = payload;
-        let _ = cx;
+        let _ = (payload, cx);
     }
 
     /// The function to interpolate between states
@@ -123,11 +122,11 @@ pub trait TransposerInputEventHandler<I: TransposerInput<Base = Self>>: Transpos
     /// For more information on `cx` see the [`UpdateContext`] documentation.
     async fn handle_input_event(
         &mut self,
+        input: &I,
         event: &I::InputEvent,
         cx: &mut dyn HandleInputContext<'_, Self>,
     ) {
-        let _ = event;
-        let _ = cx;
+        let _ = (input, event, cx);
     }
 
     /// Filter out events you know you can't do anything with.
@@ -136,8 +135,7 @@ pub trait TransposerInputEventHandler<I: TransposerInput<Base = Self>>: Transpos
     /// Note that this has access to very little information. This is meant to be an
     /// optimization, which is why the default implementation is to simply always return `true`
     fn can_handle(time: Self::Time, event: &I::InputEvent) -> bool {
-        let _ = time;
-        let _ = event;
+        let _ = (time, event);
         true
     }
 }

@@ -142,7 +142,6 @@ impl<T: Transposer, Is: InputState<T>, P: SharedPointerKind> Step<T, Is, P> {
             start_time,
             input_state,
             0,
-            output_sender,
         );
         let future: SaturationFuture<'_, T, P> = Box::pin(future);
         // SAFETY: the future here can only hold things that the step is already generic over and contains.
@@ -265,50 +264,51 @@ impl<T: Transposer, Is: InputState<T>, P: SharedPointerKind> Step<T, Is, P> {
 
     fn saturate(&mut self, mut wrapped_transposer: SharedPointer<WrappedTransposer<T, P>, P>)
     where T: Clone{
-        let (output_sender, output_reciever) = mpsc::channel(1);
+        todo!()
+        // let (output_sender, output_reciever) = mpsc::channel(1);
 
-        self.status = StepStatus::Saturating {
-            future: match self.data.as_ref() {
-                StepData::Init(_) => panic!(),
-                StepData::Input(_) => {
-                    let input_state = self.input_state.clone();
-                    let event_count = self.event_count;
-                    let step_data = self.data.clone();
-                    let future: SaturationFuture<'_, T, P> = Box::pin(async move {
-                        let i = match step_data.as_ref() {
-                            StepData::Input(i) => i,
-                            _ => unreachable!(),
-                        };
-                        SharedPointer::make_mut(&mut wrapped_transposer)
-                            .handle_input(i, input_state, event_count, output_sender)
-                            .await;
-                        wrapped_transposer
-                    });
-                    // SAFETY: the future here can only hold things that the step is already generic over and contains.
-                    // this means that this lifetime forging to 'static is ok.
-                    let future: SaturationFuture<'static, T, P> =
-                        unsafe { core::mem::transmute(future) };
-                    future
-                }
-                StepData::Scheduled(t) => {
-                    let t = t.time;
-                    let event_count = self.event_count;
-                    let input_state = self.input_state.clone();
-                    let future: SaturationFuture<'_, T, P> = Box::pin(async move {
-                        SharedPointer::make_mut(&mut wrapped_transposer)
-                            .handle_scheduled(t, input_state, event_count, output_sender)
-                            .await;
-                        wrapped_transposer
-                    });
-                    // SAFETY: the future here can only hold things that the step is already generic over and contains.
-                    // this means that this lifetime forging to 'static is ok.
-                    let future: SaturationFuture<'static, T, P> =
-                        unsafe { core::mem::transmute(future) };
-                    future
-                }
-            },
-            output_reciever,
-        };
+        // self.status = StepStatus::Saturating {
+        //     future: match self.data.as_ref() {
+        //         StepData::Init(_) => panic!(),
+        //         StepData::Input(_) => {
+        //             let input_state = self.input_state.clone();
+        //             let event_count = self.event_count;
+        //             let step_data = self.data.clone();
+        //             let future: SaturationFuture<'_, T, P> = Box::pin(async move {
+        //                 let i = match step_data.as_ref() {
+        //                     StepData::Input(i) => i,
+        //                     _ => unreachable!(),
+        //                 };
+        //                 SharedPointer::make_mut(&mut wrapped_transposer)
+        //                     .handle_input(i, input_state, event_count)
+        //                     .await;
+        //                 wrapped_transposer
+        //             });
+        //             // SAFETY: the future here can only hold things that the step is already generic over and contains.
+        //             // this means that this lifetime forging to 'static is ok.
+        //             let future: SaturationFuture<'static, T, P> =
+        //                 unsafe { core::mem::transmute(future) };
+        //             future
+        //         }
+        //         StepData::Scheduled(t) => {
+        //             let t = t.time;
+        //             let event_count = self.event_count;
+        //             let input_state = self.input_state.clone();
+        //             let future: SaturationFuture<'_, T, P> = Box::pin(async move {
+        //                 SharedPointer::make_mut(&mut wrapped_transposer)
+        //                     .handle_scheduled(t, input_state, event_count)
+        //                     .await;
+        //                 wrapped_transposer
+        //             });
+        //             // SAFETY: the future here can only hold things that the step is already generic over and contains.
+        //             // this means that this lifetime forging to 'static is ok.
+        //             let future: SaturationFuture<'static, T, P> =
+        //                 unsafe { core::mem::transmute(future) };
+        //             future
+        //         }
+        //     },
+        //     output_reciever,
+        // };
     }
 
     pub fn desaturate(&mut self) {

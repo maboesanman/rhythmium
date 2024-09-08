@@ -28,13 +28,9 @@ pub struct SubStepUpdateContext<'update, T: Transposer, P: SharedPointerKind, Is
     pub outputs_to_swallow: usize,
     current_emission_index: usize,
 
-    // values to output
-    pub output_sender:
-        futures_channel::mpsc::Sender<(T::OutputEvent, futures_channel::oneshot::Sender<()>)>,
-
     // the ownership of this is effectively shared up a couple levels in the step, so we can't
     // store live references to it.
-    input_state: NonNull<UnsafeCell<Is>>,
+    shared_step_state: NonNull<UnsafeCell<Is>>,
 }
 
 impl<'update, T: Transposer, P: SharedPointerKind, Is: InputState<T>> InitContext<'update, T>
@@ -54,20 +50,15 @@ impl<'update, T: Transposer, P: SharedPointerKind, Is: InputState<T>> SubStepUpd
     pub fn new(
         time: SubStepTime<T::Time>,
         metadata: &'update mut TransposerMetaData<T, P>,
-        input_state: NonNull<UnsafeCell<Is>>,
+        shared_step_state: NonNull<UnsafeCell<Is>>,
         outputs_to_swallow: usize,
-        output_sender: futures_channel::mpsc::Sender<(
-            T::OutputEvent,
-            futures_channel::oneshot::Sender<()>,
-        )>,
     ) -> Self {
         Self {
             time,
             metadata,
-            input_state,
             current_emission_index: 0,
             outputs_to_swallow,
-            output_sender,
+            shared_step_state,
         }
     }
 }
@@ -76,7 +67,7 @@ impl<'update, T: Transposer, P: SharedPointerKind, Is: InputState<T>> InputState
     for SubStepUpdateContext<'update, T, P, Is>
 {
     fn get_input_state_manager(&mut self) -> &mut T::InputStateManager<'update> {
-        let input_state: NonNull<UnsafeCell<Is>> = self.input_state;
+        let input_state: NonNull<UnsafeCell<Is>> = self.shared_step_state;
         let input_state: &UnsafeCell<Is> = unsafe { input_state.as_ref() };
         let input_state: *mut Is = input_state.get();
         let input_state: &mut Is = unsafe { input_state.as_mut() }.unwrap();
@@ -150,12 +141,14 @@ impl<'update, T: Transposer, P: SharedPointerKind, Is: InputState<T>> EmitEventC
             return Box::pin(core::future::ready(()));
         }
 
-        let (send, recv) = futures_channel::oneshot::channel();
-        self.output_sender.try_send((payload, send)).unwrap();
+        // let (send, recv) = futures_channel::oneshot::channel();
+        // self.output_sender.try_send((payload, send)).unwrap();
 
-        Box::pin(async move {
-            recv.await.unwrap();
-        })
+        // Box::pin(async move {
+        //     recv.await.unwrap();
+        // })
+
+        todo!()
     }
 }
 

@@ -3,6 +3,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(async_fn_in_trait)]
 #![feature(strict_provenance)]
+#![feature(never_type)]
+#![feature(fn_traits)]
 
 pub mod source;
 pub mod transposer;
