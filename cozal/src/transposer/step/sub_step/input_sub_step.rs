@@ -12,8 +12,7 @@ use std::{
 use archery::{SharedPointer, SharedPointerKind};
 
 use crate::transposer::{
-    step::{wrapped_transposer::WrappedTransposer, InputState},
-    Transposer, TransposerInput, TransposerInputEventHandler,
+    input_state_requester::InputStateManager, step::{wrapped_transposer::WrappedTransposer, InputState, OutputState}, Transposer, TransposerInput, TransposerInputEventHandler
 };
 
 use super::{PollErr, StartSaturateErr, SubStep};
@@ -25,7 +24,7 @@ pub fn new_input_sub_step<T, P, I, S>(
     input_event: I::InputEvent,
 ) -> impl SubStep<T, P, S>
 where
-    S: InputState<T>,
+    S: InputState<T> + OutputState<T>,
     P: SharedPointerKind,
     I: TransposerInput<Base = T>,
     T: Transposer + TransposerInputEventHandler<I> + Clone,
@@ -63,7 +62,7 @@ where
     T: Transposer + TransposerInputEventHandler<I> + Clone,
     P: SharedPointerKind,
     I: TransposerInput<Base = T>,
-    S: InputState<T>,
+    S: InputState<T> + OutputState<T>,
     Fut: Future<Output = SharedPointer<WrappedTransposer<T, P>, P>>,
 {
     fn is_input(&self) -> bool {
@@ -130,8 +129,7 @@ where
     fn start_saturate(
         self: Pin<&mut Self>,
         transposer: SharedPointer<WrappedTransposer<T, P>, P>,
-        shared_step_state: NonNull<UnsafeCell<S>>,
-        outputs_to_swallow: usize,
+        shared_step_state: NonNull<(S, InputStateManager<T>)>,
     ) -> Result<(), StartSaturateErr> {
         let this = unsafe { self.get_unchecked_mut() };
 
@@ -153,7 +151,6 @@ where
             input,
             input_event,
             shared_step_state,
-            outputs_to_swallow,
         );
 
         // // debug_assert_eq!(TypeId::of::<Fut>(), future.type_id());
@@ -227,11 +224,10 @@ async fn shared_pointer_update<T, P, I, S>(
     time: T::Time,
     input: NonNull<I>,
     input_event: NonNull<I::InputEvent>,
-    shared_step_state: NonNull<UnsafeCell<S>>,
-    outputs_to_swallow: usize,
+    shared_step_state: NonNull<(S, InputStateManager<T>)>,
 ) -> SharedPointer<WrappedTransposer<T, P>, P>
 where
-    S: InputState<T>,
+    S: InputState<T> + OutputState<T>,
     P: SharedPointerKind,
     I: TransposerInput<Base = T>,
     T: Transposer + TransposerInputEventHandler<I> + Clone,
@@ -245,7 +241,6 @@ where
             input,
             input_event,
             shared_step_state,
-            outputs_to_swallow,
         )
         .await;
     wrapped_transposer
@@ -257,7 +252,7 @@ fn new_input_sub_step_internal<T, P, I, S>(
     input_event: I::InputEvent,
 ) -> InputSubStep<T, P, I, S, impl Future<Output = SharedPointer<WrappedTransposer<T, P>, P>>>
 where
-    S: InputState<T>,
+    S: InputState<T> + OutputState<T>,
     P: SharedPointerKind,
     I: TransposerInput<Base = T>,
     T: Transposer + TransposerInputEventHandler<I> + Clone,
@@ -269,7 +264,6 @@ where
             status: InputSubStepStatus::Saturating {
                 time: unreachable!(),
                 future: shared_pointer_update::<T, P, I, S>(
-                    unreachable!(),
                     unreachable!(),
                     unreachable!(),
                     unreachable!(),

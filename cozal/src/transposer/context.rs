@@ -1,11 +1,16 @@
 use core::future::Future;
 use core::pin::Pin;
+use std::cell::UnsafeCell;
+use std::marker::PhantomData;
+use std::ptr::NonNull;
+use std::task::{Context, Poll};
 
 use rand_chacha::rand_core::CryptoRngCore;
 
 use super::expire_handle::ExpireHandle;
-use super::Transposer;
-use crate::transposer::{StateRetriever, TransposerInput};
+use super::input_state_requester::InputStateManager;
+use super::{Transposer, TransposerInputEventHandler};
+use crate::transposer::TransposerInput;
 
 /// This trait is a supertrait of all the context functionality available to the `Transposer::init` function
 pub trait InitContext<'a, T: Transposer>:
@@ -67,7 +72,35 @@ pub trait LastUpdatedTimeContext<T: Transposer> {
 #[doc(hidden)]
 pub trait InputStateManagerContext<'a, T: Transposer> {
     #[doc(hidden)]
-    fn get_input_state_manager(&mut self) -> &mut T::InputStateManager<'a>;
+    fn get_input_state_manager(&mut self) -> NonNull<InputStateManager<T>>;
+}
+
+struct GetInputStateImpl<'a, T, I> {
+    input: I,
+    input_state_manager: NonNull<InputStateManager<T>>,
+    phantom: PhantomData<&'a mut InputStateManager<T>>,
+}
+
+impl<'a, T, I> Future for GetInputStateImpl<'a, T, I>
+where
+    T: TransposerInputEventHandler<I>,
+    I: TransposerInput<Base = T>
+{
+    type Output = NonNull<I::InputState>;
+
+    fn poll(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = unsafe { self.get_unchecked_mut() };
+        let inner_mut = unsafe { this.input_state_manager.as_mut() };
+        let input_state = inner_mut.get_or_request_state(this.input);
+
+        // make sure the input_state_manager references 
+        drop(inner_mut);
+
+        match input_state {
+            Some(state) => Poll::Ready(state),
+            None => Poll::Pending,
+        }
+    }
 }
 
 /// A trait for requesting input state from one of the inputs of this transposer.
@@ -77,32 +110,24 @@ pub trait InputStateContext<'a, T: Transposer>: InputStateManagerContext<'a, T> 
     ///
     /// once the resulting future is awaited, the system will retrieve the input state for the given time from the input soure.
     #[must_use]
-    async fn get_input_state<I: TransposerInput<Base = T>>(
+    fn get_input_state<I: TransposerInput<Base = T>>(
         &mut self,
         input: I,
-    ) -> &'a I::InputState
-    where
-        T::InputStateManager<'a>: StateRetriever<'a, I>;
-}
+    ) -> impl '_ + Future<Output = &'a I::InputState>
+    where T: TransposerInputEventHandler<I> {
+        async move {
+            let non_null = GetInputStateImpl::<'_, T, I> {
+                input,
+                input_state_manager: self.get_input_state_manager(),
+                phantom: PhantomData,
+            }.await;
 
-impl<'a, T: Transposer, C: InputStateManagerContext<'a, T> + ?Sized> InputStateContext<'a, T>
-    for C
-{
-    #[must_use]
-    async fn get_input_state<I: TransposerInput<Base = T>>(&mut self, input: I) -> &'a I::InputState
-    where
-        T::InputStateManager<'a>: StateRetriever<'a, I>,
-    {
-        let manager = self.get_input_state_manager();
-        let fut = manager.get_input_state(input);
-
-        // it is unsound to hold references to the input state manager over await points,
-        // so we make extra sure that the reference is dropped before we await the future.
-        drop(manager);
-
-        fut.await.unwrap()
+            unsafe { non_null.as_ref() }
+        }
     }
 }
+
+impl<'a, T: Transposer, A: InputStateManagerContext<'a, T> > InputStateContext<'a, T> for A { }
 
 /// A trait for scheduling events. for future processing
 pub trait ScheduleEventContext<T: Transposer> {

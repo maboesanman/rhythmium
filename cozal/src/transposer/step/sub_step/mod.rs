@@ -9,7 +9,7 @@ use std::{
 
 use archery::{SharedPointer, SharedPointerKind};
 
-use crate::transposer::Transposer;
+use crate::transposer::{input_state_requester::InputStateManager, Transposer};
 
 use super::{wrapped_transposer::WrappedTransposer, InputState};
 
@@ -17,7 +17,7 @@ pub mod init_sub_step;
 pub mod input_sub_step;
 pub mod scheduled_sub_step;
 
-pub trait SubStep<T: Transposer, P: SharedPointerKind, S: InputState<T>> {
+pub trait SubStep<T: Transposer, P: SharedPointerKind, S> {
     fn is_input(&self) -> bool {
         false
     }
@@ -40,8 +40,7 @@ pub trait SubStep<T: Transposer, P: SharedPointerKind, S: InputState<T>> {
     fn start_saturate(
         self: Pin<&mut Self>,
         transposer: SharedPointer<WrappedTransposer<T, P>, P>,
-        shared_step_state: NonNull<UnsafeCell<S>>,
-        outputs_to_swallow: usize,
+        shared_step_state: NonNull<(S, InputStateManager<T>)>,
     ) -> Result<(), StartSaturateErr>;
 
     fn poll(self: Pin<&mut Self>, waker: &Waker) -> Result<Poll<()>, PollErr>;

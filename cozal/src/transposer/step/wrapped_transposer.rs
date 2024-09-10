@@ -6,6 +6,8 @@ use archery::{SharedPointer, SharedPointerKind};
 use super::sub_step_update_context::SubStepUpdateContext;
 use super::time::SubStepTime;
 use super::transposer_metadata::TransposerMetaData;
+use super::OutputState;
+use crate::transposer::input_state_requester::InputStateManager;
 use crate::transposer::step::InputState;
 use crate::transposer::{Transposer, TransposerInput, TransposerInputEventHandler};
 
@@ -29,26 +31,22 @@ where
 
 impl<T: Transposer, P: SharedPointerKind> WrappedTransposer<T, P> {
     /// create a wrapped transposer, and perform all T::default scheduled events.
-    pub async fn init<S: InputState<T>>(
+    pub async fn init<S: OutputState<T>>(
         mut transposer: T,
         rng_seed: [u8; 32],
         start_time: T::Time,
 
         // mutable references must not be held over await points.
-        shared_step_state: NonNull<UnsafeCell<S>>,
-        outputs_to_swallow: usize,
+        shared_step_state: NonNull<(S, InputStateManager<T>)>,
     ) -> SharedPointer<Self, P> {
         let mut metadata = TransposerMetaData::new(rng_seed, start_time);
         let mut context = SubStepUpdateContext::new(
             SubStepTime::new_init(start_time),
             &mut metadata,
             shared_step_state,
-            outputs_to_swallow,
         );
 
         transposer.init(&mut context).await;
-
-        let SubStepUpdateContext { .. } = context;
 
         let new = Self {
             transposer,
@@ -59,15 +57,14 @@ impl<T: Transposer, P: SharedPointerKind> WrappedTransposer<T, P> {
     }
 
     /// handle an input, and all scheduled events that occur at the same time.
-    pub async fn handle_input<I: TransposerInput<Base = T>, S: InputState<T>>(
+    pub async fn handle_input<I: TransposerInput<Base = T>, S: OutputState<T>>(
         &mut self,
         time: T::Time,
         input: &I,
         input_event: &I::InputEvent,
 
         // mutable references must not be held over await points.
-        shared_step_state: NonNull<UnsafeCell<S>>,
-        outputs_to_swallow: usize,
+        shared_step_state: NonNull<(S, InputStateManager<T>)>,
     ) where
         T: TransposerInputEventHandler<I>,
     {
@@ -80,25 +77,21 @@ impl<T: Transposer, P: SharedPointerKind> WrappedTransposer<T, P> {
             time,
             &mut self.metadata,
             shared_step_state,
-            outputs_to_swallow,
         );
         self.transposer
             .handle_input_event(input, input_event, &mut context)
             .await;
 
-        let SubStepUpdateContext { .. } = context;
-
         self.metadata.last_updated = time;
     }
 
     /// handle all scheduled events occuring at `time` (if any)
-    pub async fn handle_scheduled<S: InputState<T>>(
+    pub async fn handle_scheduled<S: OutputState<T>>(
         &mut self,
         time: T::Time,
 
         // mutable references must not be held over await points.
-        shared_step_state: NonNull<UnsafeCell<S>>,
-        outputs_to_swallow: usize,
+        shared_step_state: NonNull<(S, InputStateManager<T>)>,
     ) {
         let mut time = SubStepTime {
             index: self.metadata.last_updated.index + 1,
@@ -109,7 +102,6 @@ impl<T: Transposer, P: SharedPointerKind> WrappedTransposer<T, P> {
             time,
             &mut self.metadata,
             shared_step_state,
-            outputs_to_swallow,
         );
 
         while context.metadata.get_next_scheduled_time().map(|s| s.time) == Some(time.time) {

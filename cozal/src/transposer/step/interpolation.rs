@@ -11,22 +11,23 @@ use archery::{SharedPointer, SharedPointerKind};
 use super::interpolate_context::StepInterpolateContext;
 use super::wrapped_transposer::WrappedTransposer;
 use super::InputState;
+use crate::transposer::input_state_requester::InputStateManager;
 use crate::transposer::Transposer;
 
-pub trait Interpolation<Is, Out>: Future<Output = Out> {
-    fn get_input_state(self: Pin<&mut Self>) -> &mut Is;
+pub trait Interpolation<T: Transposer>: Future<Output = T::OutputState> {
+    fn get_input_state(self: Pin<&mut Self>) -> &mut InputStateManager<T>;
 }
 
 #[derive(Default)]
-enum InterpolationInner<Is, Fb: FutureBuilder<Is>> {
+enum InterpolationInner<T, Fb: FutureBuilder<T>> {
     Uninit {
         future_builder: Fb,
-        input_state: Is,
+        input_state: InputStateManager<T>,
     },
     InProgress {
         future: MaybeUninit<Fb::Future>,
 
-        input_state: UnsafeCell<Is>,
+        input_state: UnsafeCell<InputStateManager<T>>,
 
         // future contains a reference to input_state.
         _pin: PhantomPinned,
@@ -35,43 +36,45 @@ enum InterpolationInner<Is, Fb: FutureBuilder<Is>> {
     Dummy,
 }
 
-trait FutureBuilder<Is> {
+trait FutureBuilder<T> {
     type Output;
     type Future: Future<Output = Self::Output>;
-    fn build_future(self, input_state_ptr: NonNull<UnsafeCell<Is>>) -> Self::Future;
+    fn build_future(self, input_state_ptr: NonNull<UnsafeCell<InputStateManager<T>>>) -> Self::Future;
 }
 
-impl<Fn, Is, Fut> FutureBuilder<Is> for Fn
+impl<Fn, T, Fut> FutureBuilder<T> for Fn
 where
-    Fn: FnOnce(NonNull<UnsafeCell<Is>>) -> Fut,
+    Fn: FnOnce(NonNull<UnsafeCell<InputStateManager<T>>>) -> Fut,
     Fut: Future,
 {
     type Output = Fut::Output;
     type Future = Fut;
 
-    fn build_future(self, input_state_ptr: NonNull<UnsafeCell<Is>>) -> Self::Future {
+    fn build_future(self, input_state_ptr: NonNull<UnsafeCell<InputStateManager<T>>>) -> Self::Future {
         self(input_state_ptr)
     }
 }
 
-pub(crate) fn new_interpolation<T: Transposer, P: SharedPointerKind, Is: InputState<T>>(
+pub(crate) fn new_interpolation<T: Transposer, P: SharedPointerKind>(
     interpolation_time: T::Time,
     wrapped_transposer: SharedPointer<WrappedTransposer<T, P>, P>,
-) -> impl Interpolation<Is, T::OutputState> {
+) -> impl Interpolation<T> {
+    let input_state = NonNull::from(Box::leak(Box::new(((), InputStateManager::default()))));
+
     let future_builder =
         move |input_state| interpolate(interpolation_time, wrapped_transposer, input_state);
 
     InterpolationInner::Uninit {
-        input_state: Is::default(),
+        input_state: InputStateManager::default(),
         future_builder,
     }
 }
 
-async fn interpolate<T: Transposer, P: SharedPointerKind, Is: InputState<T>>(
+async fn interpolate<T: Transposer, P: SharedPointerKind>(
     interpolation_time: T::Time,
     wrapped_transposer: SharedPointer<WrappedTransposer<T, P>, P>,
     // mutable references must not be held over await points.
-    input_state: NonNull<UnsafeCell<Is>>,
+    input_state: NonNull<((), InputStateManager<T>)>,
 ) -> T::OutputState {
     let borrowed = wrapped_transposer.as_ref();
     let transposer = &borrowed.transposer;

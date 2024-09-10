@@ -9,18 +9,17 @@ use std::{
 use archery::{SharedPointer, SharedPointerKind};
 
 use crate::transposer::{
-    step::{wrapped_transposer::WrappedTransposer, InputState},
-    Transposer,
+    input_state_requester::InputStateManager, step::{wrapped_transposer::WrappedTransposer, OutputState}, Transposer
 };
 
 use super::{PollErr, StartSaturateErr, SubStep};
 
 #[allow(dead_code)]
-pub fn new_init_sub_step<T: Transposer, P: SharedPointerKind, S: InputState<T>>(
+pub fn new_init_sub_step<T: Transposer, P: SharedPointerKind, S: OutputState<T>>(
     transposer: T,
     rng_seed: [u8; 32],
     start_time: T::Time,
-    shared_step_state: NonNull<UnsafeCell<S>>,
+    shared_step_state: NonNull<(S, InputStateManager<T>)>,
 ) -> impl SubStep<T, P, S> {
     new_init_sub_step_internal(transposer, rng_seed, start_time, shared_step_state)
 }
@@ -41,7 +40,7 @@ enum InitSubStepStatus<T: Transposer, P: SharedPointerKind, Fut> {
 impl<
         T: Transposer,
         P: SharedPointerKind,
-        S: InputState<T>,
+        S,
         Fut: Future<Output = SharedPointer<WrappedTransposer<T, P>, P>>,
     > SubStep<T, P, S> for InitSubStepStatus<T, P, Fut>
 {
@@ -81,12 +80,10 @@ impl<
     fn start_saturate(
         self: Pin<&mut Self>,
         wrapped_transposer: SharedPointer<WrappedTransposer<T, P>, P>,
-        shared_step_state: NonNull<UnsafeCell<S>>,
-        outputs_to_swallow: usize,
+        shared_step_state: NonNull<(S, InputStateManager<T>)>,
     ) -> Result<(), StartSaturateErr> {
         let _ = wrapped_transposer;
         let _ = shared_step_state;
-        let _ = outputs_to_swallow;
 
         match &*self {
             InitSubStepStatus::Unsaturated { .. } => Err(StartSaturateErr::SubStepTimeIsPast),
@@ -137,14 +134,14 @@ impl<
     }
 }
 
-fn new_init_sub_step_internal<T: Transposer, P: SharedPointerKind, S: InputState<T>>(
+fn new_init_sub_step_internal<T: Transposer, P: SharedPointerKind, S: OutputState<T>>(
     transposer: T,
     rng_seed: [u8; 32],
     start_time: T::Time,
-    shared_step_state: NonNull<UnsafeCell<S>>,
+    shared_step_state: NonNull<(S, InputStateManager<T>)>,
 ) -> InitSubStepStatus<T, P, impl Future<Output = SharedPointer<WrappedTransposer<T, P>, P>>> {
     InitSubStepStatus::Saturating {
         start_time,
-        future: WrappedTransposer::init(transposer, rng_seed, start_time, shared_step_state, 0),
+        future: WrappedTransposer::init(transposer, rng_seed, start_time, shared_step_state),
     }
 }

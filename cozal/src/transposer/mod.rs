@@ -9,6 +9,7 @@ pub mod expire_handle;
 // pub mod single_input_state;
 // pub mod multi_input_state;
 pub mod step;
+pub mod input_state_requester;
 // mod test;
 
 /// A `Transposer` is a type that can update itself in response to events.
@@ -44,10 +45,6 @@ pub trait Transposer {
     ///
     /// the events in the schedule are all of type `Event<Self::Time, Self::Scheduled>`
     type Scheduled: Clone;
-
-    /// The type used to request input state. This is only passed as a shared reference.
-    /// expect this to be dyn StateRetriever<'cx, Input1> + StateRetriever<'cx, Input2> + ...
-    type InputStateManager<'cx>: ?Sized;
 
     /// The function to initialize your transposer's events.
     ///
@@ -93,9 +90,6 @@ pub trait TransposerInput: 'static + Sized + Hash + Eq + Copy + Ord {
     type InputEvent: Ord;
     type InputState;
 
-    /// This function is called to determine if all the required inputs are present.
-    fn satisfied(inputs: &[Self]) -> bool;
-
     /// This MUST be unique for each input that shares a base.
     ///
     /// in particular, two inputs with the same Base and SORT, and different InputEvents can result in UB.
@@ -103,7 +97,7 @@ pub trait TransposerInput: 'static + Sized + Hash + Eq + Copy + Ord {
 }
 
 pub trait TransposerInputEventHandler<I: TransposerInput<Base = Self>>: Transposer {
-    async fn register_inputs(&mut self, cx: &mut dyn InitContext<'_, Self>, inputs: &[I]);
+    async fn register_input(&mut self, cx: &mut dyn InitContext<'_, Self>, input: I);
 
     /// The function to respond to input.
     ///
@@ -132,12 +126,4 @@ pub trait TransposerInputEventHandler<I: TransposerInput<Base = Self>>: Transpos
         let _ = (time, event);
         true
     }
-}
-
-/// # Safety
-///
-/// the `NonNull<I::InputState>` returned by the reciever should be considered a `&'_ I::InputState`
-/// (it would be &'_ but it's not really possible to implement that)
-pub unsafe trait StateRetriever<'context, I: TransposerInput> {
-    fn get_input_state(&mut self, input: I) -> Receiver<&'context I::InputState>;
 }

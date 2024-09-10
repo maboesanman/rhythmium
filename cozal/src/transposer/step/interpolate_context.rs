@@ -9,23 +9,24 @@ use super::InputState;
 use crate::transposer::context::{
     CurrentTimeContext, InputStateManagerContext, InterpolateContext, LastUpdatedTimeContext,
 };
+use crate::transposer::input_state_requester::InputStateManager;
 use crate::transposer::Transposer;
 
-pub struct StepInterpolateContext<'update, T: Transposer, P: SharedPointerKind, Is> {
+pub struct StepInterpolateContext<'update, T: Transposer, P: SharedPointerKind, S> {
     interpolation_time: T::Time,
     metadata: &'update TransposerMetaData<T, P>,
     // the ownership of this is effectively shared up a couple levels in the step, so we can't
     // store live references to it.
-    input_state: NonNull<UnsafeCell<Is>>,
+    input_state: NonNull<(S, InputStateManager<T>)>,
 }
 
-impl<'update, T: Transposer, P: SharedPointerKind, Is: InputState<T>>
-    StepInterpolateContext<'update, T, P, Is>
+impl<'update, T: Transposer, P: SharedPointerKind, S>
+    StepInterpolateContext<'update, T, P, S>
 {
     pub fn new(
         interpolation_time: T::Time,
         metadata: &'update TransposerMetaData<T, P>,
-        input_state: NonNull<UnsafeCell<Is>>,
+        input_state: NonNull<(S, InputStateManager<T>)>,
     ) -> Self {
         Self {
             interpolation_time,
@@ -35,38 +36,29 @@ impl<'update, T: Transposer, P: SharedPointerKind, Is: InputState<T>>
     }
 }
 
-impl<'update, T: Transposer, P: SharedPointerKind, Is: InputState<T>> InterpolateContext<'update, T>
-    for StepInterpolateContext<'update, T, P, Is>
+impl<'update, T: Transposer, P: SharedPointerKind, S> InterpolateContext<'update, T>
+    for StepInterpolateContext<'update, T, P, S>
 {
 }
 
-impl<'update, T: Transposer, P: SharedPointerKind, Is: InputState<T>>
-    InputStateManagerContext<'update, T> for StepInterpolateContext<'update, T, P, Is>
+impl<'update, T: Transposer, P: SharedPointerKind, S>
+    InputStateManagerContext<'update, T> for StepInterpolateContext<'update, T, P, S>
 {
-    fn get_input_state_manager(&mut self) -> &mut T::InputStateManager<'update> {
-        let input_state: NonNull<UnsafeCell<Is>> = self.input_state;
-        let input_state: &UnsafeCell<Is> = unsafe { input_state.as_ref() };
-        let input_state: *mut Is = input_state.get();
-        let input_state: &mut Is = unsafe { input_state.as_mut() }.unwrap();
-
-        let input_state_manager: &mut T::InputStateManager<'static> = input_state.get_provider();
-        let input_state_manager: &mut T::InputStateManager<'update> =
-            unsafe { core::mem::transmute(input_state_manager) };
-
-        input_state_manager
+    fn get_input_state_manager(&mut self) -> NonNull<InputStateManager<T>> {
+        NonNull::from(unsafe { &self.input_state.as_ref().1 })
     }
 }
 
-impl<'update, T: Transposer, P: SharedPointerKind, Is: InputState<T>> CurrentTimeContext<T>
-    for StepInterpolateContext<'update, T, P, Is>
+impl<'update, T: Transposer, P: SharedPointerKind, S> CurrentTimeContext<T>
+    for StepInterpolateContext<'update, T, P, S>
 {
     fn current_time(&self) -> <T as Transposer>::Time {
         self.interpolation_time
     }
 }
 
-impl<'update, T: Transposer, P: SharedPointerKind, Is: InputState<T>> LastUpdatedTimeContext<T>
-    for StepInterpolateContext<'update, T, P, Is>
+impl<'update, T: Transposer, P: SharedPointerKind, S> LastUpdatedTimeContext<T>
+    for StepInterpolateContext<'update, T, P, S>
 {
     fn last_updated_time(&self) -> <T as Transposer>::Time {
         self.metadata.last_updated.time
