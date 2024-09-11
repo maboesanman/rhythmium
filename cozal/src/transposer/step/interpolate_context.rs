@@ -5,7 +5,6 @@ use archery::SharedPointerKind;
 
 // use super::lazy_state::LazyState;
 use super::transposer_metadata::TransposerMetaData;
-use super::InputState;
 use crate::transposer::context::{
     CurrentTimeContext, InputStateManagerContext, InterpolateContext, LastUpdatedTimeContext,
 };
@@ -20,9 +19,7 @@ pub struct StepInterpolateContext<'update, T: Transposer, P: SharedPointerKind, 
     input_state: NonNull<(S, InputStateManager<T>)>,
 }
 
-impl<'update, T: Transposer, P: SharedPointerKind, S>
-    StepInterpolateContext<'update, T, P, S>
-{
+impl<'update, T: Transposer, P: SharedPointerKind, S> StepInterpolateContext<'update, T, P, S> {
     pub fn new(
         interpolation_time: T::Time,
         metadata: &'update TransposerMetaData<T, P>,
@@ -41,8 +38,8 @@ impl<'update, T: Transposer, P: SharedPointerKind, S> InterpolateContext<'update
 {
 }
 
-impl<'update, T: Transposer, P: SharedPointerKind, S>
-    InputStateManagerContext<'update, T> for StepInterpolateContext<'update, T, P, S>
+impl<'update, T: Transposer, P: SharedPointerKind, S> InputStateManagerContext<'update, T>
+    for StepInterpolateContext<'update, T, P, S>
 {
     fn get_input_state_manager(&mut self) -> NonNull<InputStateManager<T>> {
         NonNull::from(unsafe { &self.input_state.as_ref().1 })

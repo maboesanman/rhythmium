@@ -9,18 +9,20 @@ use std::{
 use archery::{SharedPointer, SharedPointerKind};
 
 use crate::transposer::{
-    input_state_requester::InputStateManager, step::{wrapped_transposer::WrappedTransposer, OutputState}, Transposer
+    input_state_requester::InputStateManager,
+    step::{wrapped_transposer::WrappedTransposer, OutputEventManager},
+    Transposer,
 };
 
 use super::{PollErr, StartSaturateErr, SubStep};
 
 #[allow(dead_code)]
-pub fn new_init_sub_step<T: Transposer, P: SharedPointerKind, S: OutputState<T>>(
+pub fn new_init_sub_step<T: Transposer, P: SharedPointerKind>(
     transposer: T,
     rng_seed: [u8; 32],
     start_time: T::Time,
-    shared_step_state: NonNull<(S, InputStateManager<T>)>,
-) -> impl SubStep<T, P, S> {
+    shared_step_state: NonNull<(OutputEventManager<T>, InputStateManager<T>)>,
+) -> impl SubStep<T, P> {
     new_init_sub_step_internal(transposer, rng_seed, start_time, shared_step_state)
 }
 
@@ -40,9 +42,8 @@ enum InitSubStepStatus<T: Transposer, P: SharedPointerKind, Fut> {
 impl<
         T: Transposer,
         P: SharedPointerKind,
-        S,
         Fut: Future<Output = SharedPointer<WrappedTransposer<T, P>, P>>,
-    > SubStep<T, P, S> for InitSubStepStatus<T, P, Fut>
+    > SubStep<T, P> for InitSubStepStatus<T, P, Fut>
 {
     fn is_init(&self) -> bool {
         true
@@ -70,7 +71,7 @@ impl<
         }
     }
 
-    fn cmp(&self, other: &dyn SubStep<T, P, S>) -> std::cmp::Ordering {
+    fn cmp(&self, other: &dyn SubStep<T, P>) -> std::cmp::Ordering {
         match other.is_init() {
             true => std::cmp::Ordering::Equal,
             false => std::cmp::Ordering::Less,
@@ -80,7 +81,7 @@ impl<
     fn start_saturate(
         self: Pin<&mut Self>,
         wrapped_transposer: SharedPointer<WrappedTransposer<T, P>, P>,
-        shared_step_state: NonNull<(S, InputStateManager<T>)>,
+        shared_step_state: NonNull<(OutputEventManager<T>, InputStateManager<T>)>,
     ) -> Result<(), StartSaturateErr> {
         let _ = wrapped_transposer;
         let _ = shared_step_state;
@@ -124,7 +125,7 @@ impl<
     ) -> Option<SharedPointer<WrappedTransposer<T, P>, P>> {
         let this = unsafe { self.get_unchecked_mut() };
 
-        let start_time = <Self as SubStep<T, P, S>>::get_time(this);
+        let start_time = <Self as SubStep<T, P>>::get_time(this);
 
         match core::mem::replace(this, InitSubStepStatus::Unsaturated { start_time }) {
             InitSubStepStatus::Unsaturated { .. } => None,
@@ -134,11 +135,11 @@ impl<
     }
 }
 
-fn new_init_sub_step_internal<T: Transposer, P: SharedPointerKind, S: OutputState<T>>(
+fn new_init_sub_step_internal<T: Transposer, P: SharedPointerKind>(
     transposer: T,
     rng_seed: [u8; 32],
     start_time: T::Time,
-    shared_step_state: NonNull<(S, InputStateManager<T>)>,
+    shared_step_state: NonNull<(OutputEventManager<T>, InputStateManager<T>)>,
 ) -> InitSubStepStatus<T, P, impl Future<Output = SharedPointer<WrappedTransposer<T, P>, P>>> {
     InitSubStepStatus::Saturating {
         start_time,

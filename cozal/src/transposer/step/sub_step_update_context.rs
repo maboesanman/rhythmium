@@ -1,6 +1,3 @@
-use core::future::Future;
-use core::pin::Pin;
-use std::cell::UnsafeCell;
 use std::ptr::NonNull;
 
 use archery::SharedPointerKind;
@@ -8,17 +5,17 @@ use rand_chacha::rand_core::CryptoRngCore;
 
 use super::time::SubStepTime;
 use super::transposer_metadata::TransposerMetaData;
-use super::{InputState, OutputState};
 use crate::transposer::context::*;
 use crate::transposer::expire_handle::ExpireHandle;
 use crate::transposer::input_state_requester::InputStateManager;
+use crate::transposer::output_event_manager::OutputEventManager;
 use crate::transposer::Transposer;
 
 /// This is the interface through which you can do a variety of functions in your transposer.
 ///
 /// the primary features are scheduling and expiring events,
 /// though there are more methods to interact with the engine.
-pub struct SubStepUpdateContext<'update, T: Transposer, P: SharedPointerKind, S> {
+pub struct SubStepUpdateContext<'update, T: Transposer, P: SharedPointerKind> {
     time: SubStepTime<T::Time>,
     // these are pointers because this is stored next to the targets.
     pub metadata: &'update mut TransposerMetaData<T, P>,
@@ -27,29 +24,27 @@ pub struct SubStepUpdateContext<'update, T: Transposer, P: SharedPointerKind, S>
 
     // the ownership of this is effectively shared up a couple levels in the step, so we can't
     // store live references to it.
-    shared_step_state: NonNull<(S, InputStateManager<T>)>,
+    shared_step_state: NonNull<(OutputEventManager<T>, InputStateManager<T>)>,
 }
 
-impl<'update, T: Transposer, P: SharedPointerKind, S: OutputState<T>> InitContext<'update, T>
-    for SubStepUpdateContext<'update, T, P, S>
+impl<'update, T: Transposer, P: SharedPointerKind> InitContext<'update, T>
+    for SubStepUpdateContext<'update, T, P>
 {
 }
-impl<'update, T: Transposer, P: SharedPointerKind, S: OutputState<T>> HandleInputContext<'update, T>
-    for SubStepUpdateContext<'update, T, P, S>
+impl<'update, T: Transposer, P: SharedPointerKind> HandleInputContext<'update, T>
+    for SubStepUpdateContext<'update, T, P>
 {
 }
-impl<'update, T: Transposer, P: SharedPointerKind, S: OutputState<T>>
-    HandleScheduleContext<'update, T> for SubStepUpdateContext<'update, T, P, S>
+impl<'update, T: Transposer, P: SharedPointerKind> HandleScheduleContext<'update, T>
+    for SubStepUpdateContext<'update, T, P>
 {
 }
-impl<'update, T: Transposer, P: SharedPointerKind, S>
-    SubStepUpdateContext<'update, T, P, S>
-{
+impl<'update, T: Transposer, P: SharedPointerKind> SubStepUpdateContext<'update, T, P> {
     // SAFETY: need to gurantee the metadata pointer outlives this object.
     pub fn new(
         time: SubStepTime<T::Time>,
         metadata: &'update mut TransposerMetaData<T, P>,
-        shared_step_state: NonNull<(S, InputStateManager<T>)>,
+        shared_step_state: NonNull<(OutputEventManager<T>, InputStateManager<T>)>,
     ) -> Self {
         Self {
             time,
@@ -59,23 +54,37 @@ impl<'update, T: Transposer, P: SharedPointerKind, S>
         }
     }
 
-    unsafe fn get_shared_step_state(&mut self) -> &mut (S, InputStateManager<T>) {
-        let mut input_state: NonNull<(S, InputStateManager<T>)> = self.shared_step_state;
-        unsafe { input_state.as_mut() }
+    unsafe fn get_shared_step_state(
+        &mut self,
+    ) -> &mut (OutputEventManager<T>, InputStateManager<T>) {
+        let mut shared_step_state: NonNull<(OutputEventManager<T>, InputStateManager<T>)> =
+            self.shared_step_state;
+        unsafe { shared_step_state.as_mut() }
     }
 }
 
-impl<'update, T: Transposer, P: SharedPointerKind, S>
-    InputStateManagerContext<'update, T> for SubStepUpdateContext<'update, T, P, S>
+impl<'update, T: Transposer, P: SharedPointerKind> InputStateManagerContext<'update, T>
+    for SubStepUpdateContext<'update, T, P>
 {
     fn get_input_state_manager(&mut self) -> NonNull<InputStateManager<T>> {
-        let mut input_state: NonNull<(S, InputStateManager<T>)> = self.shared_step_state;
-        NonNull::from(unsafe { &mut input_state.as_mut().1 })
+        let mut shared_step_state: NonNull<(OutputEventManager<T>, InputStateManager<T>)> =
+            self.shared_step_state;
+        NonNull::from(unsafe { &mut shared_step_state.as_mut().1 })
     }
 }
 
-impl<'update, T: Transposer, P: SharedPointerKind, S> ScheduleEventContext<T>
-    for SubStepUpdateContext<'update, T, P, S>
+impl<'update, T: Transposer, P: SharedPointerKind> OutputEventManagerContext<T>
+    for SubStepUpdateContext<'update, T, P>
+{
+    fn get_output_event_manager(&mut self) -> NonNull<OutputEventManager<T>> {
+        let mut shared_step_state: NonNull<(OutputEventManager<T>, InputStateManager<T>)> =
+            self.shared_step_state;
+        NonNull::from(unsafe { &mut shared_step_state.as_mut().0 })
+    }
+}
+
+impl<'update, T: Transposer, P: SharedPointerKind> ScheduleEventContext<T>
+    for SubStepUpdateContext<'update, T, P>
 {
     fn schedule_event(
         &mut self,
@@ -112,8 +121,8 @@ impl<'update, T: Transposer, P: SharedPointerKind, S> ScheduleEventContext<T>
     }
 }
 
-impl<'update, T: Transposer, P: SharedPointerKind, S> ExpireEventContext<T>
-    for SubStepUpdateContext<'update, T, P, S>
+impl<'update, T: Transposer, P: SharedPointerKind> ExpireEventContext<T>
+    for SubStepUpdateContext<'update, T, P>
 {
     fn expire_event(
         &mut self,
@@ -123,45 +132,24 @@ impl<'update, T: Transposer, P: SharedPointerKind, S> ExpireEventContext<T>
     }
 }
 
-impl<'update, T: Transposer, P: SharedPointerKind, S: OutputState<T>> EmitEventContext<T>
-    for SubStepUpdateContext<'update, T, P, S>
-{
-    fn emit_event(
-        &mut self,
-        payload: <T as Transposer>::OutputEvent,
-    ) -> Pin<Box<dyn '_ + Future<Output = ()>>> {
-        let shared_step_state = unsafe { self.get_shared_step_state() };
-
-        let shared_output_state = &mut shared_step_state.0;
-
-        if *shared_output_state.outputs_to_swallow() != 0 {
-            *shared_output_state.outputs_to_swallow() -= 1;
-            return Box::pin(core::future::ready(()));
-        }
-
-
-        todo!()
-    }
-}
-
-impl<'update, T: Transposer, P: SharedPointerKind, S> RngContext
-    for SubStepUpdateContext<'update, T, P, S>
+impl<'update, T: Transposer, P: SharedPointerKind> RngContext
+    for SubStepUpdateContext<'update, T, P>
 {
     fn get_rng(&mut self) -> &mut dyn CryptoRngCore {
         &mut self.metadata.rng
     }
 }
 
-impl<'update, T: Transposer, P: SharedPointerKind, S> CurrentTimeContext<T>
-    for SubStepUpdateContext<'update, T, P, S>
+impl<'update, T: Transposer, P: SharedPointerKind> CurrentTimeContext<T>
+    for SubStepUpdateContext<'update, T, P>
 {
     fn current_time(&self) -> <T as Transposer>::Time {
         self.time.time
     }
 }
 
-impl<'update, T: Transposer, P: SharedPointerKind, S> LastUpdatedTimeContext<T>
-    for SubStepUpdateContext<'update, T, P, S>
+impl<'update, T: Transposer, P: SharedPointerKind> LastUpdatedTimeContext<T>
+    for SubStepUpdateContext<'update, T, P>
 {
     fn last_updated_time(&self) -> <T as Transposer>::Time {
         self.metadata.last_updated.time

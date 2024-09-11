@@ -9,6 +9,7 @@ use rand_chacha::rand_core::CryptoRngCore;
 
 use super::expire_handle::ExpireHandle;
 use super::input_state_requester::InputStateManager;
+use super::output_event_manager::{EmitOutputFuture, OutputEventManager};
 use super::{Transposer, TransposerInputEventHandler};
 use crate::transposer::TransposerInput;
 
@@ -16,21 +17,21 @@ use crate::transposer::TransposerInput;
 pub trait InitContext<'a, T: Transposer>:
     CurrentTimeContext<T>
     + InputStateManagerContext<'a, T>
-    + ScheduleEventContext<T>
-    + EmitEventContext<T>
+    + OutputEventManagerContext<T>
     + RngContext
+    + ScheduleEventContext<T>
 {
 }
 
 /// This trait is a supertrait of all the context functionality available to the `Transposer::handle_scheduled` function
 pub trait HandleScheduleContext<'a, T: Transposer>:
     CurrentTimeContext<T>
-    + LastUpdatedTimeContext<T>
-    + InputStateManagerContext<'a, T>
-    + ScheduleEventContext<T>
     + ExpireEventContext<T>
-    + EmitEventContext<T>
+    + InputStateManagerContext<'a, T>
+    + LastUpdatedTimeContext<T>
+    + OutputEventManagerContext<T>
     + RngContext
+    + ScheduleEventContext<T>
 {
 }
 
@@ -43,12 +44,12 @@ pub trait InterpolateContext<'a, T: Transposer>:
 /// This trait is a supertrait of all the context functionality available to the `TransposerInputEventHandler::handle_input` function
 pub trait HandleInputContext<'a, T: Transposer>:
     CurrentTimeContext<T>
-    + LastUpdatedTimeContext<T>
-    + InputStateManagerContext<'a, T>
-    + ScheduleEventContext<T>
     + ExpireEventContext<T>
-    + EmitEventContext<T>
+    + InputStateManagerContext<'a, T>
+    + LastUpdatedTimeContext<T>
+    + OutputEventManagerContext<T>
     + RngContext
+    + ScheduleEventContext<T>
 {
 }
 
@@ -75,32 +76,11 @@ pub trait InputStateManagerContext<'a, T: Transposer> {
     fn get_input_state_manager(&mut self) -> NonNull<InputStateManager<T>>;
 }
 
-struct GetInputStateImpl<'a, T, I> {
-    input: I,
-    input_state_manager: NonNull<InputStateManager<T>>,
-    phantom: PhantomData<&'a mut InputStateManager<T>>,
-}
-
-impl<'a, T, I> Future for GetInputStateImpl<'a, T, I>
-where
-    T: TransposerInputEventHandler<I>,
-    I: TransposerInput<Base = T>
-{
-    type Output = NonNull<I::InputState>;
-
-    fn poll(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let this = unsafe { self.get_unchecked_mut() };
-        let inner_mut = unsafe { this.input_state_manager.as_mut() };
-        let input_state = inner_mut.get_or_request_state(this.input);
-
-        // make sure the input_state_manager references 
-        drop(inner_mut);
-
-        match input_state {
-            Some(state) => Poll::Ready(state),
-            None => Poll::Pending,
-        }
-    }
+/// A trait for accessing the InputStateManager. Not called directly by the user.
+#[doc(hidden)]
+pub trait OutputEventManagerContext<T: Transposer> {
+    #[doc(hidden)]
+    fn get_output_event_manager(&mut self) -> NonNull<OutputEventManager<T>>;
 }
 
 /// A trait for requesting input state from one of the inputs of this transposer.
@@ -110,24 +90,16 @@ pub trait InputStateContext<'a, T: Transposer>: InputStateManagerContext<'a, T> 
     ///
     /// once the resulting future is awaited, the system will retrieve the input state for the given time from the input soure.
     #[must_use]
-    fn get_input_state<I: TransposerInput<Base = T>>(
-        &mut self,
-        input: I,
-    ) -> impl '_ + Future<Output = &'a I::InputState>
-    where T: TransposerInputEventHandler<I> {
-        async move {
-            let non_null = GetInputStateImpl::<'_, T, I> {
-                input,
-                input_state_manager: self.get_input_state_manager(),
-                phantom: PhantomData,
-            }.await;
-
-            unsafe { non_null.as_ref() }
-        }
+    fn get_input_state<'fut, I: TransposerInput<Base = T>>(&'fut mut self, input: I) {
+        // -> impl Future<Output = &'a I::InputState> + 'fut {
+        // let manager = self.get_input_state_manager();
+        // let manager_mut = unsafe { manager.as_mut() };
+        // manager_mu
+        todo!()
     }
 }
 
-impl<'a, T: Transposer, A: InputStateManagerContext<'a, T> > InputStateContext<'a, T> for A { }
+impl<'a, T: Transposer, A: InputStateManagerContext<'a, T>> InputStateContext<'a, T> for A {}
 
 /// A trait for scheduling events. for future processing
 pub trait ScheduleEventContext<T: Transposer> {
@@ -188,7 +160,21 @@ pub trait EmitEventContext<T: Transposer> {
     ///
     /// the event is not emitted until the future is awaited.
     #[must_use]
-    fn emit_event(&mut self, payload: T::OutputEvent) -> Pin<Box<dyn '_ + Future<Output = ()>>>;
+    fn emit_event<'a>(&'a mut self, payload: T::OutputEvent) -> impl Future<Output = ()> + 'a
+    where
+        T: 'a;
+}
+
+impl<C, T: Transposer> EmitEventContext<T> for C
+where
+    C: OutputEventManagerContext<T>,
+{
+    fn emit_event<'a>(&'a mut self, payload: T::OutputEvent) -> impl Future<Output = ()> + 'a
+    where
+        T: 'a,
+    {
+        EmitOutputFuture::new(self.get_output_event_manager(), payload)
+    }
 }
 
 /// A trait to deterministically produce randomness.

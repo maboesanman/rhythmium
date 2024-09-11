@@ -8,8 +8,10 @@ pub mod context;
 pub mod expire_handle;
 // pub mod single_input_state;
 // pub mod multi_input_state;
+pub mod input_state_manager;
+mod input_state_requester;
+mod output_event_manager;
 pub mod step;
-pub mod input_state_requester;
 // mod test;
 
 /// A `Transposer` is a type that can update itself in response to events.

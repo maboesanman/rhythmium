@@ -9,15 +9,17 @@ use std::{
 
 use archery::{SharedPointer, SharedPointerKind};
 
-use crate::transposer::{input_state_requester::InputStateManager, Transposer};
+use crate::transposer::{
+    input_state_requester::InputStateManager, output_event_manager::OutputEventManager, Transposer,
+};
 
-use super::{wrapped_transposer::WrappedTransposer, InputState};
+use super::wrapped_transposer::WrappedTransposer;
 
 pub mod init_sub_step;
 pub mod input_sub_step;
 pub mod scheduled_sub_step;
 
-pub trait SubStep<T: Transposer, P: SharedPointerKind, S> {
+pub trait SubStep<T: Transposer, P: SharedPointerKind> {
     fn is_input(&self) -> bool {
         false
     }
@@ -35,12 +37,12 @@ pub trait SubStep<T: Transposer, P: SharedPointerKind, S> {
     fn is_saturated(&self) -> bool;
     fn get_time(&self) -> T::Time;
 
-    fn cmp(&self, other: &dyn SubStep<T, P, S>) -> Ordering;
+    fn cmp(&self, other: &dyn SubStep<T, P>) -> Ordering;
 
     fn start_saturate(
         self: Pin<&mut Self>,
         transposer: SharedPointer<WrappedTransposer<T, P>, P>,
-        shared_step_state: NonNull<(S, InputStateManager<T>)>,
+        shared_step_state: NonNull<(OutputEventManager<T>, InputStateManager<T>)>,
     ) -> Result<(), StartSaturateErr>;
 
     fn poll(self: Pin<&mut Self>, waker: &Waker) -> Result<Poll<()>, PollErr>;
