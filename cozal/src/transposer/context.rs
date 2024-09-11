@@ -8,7 +8,7 @@ use std::task::{Context, Poll};
 use rand_chacha::rand_core::CryptoRngCore;
 
 use super::expire_handle::ExpireHandle;
-use super::input_state_requester::InputStateManager;
+use super::input_state_manager::InputStateManager;
 use super::output_event_manager::{EmitOutputFuture, OutputEventManager};
 use super::{Transposer, TransposerInputEventHandler};
 use crate::transposer::TransposerInput;

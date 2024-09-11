@@ -7,7 +7,7 @@ use super::time::SubStepTime;
 use super::transposer_metadata::TransposerMetaData;
 use crate::transposer::context::*;
 use crate::transposer::expire_handle::ExpireHandle;
-use crate::transposer::input_state_requester::InputStateManager;
+use crate::transposer::input_state_manager::InputStateManager;
 use crate::transposer::output_event_manager::OutputEventManager;
 use crate::transposer::Transposer;
 

@@ -10,7 +10,7 @@ use std::{
 use archery::{SharedPointer, SharedPointerKind};
 
 use crate::transposer::{
-    input_state_requester::InputStateManager, output_event_manager::OutputEventManager, Transposer,
+    input_state_manager::InputStateManager, output_event_manager::OutputEventManager, Transposer,
 };
 
 use super::wrapped_transposer::WrappedTransposer;

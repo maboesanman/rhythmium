@@ -12,7 +12,7 @@ use std::{
 use archery::{SharedPointer, SharedPointerKind};
 
 use crate::transposer::{
-    input_state_requester::InputStateManager,
+    input_state_manager::InputStateManager,
     step::{wrapped_transposer::WrappedTransposer, OutputEventManager},
     Transposer, TransposerInput, TransposerInputEventHandler,
 };

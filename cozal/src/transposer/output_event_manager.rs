@@ -55,7 +55,7 @@ pub struct EmitOutputFuture<'a, T: Transposer> {
 
 impl<'a, T: Transposer> EmitOutputFuture<'a, T> {
     pub fn new(mut manager: NonNull<OutputEventManager<T>>, value_to_emit: T::OutputEvent) -> Self {
-        let mut manager_mut = unsafe { manager.as_mut() };
+        let manager_mut = unsafe { manager.as_mut() };
         if manager_mut.outputs_to_swallow > 0 {
             manager_mut.outputs_to_swallow -= 1;
             return Self {

@@ -8,7 +8,7 @@ use super::transposer_metadata::TransposerMetaData;
 use crate::transposer::context::{
     CurrentTimeContext, InputStateManagerContext, InterpolateContext, LastUpdatedTimeContext,
 };
-use crate::transposer::input_state_requester::InputStateManager;
+use crate::transposer::input_state_manager::InputStateManager;
 use crate::transposer::Transposer;
 
 pub struct StepInterpolateContext<'update, T: Transposer, P: SharedPointerKind, S> {

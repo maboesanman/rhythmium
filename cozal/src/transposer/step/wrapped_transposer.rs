@@ -6,7 +6,7 @@ use archery::{SharedPointer, SharedPointerKind};
 use super::sub_step_update_context::SubStepUpdateContext;
 use super::time::SubStepTime;
 use super::transposer_metadata::TransposerMetaData;
-use crate::transposer::input_state_requester::InputStateManager;
+use crate::transposer::input_state_manager::InputStateManager;
 use crate::transposer::output_event_manager::OutputEventManager;
 use crate::transposer::{Transposer, TransposerInput, TransposerInputEventHandler};
 

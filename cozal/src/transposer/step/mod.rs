@@ -28,7 +28,7 @@ use wrapped_transposer::WrappedTransposer;
 
 use crate::transposer::Transposer;
 
-use super::input_state_requester::InputStateManager;
+use super::input_state_manager::InputStateManager;
 use super::output_event_manager::OutputEventManager;
 
 pub struct Step<T: Transposer, P: SharedPointerKind = ArcTK> {
