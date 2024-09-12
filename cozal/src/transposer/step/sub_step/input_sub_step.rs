@@ -1,9 +1,8 @@
 use std::{
     any::TypeId,
-    cell::UnsafeCell,
     cmp::Ordering,
     future::Future,
-    marker::{PhantomData, PhantomPinned},
+    marker::PhantomPinned,
     pin::Pin,
     ptr::NonNull,
     task::{Context, Poll, Waker},
@@ -33,11 +32,13 @@ where
     new_input_sub_step_internal::<T, P, I>(time, input, input_event)
 }
 
+#[allow(unused)]
 struct InputSubStepData<T: Transposer, I: TransposerInput<Base = T>> {
     input: I,
     input_event: I::InputEvent,
 }
 
+#[allow(unused)]
 enum InputSubStepStatus<T: Transposer, P: SharedPointerKind, Fut> {
     Unsaturated {
         time: T::Time,
@@ -51,6 +52,7 @@ enum InputSubStepStatus<T: Transposer, P: SharedPointerKind, Fut> {
     },
 }
 
+#[allow(unused)]
 struct InputSubStep<T: Transposer, P: SharedPointerKind, I: TransposerInput<Base = T>, Fut> {
     status: InputSubStepStatus<T, P, Fut>,
     data: InputSubStepData<T, I>,
@@ -245,6 +247,7 @@ where
 {
     // This is a trick to get the compiler to understand the type of the future.
     #[allow(unreachable_code)]
+    #[allow(clippy::diverging_sub_expression)]
     if false {
         return InputSubStep {
             status: InputSubStepStatus::Saturating {

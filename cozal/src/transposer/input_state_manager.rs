@@ -1,4 +1,12 @@
-use std::{any::TypeId, collections::HashMap, marker::PhantomData, ptr::NonNull};
+use std::{
+    any::TypeId,
+    collections::HashMap,
+    future::Future,
+    marker::PhantomData,
+    pin::Pin,
+    ptr::NonNull,
+    task::{Context, Poll, Waker},
+};
 
 use crate::transposer::{Transposer, TransposerInput, TransposerInputEventHandler};
 
@@ -9,13 +17,15 @@ pub struct InputStateManager<T> {
 }
 
 struct InputStateMap<I: TransposerInput> {
-    requested_input: Option<I>,
+    requested_input: Option<(I, Waker)>,
     states: HashMap<I, NonNull<I::InputState>>,
 }
 
 trait InputStateMapErased {
     // input is owned.
     fn set_request(&mut self, input: Option<NonNull<()>>);
+
+    fn get_request_waker(&self) -> Option<&Waker>;
 
     // result is not owned.
     fn get_request(&self) -> Option<NonNull<()>>;
@@ -30,6 +40,10 @@ trait InputStateMapErased {
 impl<I: TransposerInput> InputStateMapErased for InputStateMap<I> {
     fn set_request(&mut self, input: Option<NonNull<()>>) {
         self.requested_input = input.map(|i| unsafe { i.cast().read() });
+    }
+
+    fn get_request_waker(&self) -> Option<&Waker> {
+        self.requested_input.as_ref().map(|(_, waker)| waker)
     }
 
     fn get_request(&self) -> Option<NonNull<()>> {
@@ -78,7 +92,11 @@ impl<T: Transposer> InputStateManager<T> {
         }
     }
 
-    pub fn get_or_request_state<I>(&mut self, input: I) -> Option<NonNull<I::InputState>>
+    pub fn get_or_request_state<I>(
+        &mut self,
+        input: I,
+        waker: Waker,
+    ) -> Option<NonNull<I::InputState>>
     where
         I: TransposerInput<Base = T>,
         T: TransposerInputEventHandler<I>,
@@ -87,7 +105,7 @@ impl<T: Transposer> InputStateManager<T> {
 
         let inner_map = outer_map_entry.or_insert_with(|| {
             Box::new(InputStateMap::<I> {
-                requested_input: Some(input),
+                requested_input: Some((input, waker)),
                 states: HashMap::new(),
             })
         });
@@ -128,10 +146,56 @@ impl<T: Transposer> InputStateManager<T> {
 
         let inner = self.states.get_mut(&TypeId::of::<I>()).unwrap();
 
+        if let Some(waker) = inner.get_request_waker() {
+            waker.wake_by_ref();
+        }
+
         inner.set_request(None);
 
         inner.insert(NonNull::from(&input).cast(), state.cast());
 
         Ok(())
+    }
+}
+
+pub struct GetInputStateFuture<'fut, 'update: 'fut, I: TransposerInput> {
+    input_state_manager: NonNull<InputStateManager<I::Base>>,
+    phantom_ism: PhantomData<&'fut mut InputStateManager<I::Base>>,
+    phantom_update: PhantomData<fn() -> &'update I::InputState>,
+    input: I,
+    complete: bool,
+}
+
+impl<'fut, 'update: 'fut, I: TransposerInput> GetInputStateFuture<'fut, 'update, I> {
+    pub fn new(input_state_manager: NonNull<InputStateManager<I::Base>>, input: I) -> Self {
+        Self {
+            input_state_manager,
+            phantom_ism: PhantomData,
+            phantom_update: PhantomData,
+            input,
+            complete: false,
+        }
+    }
+}
+
+impl<'fut, 'update: 'fut, I: TransposerInput> Future for GetInputStateFuture<'fut, 'update, I> {
+    type Output = &'update I::InputState;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        if self.complete {
+            return Poll::Pending;
+        }
+        let input = self.input;
+        let this = unsafe { self.get_unchecked_mut() };
+        let input_state_manager = unsafe { this.input_state_manager.as_mut() };
+        match input_state_manager.get_or_request_state(input, cx.waker().clone()) {
+            Some(input_state) => {
+                this.complete = true;
+                #[allow(dropping_references)]
+                drop(this);
+                Poll::Ready(unsafe { input_state.as_ref() })
+            }
+            None => Poll::Pending,
+        }
     }
 }

@@ -1,7 +1,5 @@
 use std::{
-    cell::UnsafeCell,
     future::Future,
-    marker::PhantomData,
     pin::Pin,
     ptr::NonNull,
     task::{Context, Poll, Waker},
@@ -23,6 +21,7 @@ pub fn new_scheduled_sub_step<T: Transposer + Clone, P: SharedPointerKind>(
     new_scheduled_sub_step_internal::<T, P>(time)
 }
 
+#[allow(unused)]
 enum ScheduledSubStepStatus<T: Transposer, P: SharedPointerKind, Fut> {
     Unsaturated {
         time: T::Time,
@@ -167,6 +166,7 @@ fn new_scheduled_sub_step_internal<T: Transposer + Clone, P: SharedPointerKind>(
 ) -> ScheduledSubStepStatus<T, P, impl Future<Output = SharedPointer<WrappedTransposer<T, P>, P>>> {
     // This is a trick to get the compiler to understand the type of the future.
     #[allow(unreachable_code)]
+    #[allow(clippy::diverging_sub_expression)]
     if false {
         return ScheduledSubStepStatus::Saturating {
             time,

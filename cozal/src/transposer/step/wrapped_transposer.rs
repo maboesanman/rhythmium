@@ -1,4 +1,3 @@
-use std::cell::UnsafeCell;
 use std::ptr::NonNull;
 
 use archery::{SharedPointer, SharedPointerKind};

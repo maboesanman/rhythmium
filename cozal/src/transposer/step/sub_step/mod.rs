@@ -1,6 +1,5 @@
 use std::{
     any::TypeId,
-    cell::UnsafeCell,
     cmp::Ordering,
     pin::Pin,
     ptr::NonNull,
@@ -19,6 +18,7 @@ pub mod init_sub_step;
 pub mod input_sub_step;
 pub mod scheduled_sub_step;
 
+#[allow(dead_code)]
 pub trait SubStep<T: Transposer, P: SharedPointerKind> {
     fn is_input(&self) -> bool {
         false

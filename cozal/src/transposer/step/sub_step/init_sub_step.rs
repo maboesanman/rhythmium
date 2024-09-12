@@ -1,5 +1,4 @@
 use std::{
-    cell::UnsafeCell,
     future::Future,
     pin::Pin,
     ptr::NonNull,
@@ -26,6 +25,7 @@ pub fn new_init_sub_step<T: Transposer, P: SharedPointerKind>(
     new_init_sub_step_internal(transposer, rng_seed, start_time, shared_step_state)
 }
 
+#[allow(unused)]
 enum InitSubStepStatus<T: Transposer, P: SharedPointerKind, Fut> {
     Unsaturated {
         start_time: T::Time,

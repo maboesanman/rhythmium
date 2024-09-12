@@ -1,7 +1,6 @@
 use std::hash::Hash;
 
 use context::{HandleInputContext, HandleScheduleContext, InitContext, InterpolateContext};
-use futures_channel::oneshot::Receiver;
 
 pub mod context;
 // pub mod evaluate_to;

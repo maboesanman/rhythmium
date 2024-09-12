@@ -1,16 +1,12 @@
 use core::future::Future;
-use core::pin::Pin;
-use std::cell::UnsafeCell;
-use std::marker::PhantomData;
 use std::ptr::NonNull;
-use std::task::{Context, Poll};
 
 use rand_chacha::rand_core::CryptoRngCore;
 
 use super::expire_handle::ExpireHandle;
-use super::input_state_manager::InputStateManager;
+use super::input_state_manager::{GetInputStateFuture, InputStateManager};
 use super::output_event_manager::{EmitOutputFuture, OutputEventManager};
-use super::{Transposer, TransposerInputEventHandler};
+use super::Transposer;
 use crate::transposer::TransposerInput;
 
 /// This trait is a supertrait of all the context functionality available to the `Transposer::init` function
@@ -90,12 +86,11 @@ pub trait InputStateContext<'a, T: Transposer>: InputStateManagerContext<'a, T> 
     ///
     /// once the resulting future is awaited, the system will retrieve the input state for the given time from the input soure.
     #[must_use]
-    fn get_input_state<'fut, I: TransposerInput<Base = T>>(&'fut mut self, input: I) {
-        // -> impl Future<Output = &'a I::InputState> + 'fut {
-        // let manager = self.get_input_state_manager();
-        // let manager_mut = unsafe { manager.as_mut() };
-        // manager_mu
-        todo!()
+    fn get_input_state<'fut, I: TransposerInput<Base = T>>(
+        &'fut mut self,
+        input: I,
+    ) -> GetInputStateFuture<'fut, 'a, I> {
+        GetInputStateFuture::new(self.get_input_state_manager(), input)
     }
 }
 

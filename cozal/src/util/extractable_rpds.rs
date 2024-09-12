@@ -31,19 +31,19 @@ where
     }
 
     #[must_use]
-    pub fn get<Q: ?Sized>(&self, key: &Q) -> Option<&V>
+    pub fn get<Q>(&self, key: &Q) -> Option<&V>
     where
         K: Borrow<Q>,
-        Q: Hash + Eq,
+        Q: ?Sized + Hash + Eq,
     {
         self.0.get(key)
     }
 
     #[must_use]
-    pub fn get_key_value<Q: ?Sized>(&self, key: &Q) -> Option<(&K, &V)>
+    pub fn get_key_value<Q>(&self, key: &Q) -> Option<(&K, &V)>
     where
         K: Borrow<Q>,
-        Q: Hash + Eq,
+        Q: ?Sized + Hash + Eq,
     {
         self.0.get_key_value(key)
     }
@@ -53,10 +53,10 @@ where
     }
 
     #[must_use]
-    fn remove<Q: ?Sized>(&mut self, key: &Q) -> Option<V>
+    fn remove<Q>(&mut self, key: &Q) -> Option<V>
     where
         K: Borrow<Q>,
-        Q: Hash + Eq,
+        Q: ?Sized + Hash + Eq,
         V: Clone,
     {
         self.0.get(key).cloned()

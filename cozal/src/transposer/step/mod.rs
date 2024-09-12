@@ -10,20 +10,11 @@ mod wrapped_transposer;
 // #[cfg(test)]
 // mod test;
 
-use core::future::Future;
-use core::pin::Pin;
-use core::task::{Context, Waker};
-use std::cell::UnsafeCell;
-use std::marker::PhantomData;
+use core::task::Waker;
 use std::ptr::NonNull;
-use std::task::Poll;
 
 use archery::{ArcTK, SharedPointer, SharedPointerKind};
-use futures_channel::{mpsc, oneshot};
-use futures_util::{FutureExt, StreamExt};
-use smallvec::SmallVec;
 use sub_step::SubStep;
-use time::ScheduledTime;
 use wrapped_transposer::WrappedTransposer;
 
 use crate::transposer::Transposer;
@@ -70,7 +61,7 @@ impl<T: Transposer, P: SharedPointerKind> Step<T, P> {
 
 impl<T: Transposer, P: SharedPointerKind> Step<T, P> {
     fn new_input_state() -> NonNull<(OutputEventManager<T>, InputStateManager<T>)> {
-        let input_state = Box::new(Default::default());
+        let input_state = Box::default();
         NonNull::from(Box::leak(input_state))
     }
 }
