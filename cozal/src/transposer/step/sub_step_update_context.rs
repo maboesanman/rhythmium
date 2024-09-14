@@ -53,14 +53,6 @@ impl<'update, T: Transposer, P: SharedPointerKind> SubStepUpdateContext<'update,
             shared_step_state,
         }
     }
-
-    unsafe fn get_shared_step_state(
-        &mut self,
-    ) -> &mut (OutputEventManager<T>, InputStateManager<T>) {
-        let mut shared_step_state: NonNull<(OutputEventManager<T>, InputStateManager<T>)> =
-            self.shared_step_state;
-        unsafe { shared_step_state.as_mut() }
-    }
 }
 
 impl<'update, T: Transposer, P: SharedPointerKind> InputStateManagerContext<'update, T>

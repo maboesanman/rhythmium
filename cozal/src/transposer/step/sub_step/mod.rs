@@ -12,11 +12,50 @@ use crate::transposer::{
     input_state_manager::InputStateManager, output_event_manager::OutputEventManager, Transposer,
 };
 
-use super::wrapped_transposer::WrappedTransposer;
+use super::{wrapped_transposer::WrappedTransposer, PollErr};
 
 pub mod init_sub_step;
 pub mod input_sub_step;
 pub mod scheduled_sub_step;
+
+#[repr(transparent)]
+pub struct BoxedSubStep<'t, T: Transposer + 't, P: SharedPointerKind + 't>(
+    Box<dyn SubStep<T, P> + 't>,
+);
+
+impl<'t, T: Transposer + 't, P: SharedPointerKind + 't> BoxedSubStep<'t, T, P> {
+    pub fn new(sub_step: Box<dyn SubStep<T, P> + 't>) -> Self {
+        Self(sub_step)
+    }
+
+    pub fn as_ref(&self) -> &dyn SubStep<T, P> {
+        &*self.0
+    }
+
+    pub fn as_mut(&mut self) -> Pin<&mut dyn SubStep<T, P>> {
+        unsafe { Pin::new_unchecked(&mut *self.0) }
+    }
+}
+
+impl<'t, T: Transposer + 't, P: SharedPointerKind + 't> Ord for BoxedSubStep<'t, T, P> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.as_ref().dyn_cmp(other.as_ref())
+    }
+}
+
+impl<'t, T: Transposer + 't, P: SharedPointerKind + 't> PartialOrd for BoxedSubStep<'t, T, P> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<'t, T: Transposer + 't, P: SharedPointerKind + 't> PartialEq for BoxedSubStep<'t, T, P> {
+    fn eq(&self, other: &Self) -> bool {
+        matches!(self.cmp(other), Ordering::Equal)
+    }
+}
+
+impl<'t, T: Transposer + 't, P: SharedPointerKind + 't> Eq for BoxedSubStep<'t, T, P> {}
 
 #[allow(dead_code)]
 pub trait SubStep<T: Transposer, P: SharedPointerKind> {
@@ -37,7 +76,7 @@ pub trait SubStep<T: Transposer, P: SharedPointerKind> {
     fn is_saturated(&self) -> bool;
     fn get_time(&self) -> T::Time;
 
-    fn cmp(&self, other: &dyn SubStep<T, P>) -> Ordering;
+    fn dyn_cmp(&self, other: &dyn SubStep<T, P>) -> Ordering;
 
     fn start_saturate(
         self: Pin<&mut Self>,
@@ -52,11 +91,8 @@ pub trait SubStep<T: Transposer, P: SharedPointerKind> {
     fn take_finished_transposer(
         self: Pin<&mut Self>,
     ) -> Option<SharedPointer<WrappedTransposer<T, P>, P>>;
-}
 
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
-pub enum PollErr {
-    NotSaturating,
+    fn desaturate(self: Pin<&mut Self>);
 }
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]

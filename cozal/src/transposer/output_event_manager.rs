@@ -24,6 +24,26 @@ impl<T: Transposer> Default for OutputEventManager<T> {
     }
 }
 
+impl<T: Transposer> OutputEventManager<T> {
+    pub fn new_with_swallow_count(swallow_count: usize) -> Self {
+        Self {
+            outputs_to_swallow: swallow_count,
+            inner: Default::default(),
+        }
+    }
+    pub fn try_take_value(&mut self) -> Option<T::OutputEvent> {
+        match core::mem::take(&mut self.inner) {
+            OutputEventManagerInner::Occupied { event, waiting } => {
+                for waker in waiting.into_iter() {
+                    waker.wake();
+                }
+                Some(event)
+            }
+            OutputEventManagerInner::Vacant => None,
+        }
+    }
+}
+
 pub enum OutputEventManagerInner<T: Transposer> {
     // wakers to call when the output slot is vacated.
     Occupied {

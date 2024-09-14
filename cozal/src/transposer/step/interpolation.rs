@@ -10,8 +10,7 @@ use archery::{SharedPointer, SharedPointerKind};
 
 use super::interpolate_context::StepInterpolateContext;
 use super::wrapped_transposer::WrappedTransposer;
-use super::InputState;
-use crate::transposer::input_state_requester::InputStateManager;
+use crate::transposer::input_state_manager::InputStateManager;
 use crate::transposer::Transposer;
 
 pub trait Interpolation<T: Transposer>: Future<Output = T::OutputState> {
@@ -39,7 +38,10 @@ enum InterpolationInner<T, Fb: FutureBuilder<T>> {
 trait FutureBuilder<T> {
     type Output;
     type Future: Future<Output = Self::Output>;
-    fn build_future(self, input_state_ptr: NonNull<UnsafeCell<InputStateManager<T>>>) -> Self::Future;
+    fn build_future(
+        self,
+        input_state_ptr: NonNull<UnsafeCell<InputStateManager<T>>>,
+    ) -> Self::Future;
 }
 
 impl<Fn, T, Fut> FutureBuilder<T> for Fn
@@ -50,7 +52,10 @@ where
     type Output = Fut::Output;
     type Future = Fut;
 
-    fn build_future(self, input_state_ptr: NonNull<UnsafeCell<InputStateManager<T>>>) -> Self::Future {
+    fn build_future(
+        self,
+        input_state_ptr: NonNull<UnsafeCell<InputStateManager<T>>>,
+    ) -> Self::Future {
         self(input_state_ptr)
     }
 }

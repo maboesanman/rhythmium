@@ -12,13 +12,20 @@ use crate::transposer::{
     step::wrapped_transposer::WrappedTransposer, Transposer,
 };
 
-use super::{PollErr, StartSaturateErr, SubStep};
+use super::{BoxedSubStep, PollErr, StartSaturateErr, SubStep};
 
 #[allow(dead_code)]
 pub fn new_scheduled_sub_step<T: Transposer + Clone, P: SharedPointerKind>(
     time: T::Time,
 ) -> impl SubStep<T, P> {
     new_scheduled_sub_step_internal::<T, P>(time)
+}
+
+#[allow(dead_code)]
+pub fn new_scheduled_boxed_sub_step<'a, T: Transposer + Clone + 'a, P: SharedPointerKind + 'a>(
+    time: T::Time,
+) -> BoxedSubStep<'a, T, P> {
+    BoxedSubStep::new(Box::new(new_scheduled_sub_step_internal::<T, P>(time)))
 }
 
 #[allow(unused)]
@@ -66,7 +73,7 @@ where
         }
     }
 
-    fn cmp(&self, other: &dyn SubStep<T, P>) -> std::cmp::Ordering {
+    fn dyn_cmp(&self, other: &dyn SubStep<T, P>) -> std::cmp::Ordering {
         match other.is_scheduled() {
             true => std::cmp::Ordering::Equal,
             false => std::cmp::Ordering::Greater,
@@ -110,7 +117,7 @@ where
         let this = unsafe { self.get_unchecked_mut() };
 
         let wrapped_transposer = match this {
-            ScheduledSubStepStatus::Unsaturated { .. } => return Err(PollErr::NotSaturating),
+            ScheduledSubStepStatus::Unsaturated { .. } => return Err(PollErr::Unsaturated),
             ScheduledSubStepStatus::Saturating { future, .. } => {
                 let pinned = unsafe { Pin::new_unchecked(future) };
 
@@ -119,7 +126,7 @@ where
                     Poll::Pending => return Ok(Poll::Pending),
                 }
             }
-            ScheduledSubStepStatus::Saturated { .. } => return Err(PollErr::NotSaturating),
+            ScheduledSubStepStatus::Saturated { .. } => return Err(PollErr::Saturated),
         };
 
         *this = ScheduledSubStepStatus::Saturated { wrapped_transposer };
@@ -146,6 +153,14 @@ where
             ScheduledSubStepStatus::Saturating { .. } => None,
             ScheduledSubStepStatus::Saturated { wrapped_transposer } => Some(wrapped_transposer),
         }
+    }
+
+    fn desaturate(self: Pin<&mut Self>) {
+        let this = unsafe { self.get_unchecked_mut() };
+
+        let time = <Self as SubStep<T, P>>::get_time(this);
+
+        *this = ScheduledSubStepStatus::Unsaturated { time };
     }
 }
 

@@ -10,13 +10,12 @@ use std::{
 
 use archery::{SharedPointer, SharedPointerKind};
 
+use super::{BoxedSubStep, StartSaturateErr, SubStep};
 use crate::transposer::{
     input_state_manager::InputStateManager,
-    step::{wrapped_transposer::WrappedTransposer, OutputEventManager},
+    step::{wrapped_transposer::WrappedTransposer, OutputEventManager, PollErr},
     Transposer, TransposerInput, TransposerInputEventHandler,
 };
-
-use super::{PollErr, StartSaturateErr, SubStep};
 
 #[allow(dead_code)]
 pub fn new_input_sub_step<T, P, I>(
@@ -30,6 +29,24 @@ where
     T: Transposer + TransposerInputEventHandler<I> + Clone,
 {
     new_input_sub_step_internal::<T, P, I>(time, input, input_event)
+}
+
+#[allow(dead_code)]
+pub fn new_input_boxed_sub_step<'a, T, P, I>(
+    time: T::Time,
+    input: I,
+    input_event: I::InputEvent,
+) -> BoxedSubStep<'a, T, P>
+where
+    P: SharedPointerKind + 'a,
+    I: TransposerInput<Base = T>,
+    T: Transposer + TransposerInputEventHandler<I> + Clone + 'a,
+{
+    BoxedSubStep::new(Box::new(new_input_sub_step::<T, P, I>(
+        time,
+        input,
+        input_event,
+    )))
 }
 
 #[allow(unused)]
@@ -96,7 +113,7 @@ where
         }
     }
 
-    fn cmp(&self, other: &dyn SubStep<T, P>) -> Ordering {
+    fn dyn_cmp(&self, other: &dyn SubStep<T, P>) -> Ordering {
         match self.get_time().cmp(&other.get_time()) {
             Ordering::Equal => {}
             ne => return ne,
@@ -173,7 +190,7 @@ where
         let this = unsafe { self.get_unchecked_mut() };
 
         let wrapped_transposer = match &mut this.status {
-            InputSubStepStatus::Unsaturated { .. } => return Err(PollErr::NotSaturating),
+            InputSubStepStatus::Unsaturated { .. } => return Err(PollErr::Unsaturated),
             InputSubStepStatus::Saturating { future, .. } => {
                 let pinned = unsafe { Pin::new_unchecked(future) };
 
@@ -182,7 +199,7 @@ where
                     Poll::Pending => return Ok(Poll::Pending),
                 }
             }
-            InputSubStepStatus::Saturated { .. } => return Err(PollErr::NotSaturating),
+            InputSubStepStatus::Saturated { .. } => return Err(PollErr::Saturated),
         };
 
         this.status = InputSubStepStatus::Saturated { wrapped_transposer };
@@ -211,6 +228,14 @@ where
             InputSubStepStatus::Saturating { .. } => None,
             InputSubStepStatus::Saturated { wrapped_transposer } => Some(wrapped_transposer),
         }
+    }
+
+    fn desaturate(self: Pin<&mut Self>) {
+        let this = unsafe { self.get_unchecked_mut() };
+
+        let time = <Self as SubStep<T, P>>::get_time(this);
+
+        this.status = InputSubStepStatus::Unsaturated { time };
     }
 }
 
