@@ -40,25 +40,20 @@ pub fn new_init_boxed_sub_step<'a, T: Transposer + 'a, P: SharedPointerKind + 'a
 }
 
 #[allow(unused)]
-enum InitSubStepStatus<T: Transposer, P: SharedPointerKind, Fut> {
+enum InitSubStepStatus<T: Transposer, P: SharedPointerKind> {
     Unsaturated {
         time: T::Time,
     },
     Saturating {
         time: T::Time,
-        future: Fut,
+        future: wrapped_handler::WrappedHandlerFuture<T, P>,
     },
     Saturated {
         wrapped_transposer: SharedPointer<WrappedTransposer<T, P>, P>,
     },
 }
 
-impl<
-        T: Transposer,
-        P: SharedPointerKind,
-        Fut: Future<Output = SharedPointer<WrappedTransposer<T, P>, P>>,
-    > SubStep<T, P> for InitSubStepStatus<T, P, Fut>
-{
+impl<T: Transposer, P: SharedPointerKind> SubStep<T, P> for InitSubStepStatus<T, P> {
     fn is_init(&self) -> bool {
         true
     }
@@ -161,9 +156,25 @@ fn new_init_sub_step_internal<T: Transposer, P: SharedPointerKind>(
     rng_seed: [u8; 32],
     start_time: T::Time,
     shared_step_state: NonNull<(OutputEventManager<T>, InputStateManager<T>)>,
-) -> InitSubStepStatus<T, P, impl Future<Output = SharedPointer<WrappedTransposer<T, P>, P>>> {
+) -> InitSubStepStatus<T, P> {
     InitSubStepStatus::Saturating {
         time: start_time,
-        future: WrappedTransposer::init(transposer, rng_seed, start_time, shared_step_state),
+        future: wrapped_handler::handle(transposer, rng_seed, start_time, shared_step_state),
+    }
+}
+
+mod wrapped_handler {
+    use super::*;
+
+    pub type WrappedHandlerFuture<T: Transposer, P: SharedPointerKind> =
+        impl Future<Output = SharedPointer<WrappedTransposer<T, P>, P>>;
+
+    pub fn handle<T: Transposer, P: SharedPointerKind>(
+        transposer: T,
+        rng_seed: [u8; 32],
+        start_time: T::Time,
+        shared_step_state: NonNull<(OutputEventManager<T>, InputStateManager<T>)>,
+    ) -> WrappedHandlerFuture<T, P> {
+        async move { WrappedTransposer::init(transposer, rng_seed, start_time, shared_step_state).await }
     }
 }

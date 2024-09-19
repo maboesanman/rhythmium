@@ -28,7 +28,11 @@ where
     I: TransposerInput<Base = T>,
     T: Transposer + TransposerInputEventHandler<I> + Clone,
 {
-    new_input_sub_step_internal::<T, P, I>(time, input, input_event)
+    InputSubStep {
+        status: InputSubStepStatus::Unsaturated { time },
+        data: InputSubStepData { input, input_event },
+        _pinned: PhantomPinned,
+    }
 }
 
 #[allow(dead_code)]
@@ -56,13 +60,18 @@ struct InputSubStepData<T: Transposer, I: TransposerInput<Base = T>> {
 }
 
 #[allow(unused)]
-enum InputSubStepStatus<T: Transposer, P: SharedPointerKind, Fut> {
+enum InputSubStepStatus<T: Transposer, P: SharedPointerKind, I: TransposerInput<Base = T>>
+where
+    P: SharedPointerKind,
+    I: TransposerInput<Base = T>,
+    T: Transposer + TransposerInputEventHandler<I> + Clone,
+{
     Unsaturated {
         time: T::Time,
     },
     Saturating {
         time: T::Time,
-        future: Fut,
+        future: wrapped_handler::WrappedHandlerFuture<T, P, I>,
     },
     Saturated {
         wrapped_transposer: SharedPointer<WrappedTransposer<T, P>, P>,
@@ -70,18 +79,22 @@ enum InputSubStepStatus<T: Transposer, P: SharedPointerKind, Fut> {
 }
 
 #[allow(unused)]
-struct InputSubStep<T: Transposer, P: SharedPointerKind, I: TransposerInput<Base = T>, Fut> {
-    status: InputSubStepStatus<T, P, Fut>,
+struct InputSubStep<T: Transposer, P: SharedPointerKind, I: TransposerInput<Base = T>>
+where
+    P: SharedPointerKind,
+    I: TransposerInput<Base = T>,
+    T: Transposer + TransposerInputEventHandler<I> + Clone,
+{
+    status: InputSubStepStatus<T, P, I>,
     data: InputSubStepData<T, I>,
     _pinned: PhantomPinned,
 }
 
-impl<T, P, I, Fut> SubStep<T, P> for InputSubStep<T, P, I, Fut>
+impl<T, P, I> SubStep<T, P> for InputSubStep<T, P, I>
 where
     T: Transposer + TransposerInputEventHandler<I> + Clone,
     P: SharedPointerKind,
     I: TransposerInput<Base = T>,
-    Fut: Future<Output = SharedPointer<WrappedTransposer<T, P>, P>>,
 {
     fn is_input(&self) -> bool {
         true
@@ -163,7 +176,7 @@ where
         let input = NonNull::from(&this.data.input);
         let input_event = NonNull::from(&this.data.input_event);
 
-        let future = shared_pointer_update::<T, P, I>(
+        let future = wrapped_handler::handle::<T, P, I>(
             transposer,
             time,
             input,
@@ -171,17 +184,7 @@ where
             shared_step_state,
         );
 
-        // // debug_assert_eq!(TypeId::of::<Fut>(), future.type_id());
-
-        // Safety: this future type is only ever created by invoking the `shared_pointer_update` function,
-        // so the future returned by it is exactly `Fut`.
-        let corrected_future = unsafe { core::mem::transmute_copy::<_, Fut>(&future) };
-        core::mem::forget(future);
-
-        this.status = InputSubStepStatus::Saturating {
-            time,
-            future: corrected_future,
-        };
+        this.status = InputSubStepStatus::Saturating { time, future };
 
         Ok(())
     }
@@ -239,60 +242,36 @@ where
     }
 }
 
-async fn shared_pointer_update<T, P, I>(
-    mut wrapped_transposer: SharedPointer<WrappedTransposer<T, P>, P>,
-    time: T::Time,
-    input: NonNull<I>,
-    input_event: NonNull<I::InputEvent>,
-    shared_step_state: NonNull<(OutputEventManager<T>, InputStateManager<T>)>,
-) -> SharedPointer<WrappedTransposer<T, P>, P>
-where
-    P: SharedPointerKind,
-    I: TransposerInput<Base = T>,
-    T: Transposer + TransposerInputEventHandler<I> + Clone,
-{
-    let transposer_mut = SharedPointer::make_mut(&mut wrapped_transposer);
-    let input = unsafe { input.as_ref() };
-    let input_event = unsafe { input_event.as_ref() };
-    transposer_mut
-        .handle_input(time, input, input_event, shared_step_state)
-        .await;
-    wrapped_transposer
-}
+mod wrapped_handler {
+    use super::*;
 
-fn new_input_sub_step_internal<T, P, I>(
-    time: T::Time,
-    input: I,
-    input_event: I::InputEvent,
-) -> InputSubStep<T, P, I, impl Future<Output = SharedPointer<WrappedTransposer<T, P>, P>>>
-where
-    P: SharedPointerKind,
-    I: TransposerInput<Base = T>,
-    T: Transposer + TransposerInputEventHandler<I> + Clone,
-{
-    // This is a trick to get the compiler to understand the type of the future.
-    #[allow(unreachable_code)]
-    #[allow(clippy::diverging_sub_expression)]
-    if false {
-        return InputSubStep {
-            status: InputSubStepStatus::Saturating {
-                time: unreachable!(),
-                future: shared_pointer_update::<T, P, I>(
-                    unreachable!(),
-                    unreachable!(),
-                    unreachable!(),
-                    unreachable!(),
-                    unreachable!(),
-                ),
-            },
-            data: unreachable!(),
-            _pinned: unreachable!(),
-        };
-    }
+    pub type WrappedHandlerFuture<T, P, I>
+    where
+        P: SharedPointerKind,
+        I: TransposerInput<Base = T>,
+        T: Transposer + TransposerInputEventHandler<I> + Clone,
+    = impl Future<Output = SharedPointer<WrappedTransposer<T, P>, P>>;
 
-    InputSubStep {
-        status: InputSubStepStatus::Unsaturated { time },
-        data: InputSubStepData { input, input_event },
-        _pinned: PhantomPinned,
+    pub fn handle<T, P, I>(
+        mut wrapped_transposer: SharedPointer<WrappedTransposer<T, P>, P>,
+        time: T::Time,
+        input: NonNull<I>,
+        input_event: NonNull<I::InputEvent>,
+        shared_step_state: NonNull<(OutputEventManager<T>, InputStateManager<T>)>,
+    ) -> WrappedHandlerFuture<T, P, I>
+    where
+        P: SharedPointerKind,
+        I: TransposerInput<Base = T>,
+        T: Transposer + TransposerInputEventHandler<I> + Clone,
+    {
+        async move {
+            let transposer_mut = SharedPointer::make_mut(&mut wrapped_transposer);
+            let input = unsafe { input.as_ref() };
+            let input_event = unsafe { input_event.as_ref() };
+            transposer_mut
+                .handle_input(time, input, input_event, shared_step_state)
+                .await;
+            wrapped_transposer
+        }
     }
 }

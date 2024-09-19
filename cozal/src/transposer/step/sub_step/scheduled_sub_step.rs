@@ -18,35 +18,34 @@ use super::{BoxedSubStep, PollErr, StartSaturateErr, SubStep};
 pub fn new_scheduled_sub_step<T: Transposer + Clone, P: SharedPointerKind>(
     time: T::Time,
 ) -> impl SubStep<T, P> {
-    new_scheduled_sub_step_internal::<T, P>(time)
+    ScheduledSubStepStatus::Unsaturated { time }
 }
 
 #[allow(dead_code)]
 pub fn new_scheduled_boxed_sub_step<'a, T: Transposer + Clone + 'a, P: SharedPointerKind + 'a>(
     time: T::Time,
 ) -> BoxedSubStep<'a, T, P> {
-    BoxedSubStep::new(Box::new(new_scheduled_sub_step_internal::<T, P>(time)))
+    BoxedSubStep::new(Box::new(new_scheduled_sub_step::<T, P>(time)))
 }
 
 #[allow(unused)]
-enum ScheduledSubStepStatus<T: Transposer, P: SharedPointerKind, Fut> {
+enum ScheduledSubStepStatus<T: Transposer + Clone, P: SharedPointerKind> {
     Unsaturated {
         time: T::Time,
     },
     Saturating {
         time: T::Time,
-        future: Fut,
+        future: wrapped_handler::WrappedHandlerFuture<T, P>,
     },
     Saturated {
         wrapped_transposer: SharedPointer<WrappedTransposer<T, P>, P>,
     },
 }
 
-impl<T, P, Fut> SubStep<T, P> for ScheduledSubStepStatus<T, P, Fut>
+impl<T, P> SubStep<T, P> for ScheduledSubStepStatus<T, P>
 where
     T: Transposer + Clone,
     P: SharedPointerKind,
-    Fut: Future<Output = SharedPointer<WrappedTransposer<T, P>, P>>,
 {
     fn is_scheduled(&self) -> bool {
         true
@@ -96,19 +95,9 @@ where
             return Err(StartSaturateErr::SubStepTimeIsPast);
         }
 
-        let future = shared_pointer_update::<T, P>(transposer, time, shared_step_state);
+        let future = wrapped_handler::handle::<T, P>(transposer, time, shared_step_state);
 
-        // debug_assert_eq!(TypeId::of::<Fut>(), future.type_id());
-
-        // Safety: this future type is only ever created by invoking the `shared_pointer_update` function,
-        // so the future returned by it is exactly `Fut`.
-        let corrected_future = unsafe { core::mem::transmute_copy::<_, Fut>(&future) };
-        core::mem::forget(future);
-
-        *this = ScheduledSubStepStatus::Saturating {
-            time,
-            future: corrected_future,
-        };
+        *this = ScheduledSubStepStatus::Saturating { time, future };
 
         Ok(())
     }
@@ -164,30 +153,23 @@ where
     }
 }
 
-async fn shared_pointer_update<T: Transposer + Clone, P: SharedPointerKind>(
-    mut wrapped_transposer: SharedPointer<WrappedTransposer<T, P>, P>,
-    time: T::Time,
-    shared_step_state: NonNull<(OutputEventManager<T>, InputStateManager<T>)>,
-) -> SharedPointer<WrappedTransposer<T, P>, P> {
-    let transposer_mut = SharedPointer::make_mut(&mut wrapped_transposer);
-    transposer_mut
-        .handle_scheduled(time, shared_step_state)
-        .await;
-    wrapped_transposer
-}
+mod wrapped_handler {
+    use super::*;
 
-fn new_scheduled_sub_step_internal<T: Transposer + Clone, P: SharedPointerKind>(
-    time: T::Time,
-) -> ScheduledSubStepStatus<T, P, impl Future<Output = SharedPointer<WrappedTransposer<T, P>, P>>> {
-    // This is a trick to get the compiler to understand the type of the future.
-    #[allow(unreachable_code)]
-    #[allow(clippy::diverging_sub_expression)]
-    if false {
-        return ScheduledSubStepStatus::Saturating {
-            time,
-            future: shared_pointer_update::<T, P>(unreachable!(), unreachable!(), unreachable!()),
-        };
+    pub type WrappedHandlerFuture<T: Transposer + Clone, P: SharedPointerKind> =
+        impl Future<Output = SharedPointer<WrappedTransposer<T, P>, P>>;
+
+    pub fn handle<T: Transposer + Clone, P: SharedPointerKind>(
+        mut wrapped_transposer: SharedPointer<WrappedTransposer<T, P>, P>,
+        time: T::Time,
+        shared_step_state: NonNull<(OutputEventManager<T>, InputStateManager<T>)>,
+    ) -> WrappedHandlerFuture<T, P> {
+        async move {
+            let transposer_mut = SharedPointer::make_mut(&mut wrapped_transposer);
+            transposer_mut
+                .handle_scheduled(time, shared_step_state)
+                .await;
+            wrapped_transposer
+        }
     }
-
-    ScheduledSubStepStatus::Unsaturated { time }
 }
