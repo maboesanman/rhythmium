@@ -141,12 +141,14 @@ where
         }
 
         match self.input_sort().cmp(&other.input_sort()) {
-            Ordering::Equal => {}
+            Ordering::Equal => {
+                // we compared both the input sort and the input type_id in this comparison, so
+                // now we can be sure the type of other is Self.
+            }
             ne => return ne,
         }
 
-        let other_addr = (other as *const dyn SubStep<T, P>).addr();
-        let other_ptr = (self as *const Self).with_addr(other_addr);
+        let other_ptr = other as *const dyn SubStep<T, P> as *const Self;
         let other = unsafe { &*other_ptr };
 
         match self.data.input.cmp(&other.data.input) {
@@ -154,7 +156,14 @@ where
             ne => return ne,
         }
 
-        self.data.input_event.cmp(&other.data.input_event)
+        match self.data.input_event.cmp(&other.data.input_event) {
+            Ordering::Equal => {}
+            ne => return ne,
+        }
+
+        // could sort by byte representation of input_event, but not sure about
+        // endianness between platforms.
+        Ordering::Equal
     }
 
     fn start_saturate(

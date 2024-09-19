@@ -77,6 +77,7 @@ pub struct Step<'t, T: Transposer + 't, P: SharedPointerKind + 't = ArcTK> {
 
 impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Drop for Step<'a, T, P> {
     fn drop(&mut self) {
+        // doesn't matter if there are non-null pointers to this in steps since they won't access this during drop.
         Self::drop_shared_step_state(self.shared_step_state);
     }
 }
@@ -120,13 +121,15 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
         }
     }
 
-    pub fn get_input_state(&mut self) -> &mut InputStateManager<T> {
-        let mut input_state: NonNull<(OutputEventManager<T>, InputStateManager<T>)> =
-            self.shared_step_state;
-        &mut unsafe { input_state.as_mut() }.1
+    fn get_input_state(&self) -> &InputStateManager<T> {
+        &unsafe { self.shared_step_state.as_ref() }.1
     }
 
-    pub fn get_output_state(&mut self) -> &mut OutputEventManager<T> {
+    fn get_input_state_mut(&mut self) -> &mut InputStateManager<T> {
+        &mut unsafe { self.shared_step_state.as_mut() }.1
+    }
+
+    fn get_output_state_mut(&mut self) -> &mut OutputEventManager<T> {
         let mut input_state: NonNull<(OutputEventManager<T>, InputStateManager<T>)> =
             self.shared_step_state;
         &mut unsafe { input_state.as_mut() }.0
@@ -178,23 +181,45 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
             }
         }
 
-        let next_step = match (next_scheduled_time, next_input) {
+        let (time, next_scheduled_time, next_input) = match (next_scheduled_time, next_input) {
             (None, None) => return Ok(None),
-            (None, Some(i)) => i.take_sub_step(),
-            (Some(t), None) => new_scheduled_boxed_sub_step::<'a, T, P>(t),
+            (None, Some(i)) => (i.get_time(), None, Some(i)),
+            (Some(t), None) => (t, Some(t), None),
             (Some(t), Some(i)) => {
-                if i.get_time() > t {
-                    new_scheduled_boxed_sub_step::<'a, T, P>(t)
+                let i_time = i.get_time();
+                if i_time > t {
+                    (t, Some(t), None)
                 } else {
-                    i.take_sub_step()
+                    (i_time, None, Some(i))
                 }
             }
         };
 
-        let time = next_step.as_ref().get_time();
+        let steps = match (next_scheduled_time, next_input) {
+            (None, Some(i)) => {
+                let mut steps = Vec::new();
+                let mut front = Some(i);
+                loop {
+                    let (item, new_front) = match front.take() {
+                        Some(front) => {
+                            if front.get_time() != time {
+                                break;
+                            }
+                            front.take_sub_step()
+                        }
+                        None => break,
+                    };
+                    front = new_front;
+                    steps.push(item);
+                }
+                steps
+            }
+            (Some(t), None) => vec![new_scheduled_boxed_sub_step::<'a, T, P>(t)],
+            _ => unreachable!(),
+        };
 
         Ok(Some(Self {
-            steps: vec![next_step],
+            steps,
             status: StepStatus::Unsaturated,
             time,
             shared_step_state: Self::new_shared_step_state(),
@@ -261,7 +286,7 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
     where
         T: Clone,
     {
-        *self.get_output_state() = OutputEventManager::new_with_swallow_count(self.event_count);
+        *self.get_output_state_mut() = OutputEventManager::new_with_swallow_count(self.event_count);
         let shared_step_state = self.shared_step_state;
         let first = match self.get_step_status_mut() {
             ActiveStepStatusMut::Unsaturated(first) => first,
@@ -304,12 +329,13 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
 
             match sub_step.as_mut().poll(waker)? {
                 Poll::Pending => {
-                    if let Some(output_event) = self.get_output_state().try_take_value() {
+                    if let Some(output_event) = self.get_output_state_mut().try_take_value() {
                         self.event_count += 1;
                         break Ok(StepPoll::Emitted(output_event));
                     }
 
-                    if let Some(type_id) = self.get_input_state().get_requested_input_type_id() {
+                    if let Some(type_id) = self.get_input_state_mut().get_requested_input_type_id()
+                    {
                         break Ok(StepPoll::StateRequested(type_id));
                     }
 
@@ -355,11 +381,15 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
         }
     }
 
+    pub fn get_requested_input_type_id(&self) -> Option<TypeId> {
+        self.get_input_state().get_requested_input_type_id()
+    }
+
     pub fn get_requested_input<I: TransposerInput<Base = T>>(&mut self) -> Option<I>
     where
         T: TransposerInputEventHandler<I>,
     {
-        self.get_input_state().get_requested_input()
+        self.get_input_state_mut().get_requested_input()
     }
 
     pub fn provide_input_state<I: TransposerInput<Base = T>>(
@@ -371,7 +401,7 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
         T: TransposerInputEventHandler<I>,
     {
         let input_state = NonNull::from(Box::leak(Box::new(input_state)));
-        self.get_input_state()
+        self.get_input_state_mut()
             .provide_input_state(input, input_state)
             .map_err(|ptr| *unsafe { Box::from_raw(ptr.as_ptr()) })
     }

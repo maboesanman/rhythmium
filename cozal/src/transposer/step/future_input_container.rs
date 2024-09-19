@@ -10,9 +10,9 @@ pub trait FutureInputContainer<'t, T: Transposer + 't, P: SharedPointerKind + 't
     fn next(&'_ mut self) -> Option<impl FutureInputContainerGuard<'t, T, P> + '_>;
 }
 
-pub trait FutureInputContainerGuard<'t, T: Transposer, P: SharedPointerKind> {
+pub trait FutureInputContainerGuard<'t, T: Transposer, P: SharedPointerKind>: Sized {
     fn get_time(&self) -> T::Time;
-    fn take_sub_step(self) -> BoxedSubStep<'t, T, P>;
+    fn take_sub_step(self) -> (BoxedSubStep<'t, T, P>, Option<Self>);
 }
 
 impl<'t, T: Transposer + 't, P: SharedPointerKind + 't> FutureInputContainer<'t, T, P>
@@ -33,8 +33,8 @@ impl<'a, 't, T: Transposer, P: SharedPointerKind> FutureInputContainerGuard<'t, 
         self.as_ref().unwrap().as_ref().get_time()
     }
 
-    fn take_sub_step(self) -> BoxedSubStep<'t, T, P> {
-        core::mem::take(self).unwrap()
+    fn take_sub_step(self) -> (BoxedSubStep<'t, T, P>, Option<Self>) {
+        (core::mem::take(self).unwrap(), None)
     }
 }
 
@@ -57,7 +57,10 @@ impl<'a, 't, T: Transposer, P: SharedPointerKind> FutureInputContainerGuard<'t, 
         self.first().unwrap().as_ref().get_time()
     }
 
-    fn take_sub_step(self) -> BoxedSubStep<'t, T, P> {
-        self.pop_first().unwrap()
+    fn take_sub_step(self) -> (BoxedSubStep<'t, T, P>, Option<Self>) {
+        let value = self.pop_first().unwrap();
+        let next = if self.is_empty() { None } else { Some(self) };
+
+        (value, next)
     }
 }

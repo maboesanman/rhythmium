@@ -24,16 +24,24 @@ enum InterpolationInner<T: Transposer, P: SharedPointerKind> {
         wrapped_transposer: SharedPointer<WrappedTransposer<T, P>, P>,
         input_state: InputStateManager<T>,
     },
-    InProgress {
-        interpolation_time: T::Time,
-        future: MaybeUninit<interpolate::FutureImpl<T, P>>,
-        input_state: InputStateManager<T>,
-
-        // future contains a reference to input_state.
-        _pin: PhantomPinned,
-    },
+    InProgress(InterpolateInnerInProgress<T, P>),
     #[default]
     Dummy,
+}
+
+struct InterpolateInnerInProgress<T: Transposer, P: SharedPointerKind> {
+    interpolation_time: T::Time,
+    future: MaybeUninit<interpolate::FutureImpl<T, P>>,
+    input_state: InputStateManager<T>,
+
+    // future contains a reference to input_state.
+    _pin: PhantomPinned,
+}
+
+impl<T: Transposer, P: SharedPointerKind> Drop for InterpolateInnerInProgress<T, P> {
+    fn drop(&mut self) {
+        unsafe { self.future.assume_init_drop() };
+    }
 }
 
 impl<T: Transposer, P: SharedPointerKind> Interpolation<T, P> {
@@ -55,9 +63,10 @@ impl<T: Transposer, P: SharedPointerKind> Interpolation<T, P> {
             InterpolationInner::Uninit {
                 interpolation_time, ..
             }
-            | InterpolationInner::InProgress {
-                interpolation_time, ..
-            } => *interpolation_time,
+            | InterpolationInner::InProgress(InterpolateInnerInProgress {
+                interpolation_time,
+                ..
+            }) => *interpolation_time,
             InterpolationInner::Dummy => unreachable!(),
         }
     }
@@ -67,7 +76,9 @@ impl<T: Transposer, P: SharedPointerKind> Interpolation<T, P> {
 
         match &mut unpinned.inner {
             InterpolationInner::Uninit { input_state, .. }
-            | InterpolationInner::InProgress { input_state, .. } => input_state,
+            | InterpolationInner::InProgress(InterpolateInnerInProgress { input_state, .. }) => {
+                input_state
+            }
             InterpolationInner::Dummy => unreachable!(),
         }
     }
@@ -80,7 +91,7 @@ impl<T: Transposer, P: SharedPointerKind> Future for Interpolation<T, P> {
         let unpinned = unsafe { self.get_unchecked_mut() };
 
         let future = match &mut unpinned.inner {
-            InterpolationInner::InProgress { future, .. } => future,
+            InterpolationInner::InProgress(InterpolateInnerInProgress { future, .. }) => future,
             InterpolationInner::Uninit { .. } => {
                 let (interpolation_time, wrapped_transposer, input_state) =
                     match core::mem::take(&mut unpinned.inner) {
@@ -92,22 +103,27 @@ impl<T: Transposer, P: SharedPointerKind> Future for Interpolation<T, P> {
                         _ => unreachable!(),
                     };
 
-                unpinned.inner = InterpolationInner::InProgress {
+                unpinned.inner = InterpolationInner::InProgress(InterpolateInnerInProgress {
                     interpolation_time,
                     future: MaybeUninit::uninit(),
                     input_state,
                     _pin: PhantomPinned,
-                };
+                });
 
                 let input_state = match &mut unpinned.inner {
-                    InterpolationInner::InProgress { input_state, .. } => input_state,
+                    InterpolationInner::InProgress(InterpolateInnerInProgress {
+                        input_state,
+                        ..
+                    }) => input_state,
                     _ => unreachable!(),
                 };
 
                 let input_state = NonNull::from(input_state);
 
                 let future = match &mut unpinned.inner {
-                    InterpolationInner::InProgress { future, .. } => future,
+                    InterpolationInner::InProgress(InterpolateInnerInProgress {
+                        future, ..
+                    }) => future,
                     _ => unreachable!(),
                 };
 
