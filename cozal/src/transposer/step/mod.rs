@@ -1,7 +1,7 @@
 mod expire_handle_factory;
 mod future_input_container;
 mod interpolate_context;
-// mod interpolation;
+mod interpolation;
 mod sub_step;
 mod sub_step_update_context;
 mod time;
@@ -18,6 +18,7 @@ use std::task::Poll;
 
 use archery::{ArcTK, SharedPointer, SharedPointerKind};
 use future_input_container::{FutureInputContainer, FutureInputContainerGuard};
+use interpolation::Interpolation;
 use sub_step::init_sub_step::new_init_boxed_sub_step;
 use sub_step::scheduled_sub_step::new_scheduled_boxed_sub_step;
 use sub_step::{BoxedSubStep, StartSaturateErr};
@@ -375,19 +376,22 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
             .map_err(|ptr| *unsafe { Box::from_raw(ptr.as_ptr()) })
     }
 
-    // pub fn interpolate(&self, time: T::Time) -> Result<impl Interpolation<T>, InterpolateErr> {
-    //     let wrapped_transposer = match &self.status {
-    //         StepStatus::Saturated { wrapped_transposer } => wrapped_transposer.clone(),
-    //         _ => return Err(InterpolateErr::NotSaturated),
-    //     };
+    pub fn interpolate(&self, time: T::Time) -> Result<Interpolation<T, P>, InterpolateErr>
+    where
+        T: Clone,
+    {
+        let wrapped_transposer = match self.get_step_status_ref() {
+            ActiveStepStatusRef::Saturated(wrapped_transposer) => wrapped_transposer.clone(),
+            _ => return Err(InterpolateErr::NotSaturated),
+        };
 
-    //     #[cfg(debug_assertions)]
-    //     if time < wrapped_transposer.metadata.last_updated.time {
-    //         return Err(InterpolateErr::TimePast);
-    //     }
+        #[cfg(debug_assertions)]
+        if time < wrapped_transposer.metadata.last_updated.time {
+            return Err(InterpolateErr::TimePast);
+        }
 
-    //     Ok(new_interpolation(time, wrapped_transposer))
-    // }
+        Ok(Interpolation::new(time, wrapped_transposer))
+    }
 
     pub fn get_time(&self) -> T::Time {
         self.time
