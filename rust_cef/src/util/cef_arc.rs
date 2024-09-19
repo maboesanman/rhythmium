@@ -42,6 +42,7 @@ impl<T: StartsWith<cef_base_ref_counted_t>> Clone for CefArc<T> {
 }
 
 /// CefType is a type from rust that has been prepared to be sent to cef.
+///
 /// It contains a vtable and the user defined rust type, as well as any
 /// extra data needed by the smart pointer (a ref count for CefArc, nothing for CefBox).
 #[repr(C)]
