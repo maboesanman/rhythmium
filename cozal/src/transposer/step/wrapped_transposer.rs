@@ -28,23 +28,8 @@ where
 }
 
 impl<T: Transposer, P: SharedPointerKind> WrappedTransposer<T, P> {
-    /// create a wrapped transposer, and perform all T::default scheduled events.
-    pub async fn init(
-        mut transposer: T,
-        rng_seed: [u8; 32],
-        start_time: T::Time,
-
-        // mutable references must not be held over await points.
-        shared_step_state: NonNull<(OutputEventManager<T>, InputStateManager<T>)>,
-    ) -> SharedPointer<Self, P> {
-        let mut metadata = TransposerMetaData::new(rng_seed, start_time);
-        let mut context = SubStepUpdateContext::new(
-            SubStepTime::new_init(start_time),
-            &mut metadata,
-            shared_step_state,
-        );
-
-        transposer.init(&mut context).await;
+    pub fn new(transposer: T, rng_seed: [u8; 32], start_time: T::Time) -> SharedPointer<Self, P> {
+        let metadata = TransposerMetaData::new(rng_seed, start_time);
 
         let new = Self {
             transposer,
@@ -52,6 +37,21 @@ impl<T: Transposer, P: SharedPointerKind> WrappedTransposer<T, P> {
         };
 
         SharedPointer::new(new)
+    }
+
+    /// create a wrapped transposer, and perform all T::default scheduled events.
+    pub async fn init(
+        &mut self,
+        // mutable references must not be held over await points.
+        shared_step_state: NonNull<(OutputEventManager<T>, InputStateManager<T>)>,
+    ) {
+        let mut context = SubStepUpdateContext::new(
+            self.metadata.last_updated,
+            &mut self.metadata,
+            shared_step_state,
+        );
+
+        self.transposer.init(&mut context).await;
     }
 
     /// handle an input, and all scheduled events that occur at the same time.

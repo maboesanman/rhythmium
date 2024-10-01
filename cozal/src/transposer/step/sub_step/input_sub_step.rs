@@ -10,56 +10,29 @@ use std::{
 
 use archery::{SharedPointer, SharedPointerKind};
 
-use super::{BoxedSubStep, StartSaturateErr, SubStep};
+use super::{BoxedSubStep, StartSaturateErr, SubStep, INPUT_SUB_STEP_SORT_PHASE};
 use crate::transposer::{
     input_state_manager::InputStateManager,
     step::{wrapped_transposer::WrappedTransposer, OutputEventManager, PollErr},
     Transposer, TransposerInput, TransposerInputEventHandler,
 };
 
-#[allow(dead_code)]
-pub fn new_input_sub_step<T, P, I>(
-    time: T::Time,
-    input: I,
-    input_event: I::InputEvent,
-) -> impl SubStep<T, P>
+pub struct InputSubStep<T: Transposer, P: SharedPointerKind, I: TransposerInput<Base = T>>
 where
     P: SharedPointerKind,
     I: TransposerInput<Base = T>,
     T: Transposer + TransposerInputEventHandler<I> + Clone,
 {
-    InputSubStep {
-        status: InputSubStepStatus::Unsaturated { time },
-        data: InputSubStepData { input, input_event },
-        _pinned: PhantomPinned,
-    }
+    status: InputSubStepStatus<T, P, I>,
+    data: InputSubStepData<T, I>,
+    _pinned: PhantomPinned,
 }
 
-#[allow(dead_code)]
-pub fn new_input_boxed_sub_step<'a, T, P, I>(
-    time: T::Time,
-    input: I,
-    input_event: I::InputEvent,
-) -> BoxedSubStep<'a, T, P>
-where
-    P: SharedPointerKind + 'a,
-    I: TransposerInput<Base = T>,
-    T: Transposer + TransposerInputEventHandler<I> + Clone + 'a,
-{
-    BoxedSubStep::new(Box::new(new_input_sub_step::<T, P, I>(
-        time,
-        input,
-        input_event,
-    )))
-}
-
-#[allow(unused)]
 struct InputSubStepData<T: Transposer, I: TransposerInput<Base = T>> {
     input: I,
     input_event: I::InputEvent,
 }
 
-#[allow(unused)]
 enum InputSubStepStatus<T: Transposer, P: SharedPointerKind, I: TransposerInput<Base = T>>
 where
     P: SharedPointerKind,
@@ -78,19 +51,68 @@ where
     },
 }
 
-#[allow(unused)]
-struct InputSubStep<T: Transposer, P: SharedPointerKind, I: TransposerInput<Base = T>>
-where
-    P: SharedPointerKind,
-    I: TransposerInput<Base = T>,
-    T: Transposer + TransposerInputEventHandler<I> + Clone,
-{
-    status: InputSubStepStatus<T, P, I>,
-    data: InputSubStepData<T, I>,
-    _pinned: PhantomPinned,
+mod wrapped_handler {
+    use super::*;
+
+    pub type WrappedHandlerFuture<T, P, I>
+    where
+        P: SharedPointerKind,
+        I: TransposerInput<Base = T>,
+        T: Transposer + TransposerInputEventHandler<I> + Clone,
+    = impl Future<Output = SharedPointer<WrappedTransposer<T, P>, P>>;
+
+    pub fn handle<T, P, I>(
+        mut wrapped_transposer: SharedPointer<WrappedTransposer<T, P>, P>,
+        time: T::Time,
+        input: NonNull<I>,
+        input_event: NonNull<I::InputEvent>,
+        shared_step_state: NonNull<(OutputEventManager<T>, InputStateManager<T>)>,
+    ) -> WrappedHandlerFuture<T, P, I>
+    where
+        P: SharedPointerKind,
+        I: TransposerInput<Base = T>,
+        T: Transposer + TransposerInputEventHandler<I> + Clone,
+    {
+        async move {
+            let transposer_mut = SharedPointer::make_mut(&mut wrapped_transposer);
+            let input = unsafe { input.as_ref() };
+            let input_event = unsafe { input_event.as_ref() };
+            transposer_mut
+                .handle_input(time, input, input_event, shared_step_state)
+                .await;
+            wrapped_transposer
+        }
+    }
 }
 
-impl<T, P, I> SubStep<T, P> for InputSubStep<T, P, I>
+impl<T, P, I> InputSubStep<T, P, I>
+where
+    T: Transposer + TransposerInputEventHandler<I> + Clone,
+    P: SharedPointerKind,
+    I: TransposerInput<Base = T>,
+{
+    pub fn new(time: T::Time, input: I, input_event: I::InputEvent) -> Self {
+        Self {
+            status: InputSubStepStatus::Unsaturated { time },
+            data: InputSubStepData { input, input_event },
+            _pinned: PhantomPinned,
+        }
+    }
+
+    pub fn new_boxed<'a>(
+        time: T::Time,
+        input: I,
+        input_event: I::InputEvent,
+    ) -> BoxedSubStep<'a, T, P>
+    where
+        T: 'a,
+        P: 'a,
+    {
+        BoxedSubStep::new(Box::new(Self::new(time, input, input_event)))
+    }
+}
+
+unsafe impl<T, P, I> SubStep<T, P> for InputSubStep<T, P, I>
 where
     T: Transposer + TransposerInputEventHandler<I> + Clone,
     P: SharedPointerKind,
@@ -132,13 +154,12 @@ where
             ne => return ne,
         };
 
-        if other.is_init() {
-            return Ordering::Greater;
+        match self.sort_phase().cmp(&other.sort_phase()) {
+            Ordering::Equal => {}
+            ne => return ne,
         }
 
-        if other.is_scheduled() {
-            return Ordering::Less;
-        }
+        // self and other are both inputs
 
         match self.input_sort().cmp(&other.input_sort()) {
             Ordering::Equal => {
@@ -156,14 +177,7 @@ where
             ne => return ne,
         }
 
-        match self.data.input_event.cmp(&other.data.input_event) {
-            Ordering::Equal => {}
-            ne => return ne,
-        }
-
-        // could sort by byte representation of input_event, but not sure about
-        // endianness between platforms.
-        Ordering::Equal
+        self.data.input_event.cmp(&other.data.input_event)
     }
 
     fn start_saturate(
@@ -249,38 +263,8 @@ where
 
         this.status = InputSubStepStatus::Unsaturated { time };
     }
-}
 
-mod wrapped_handler {
-    use super::*;
-
-    pub type WrappedHandlerFuture<T, P, I>
-    where
-        P: SharedPointerKind,
-        I: TransposerInput<Base = T>,
-        T: Transposer + TransposerInputEventHandler<I> + Clone,
-    = impl Future<Output = SharedPointer<WrappedTransposer<T, P>, P>>;
-
-    pub fn handle<T, P, I>(
-        mut wrapped_transposer: SharedPointer<WrappedTransposer<T, P>, P>,
-        time: T::Time,
-        input: NonNull<I>,
-        input_event: NonNull<I::InputEvent>,
-        shared_step_state: NonNull<(OutputEventManager<T>, InputStateManager<T>)>,
-    ) -> WrappedHandlerFuture<T, P, I>
-    where
-        P: SharedPointerKind,
-        I: TransposerInput<Base = T>,
-        T: Transposer + TransposerInputEventHandler<I> + Clone,
-    {
-        async move {
-            let transposer_mut = SharedPointer::make_mut(&mut wrapped_transposer);
-            let input = unsafe { input.as_ref() };
-            let input_event = unsafe { input_event.as_ref() };
-            transposer_mut
-                .handle_input(time, input, input_event, shared_step_state)
-                .await;
-            wrapped_transposer
-        }
+    fn sort_phase(&self) -> usize {
+        INPUT_SUB_STEP_SORT_PHASE
     }
 }

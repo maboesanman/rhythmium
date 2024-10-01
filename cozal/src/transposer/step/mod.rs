@@ -2,6 +2,7 @@ mod expire_handle_factory;
 mod future_input_container;
 mod interpolate_context;
 mod interpolation;
+mod pre_init_step;
 mod sub_step;
 mod sub_step_update_context;
 mod time;
@@ -19,8 +20,9 @@ use std::task::Poll;
 use archery::{ArcTK, SharedPointer, SharedPointerKind};
 use future_input_container::{FutureInputContainer, FutureInputContainerGuard};
 use interpolation::Interpolation;
-use sub_step::init_sub_step::new_init_boxed_sub_step;
-use sub_step::scheduled_sub_step::new_scheduled_boxed_sub_step;
+use pre_init_step::PreInitStep;
+use sub_step::init_sub_step::InitSubStep;
+use sub_step::scheduled_sub_step::ScheduledSubStep;
 use sub_step::{BoxedSubStep, StartSaturateErr};
 use wrapped_transposer::WrappedTransposer;
 
@@ -135,14 +137,24 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
         &mut unsafe { input_state.as_mut() }.0
     }
 
-    pub fn new_init(transposer: T, start_time: T::Time, rng_seed: [u8; 32]) -> Self {
+    pub fn new_init(
+        transposer: T,
+        pre_init_step: PreInitStep<T>,
+        start_time: T::Time,
+        rng_seed: [u8; 32],
+    ) -> Result<Self, T>
+    where
+        T: Clone,
+    {
         let shared_step_state = Self::new_shared_step_state();
         let uuid_self = uuid::Uuid::new_v4();
         let uuid_prev = None;
-        let init_sub_step =
-            new_init_boxed_sub_step(transposer, rng_seed, start_time, shared_step_state);
 
-        Self {
+        let transposer = pre_init_step.execute(transposer)?;
+        let init_sub_step =
+            InitSubStep::new_boxed(transposer, rng_seed, start_time, shared_step_state);
+
+        Ok(Self {
             steps: vec![init_sub_step],
             status: StepStatus::Saturating(0),
             time: start_time,
@@ -153,7 +165,7 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
             uuid_self,
             #[cfg(debug_assertions)]
             uuid_prev,
-        }
+        })
     }
 
     pub fn next_unsaturated<F: FutureInputContainer<'a, T, P>>(
@@ -214,7 +226,7 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
                 }
                 steps
             }
-            (Some(t), None) => vec![new_scheduled_boxed_sub_step::<'a, T, P>(t)],
+            (Some(t), None) => vec![ScheduledSubStep::new_boxed(t)],
             _ => unreachable!(),
         };
 
@@ -353,8 +365,7 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
                         {
                             let t_time = t.time;
                             if t_time == time {
-                                self.steps
-                                    .push(new_scheduled_boxed_sub_step::<'a, T, P>(t_time));
+                                self.steps.push(ScheduledSubStep::new_boxed(t_time));
                                 self.status = StepStatus::Saturating(current_index + 1);
                                 continue;
                             }

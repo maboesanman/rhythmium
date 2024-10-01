@@ -5,8 +5,6 @@ use context::{HandleInputContext, HandleScheduleContext, InitContext, Interpolat
 pub mod context;
 // pub mod evaluate_to;
 pub mod expire_handle;
-// pub mod single_input_state;
-// pub mod multi_input_state;
 pub mod input_state_manager;
 mod output_event_manager;
 pub mod step;
@@ -46,17 +44,27 @@ pub trait Transposer {
     /// the events in the schedule are all of type `Event<Self::Time, Self::Scheduled>`
     type Scheduled: Clone;
 
+    /// The function to finalize all inputs and prepare for initialization.
+    ///
+    /// This function is called after all the supplied inputs' register_input functions have been called.
+    /// If the registered inputs are not sufficient for the transposer to operate, this function should return false,
+    /// and the transposer will not be initialized.
+    ///
+    /// If the registered inputs _are_ sufficient, this function should return true.
+    fn prepare_to_init(&mut self) -> bool;
+
     /// The function to initialize your transposer's events.
     ///
     /// You should initialize your transposer like any other struct.
-    /// This function is for initializing the schedule events and emitting any
-    /// output events that correspond with your transposer starting.
+    /// This function is for initializing the schedule events.
+    ///
+    /// Additionally, this function serves as the validation for the inputs that have been registered.
+    /// If this transposer requires a specific input to have been registered, but it was not,
+    /// this function should return false.
     ///
     /// `cx` is a context object for performing additional operations.
     /// For more information on `cx` see the [`InitContext`] documentation.
-    async fn init(&mut self, cx: &mut dyn InitContext<'_, Self>) {
-        let _ = cx;
-    }
+    async fn init(&mut self, cx: &mut dyn InitContext<'_, Self>);
 
     /// The function to respond to internally scheduled events.
     ///
@@ -68,9 +76,7 @@ pub trait Transposer {
         &mut self,
         payload: Self::Scheduled,
         cx: &mut dyn HandleScheduleContext<'_, Self>,
-    ) {
-        let _ = (payload, cx);
-    }
+    );
 
     /// The function to interpolate between states
     ///
@@ -97,14 +103,21 @@ pub trait TransposerInput: 'static + Sized + Hash + Eq + Copy + Ord {
 }
 
 pub trait TransposerInputEventHandler<I: TransposerInput<Base = Self>>: Transposer {
-    async fn register_input(&mut self, cx: &mut dyn InitContext<'_, Self>, input: I);
+    /// The function to register an input.
+    /// This occurs before the init function is run.
+    /// return false if the input is not valid for whatever reason.
+    ///
+    /// `input` is the specific input.
+    ///
+    /// `cx` is a context object for performing additional operations like scheduling events.
+    /// For more information on `cx` see the [`UpdateContext`] documentation.
+    fn register_input(&mut self, input: I) -> bool;
 
     /// The function to respond to input.
     ///
-    /// `inputs` is the collection of payloads of input events that occurred at time `time`.
-    /// this is a collection and not one by one because cozal cannot disambiguate
-    /// the order of input events whose times are equal, so we need the implementer
-    /// to provide an implementation that does not depend on the order of the events.
+    /// `input` is the specific input the event is from.
+    ///
+    /// `event` is the event to be handled.
     ///
     /// `cx` is a context object for performing additional operations like scheduling events.
     /// For more information on `cx` see the [`UpdateContext`] documentation.
@@ -113,9 +126,7 @@ pub trait TransposerInputEventHandler<I: TransposerInput<Base = Self>>: Transpos
         input: &I,
         event: &I::InputEvent,
         cx: &mut dyn HandleInputContext<'_, Self>,
-    ) {
-        let _ = (input, event, cx);
-    }
+    );
 
     /// Filter out events you know you can't do anything with.
     /// This reduces the amount of events you have to remember for rollback to work.

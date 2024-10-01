@@ -17,6 +17,9 @@ use super::{wrapped_transposer::WrappedTransposer, PollErr};
 pub mod init_sub_step;
 pub mod input_sub_step;
 pub mod scheduled_sub_step;
+pub const INIT_SUB_STEP_SORT_PHASE: usize = 1;
+pub const INPUT_SUB_STEP_SORT_PHASE: usize = 2;
+pub const SCHEDULED_SUB_STEP_SORT_PHASE: usize = 3;
 
 #[repr(transparent)]
 pub struct BoxedSubStep<'t, T: Transposer + 't, P: SharedPointerKind + 't>(
@@ -58,7 +61,9 @@ impl<'t, T: Transposer + 't, P: SharedPointerKind + 't> PartialEq for BoxedSubSt
 impl<'t, T: Transposer + 't, P: SharedPointerKind + 't> Eq for BoxedSubStep<'t, T, P> {}
 
 #[allow(dead_code)]
-pub trait SubStep<T: Transposer, P: SharedPointerKind> {
+/// # Safety
+/// This trait is unsafe because the dyn_cmp function must be implemented properly, or there could be UB.
+pub unsafe trait SubStep<T: Transposer, P: SharedPointerKind> {
     fn is_input(&self) -> bool {
         false
     }
@@ -71,6 +76,9 @@ pub trait SubStep<T: Transposer, P: SharedPointerKind> {
     fn is_scheduled(&self) -> bool {
         false
     }
+
+    fn sort_phase(&self) -> usize;
+
     fn is_unsaturated(&self) -> bool;
     fn is_saturating(&self) -> bool;
     fn is_saturated(&self) -> bool;
