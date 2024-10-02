@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Weak;
 
-use crate::transposer::step::{Interpolation, NoInput, NoInputManager};
+use crate::transposer::step::Interpolation;
 use crate::transposer::Transposer;
 use crate::util::extended_entry::hash_map::{get_occupied, VacantExtEntry as HashMapVacantEntry};
 use crate::util::stack_waker::StackWaker;
@@ -11,7 +11,7 @@ use super::original_step_future::OriginalStepFuture;
 use super::repeat_step_future::RepeatStepFuture;
 use super::{get_pinned_times, CallerChannelBlockedReason, CallerChannelBlockedReasonInner};
 
-pub struct Free<'a, T: Transposer<InputStateManager = NoInputManager>> {
+pub struct Free<'a, T: Transposer> {
     // entries
     pub caller_channel: HashMapVacantEntry<'a, usize, CallerChannelBlockedReason<T>>,
 
@@ -20,7 +20,7 @@ pub struct Free<'a, T: Transposer<InputStateManager = NoInputManager>> {
         &'a mut HashMap</* step_id */ usize, (usize, Weak<StackWaker>)>,
 }
 
-impl<'a, T: Transposer<InputStateManager = NoInputManager>> Free<'a, T> {
+impl<'a, T: Transposer> Free<'a, T> {
     pub fn start_interpolation(
         self,
         interpolation: Interpolation<T, NoInput>,

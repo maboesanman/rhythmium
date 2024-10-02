@@ -1,5 +1,4 @@
 /// A modified version of [`futures::task::Poll`], which has two new variants:
-/// [`Scheduled`](self::SchedulePoll::Scheduled) and [`Done`](self::SchedulePoll::Done).
 pub enum SourcePoll<T, E, S> {
     /// Indicates the poll is complete
     Ready {

@@ -1,6 +1,6 @@
 use std::task::Poll;
 
-use crate::transposer::step::{NoInputManager, StepPoll};
+use crate::transposer::step::StepPoll;
 use crate::transposer::Transposer;
 
 use super::channels::free::Free;
@@ -11,13 +11,13 @@ use crate::source::sources::transposer::channels::original_step_future::Original
 use crate::source::traits::SourceContext;
 use crate::source::{Source, SourcePoll};
 
-pub struct NoInputTransposerSource<T: Transposer<InputStateManager = NoInputManager>> {
+pub struct NoInputTransposerSource<T: Transposer> {
     steps: Steps<T>,
 
     channel_statuses: ChannelStatuses<T>,
 }
 
-impl<T: Transposer<InputStateManager = NoInputManager>> NoInputTransposerSource<T> {
+impl<T: Transposer> NoInputTransposerSource<T> {
     pub fn new(transposer: T, start_time: T::Time, rng_seed: [u8; 32]) -> Self {
         Self {
             steps: Steps::new(transposer, start_time, rng_seed),
@@ -26,14 +26,18 @@ impl<T: Transposer<InputStateManager = NoInputManager>> NoInputTransposerSource<
     }
 }
 
-impl<T: Transposer<InputStateManager = NoInputManager>> Source for NoInputTransposerSource<T> {
+pub enum NoInputTransposerSourceError {
+    InputStateRequested,
+}
+
+impl<T: Transposer> Source for NoInputTransposerSource<T> {
     type Time = T::Time;
 
     type Event = T::OutputEvent;
 
     type State = T::OutputState;
 
-    type Error = ();
+    type Error = NoInputTransposerSourceError;
 
     fn poll(
         &mut self,
@@ -163,6 +167,7 @@ impl<T: Transposer<InputStateManager = NoInputManager>> Source for NoInputTransp
                 }
                 StepPoll::Pending => break SourcePoll::Pending,
                 StepPoll::Ready => continue,
+                StepPoll::StateRequested(type_id) => return Err(source_poll::SourcePollErr::SpecificError(NoInputTransposerSourceError::InputStateRequested)),
             }
         };
 

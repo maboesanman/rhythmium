@@ -1,10 +1,12 @@
 use core::fmt::Debug;
 use std::collections::{BTreeSet, VecDeque};
 
-use crate::transposer::step::{NoInput, NoInputManager, Step};
+use archery::{RcK, SharedPointerKind};
+
+use crate::transposer::step::{Step};
 use crate::transposer::Transposer;
 
-pub struct Steps<T: Transposer<InputStateManager = NoInputManager>> {
+pub struct Steps<T: Transposer> {
     steps: VecDeque<StepWrapper<T>>,
     not_unsaturated: BTreeSet<usize>,
     num_deleted_steps: usize,
@@ -12,7 +14,7 @@ pub struct Steps<T: Transposer<InputStateManager = NoInputManager>> {
     number_of_checkpoints: usize,
 }
 
-impl<T: Transposer<InputStateManager = NoInputManager>> Steps<T> {
+impl<T: Transposer> Steps<T> {
     #[cfg(debug_assertions)]
     fn debug_assertions(&self) {
         assert_eq!(
@@ -362,23 +364,23 @@ impl<T: Transposer<InputStateManager = NoInputManager>> Steps<T> {
     }
 }
 
-pub enum BeforeStatus<'a, T: Transposer<InputStateManager = NoInputManager>> {
+pub enum BeforeStatus<'a, 't, T: Transposer> {
     Saturated {
-        step: &'a Step<T, NoInput>,
+        step: &'a Step<'t, T, RcK>,
         next_time: Option<T::Time>,
     },
     Saturating {
-        step: &'a mut Step<T, NoInput>,
+        step: &'a mut Step<'t, T, RcK>,
         step_index: usize,
     },
 }
 
-pub enum BeforeStatusEvents<'a, T: Transposer<InputStateManager = NoInputManager>> {
+pub enum BeforeStatusEvents<'a, 't, T: Transposer> {
     Ready {
         next_time: Option<T::Time>,
     },
     Saturating {
-        step: &'a mut Step<T, NoInput>,
+        step: &'a mut Step<'t, T, RcK>,
         step_index: usize,
     },
 }
@@ -389,11 +391,11 @@ pub enum BeforeStatusInternal {
     AllRepeat,
 }
 
-struct StepWrapper<T: Transposer<InputStateManager = NoInputManager>> {
-    pub step: Step<T, NoInput>,
+struct StepWrapper<'t, T: Transposer> {
+    pub step: Step<'t, T, RcK>,
 }
 
-impl<T: Transposer<InputStateManager = NoInputManager>> Debug for StepWrapper<T>
+impl<'t, T: Transposer> Debug for StepWrapper<'t, T>
 where
     T::Time: Debug,
 {
@@ -408,7 +410,7 @@ where
     }
 }
 
-impl<T: Transposer<InputStateManager = NoInputManager>> StepWrapper<T> {
+impl<'t, T: Transposer + Clone> StepWrapper<'t, T> {
     pub fn new_init(transposer: T, start_time: T::Time, rng_seed: [u8; 32]) -> Self {
         Self {
             step: Step::new_init(transposer, start_time, rng_seed),

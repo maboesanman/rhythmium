@@ -19,7 +19,7 @@ use std::task::Poll;
 
 use archery::{ArcTK, SharedPointer, SharedPointerKind};
 use future_input_container::{FutureInputContainer, FutureInputContainerGuard};
-use interpolation::Interpolation;
+pub use interpolation::Interpolation;
 use pre_init_step::PreInitStep;
 use sub_step::init_sub_step::InitSubStep;
 use sub_step::scheduled_sub_step::ScheduledSubStep;
