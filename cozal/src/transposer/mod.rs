@@ -10,6 +10,12 @@ mod output_event_manager;
 pub mod step;
 // mod test;
 
+mod prelude {
+    pub use super::Transposer;
+    pub use super::TransposerInput;
+    pub use super::TransposerInputEventHandler;
+}
+
 /// A `Transposer` is a type that can update itself in response to events.
 ///
 /// the purpose of this type is to provide an abstraction for game logic which can be used to add rollback and
@@ -20,7 +26,7 @@ pub mod step;
 ///
 /// The name comes from the idea that we are converting a stream of events into another stream of events,
 /// perhaps in the way a stream of music notes can be *transposed* into another stream of music notes.
-pub trait Transposer {
+pub trait Transposer: Sized {
     /// The type used as the 'time' for events. This must be Ord and Copy because it is frequently used for comparisons,
     /// and it must be [`Default`] because the default value is used for the timestamp of events emitted.
     /// by the init function.
@@ -64,7 +70,7 @@ pub trait Transposer {
     ///
     /// `cx` is a context object for performing additional operations.
     /// For more information on `cx` see the [`InitContext`] documentation.
-    async fn init(&mut self, cx: &mut dyn InitContext<'_, Self>);
+    async fn init(&mut self, cx: &mut InitContext<'_, Self>);
 
     /// The function to respond to internally scheduled events.
     ///
@@ -75,7 +81,7 @@ pub trait Transposer {
     async fn handle_scheduled_event(
         &mut self,
         payload: Self::Scheduled,
-        cx: &mut dyn HandleScheduleContext<'_, Self>,
+        cx: &mut HandleScheduleContext<'_, Self>,
     );
 
     /// The function to interpolate between states
@@ -86,7 +92,7 @@ pub trait Transposer {
     /// `base_time` is the time of the `self` parameter
     /// `interpolated_time` is the time being requested `self`
     /// `cx is a context object for performing additional operations like requesting state.
-    async fn interpolate(&self, cx: &mut dyn InterpolateContext<'_, Self>) -> Self::OutputState;
+    async fn interpolate(&self, cx: &mut InterpolateContext<'_, Self>) -> Self::OutputState;
 }
 
 /// This represents an input that your transposer expects to be present.
@@ -125,7 +131,7 @@ pub trait TransposerInputEventHandler<I: TransposerInput<Base = Self>>: Transpos
         &mut self,
         input: &I,
         event: &I::InputEvent,
-        cx: &mut dyn HandleInputContext<'_, Self>,
+        cx: &mut HandleInputContext<'_, Self>,
     );
 
     /// Filter out events you know you can't do anything with.

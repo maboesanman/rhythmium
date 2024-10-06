@@ -27,15 +27,15 @@ pub struct SubStepUpdateContext<'update, T: Transposer, P: SharedPointerKind> {
     shared_step_state: NonNull<(OutputEventManager<T>, InputStateManager<T>)>,
 }
 
-impl<'update, T: Transposer, P: SharedPointerKind> InitContext<'update, T>
+impl<'update, T: Transposer, P: SharedPointerKind> InitContextInner<'update, T>
     for SubStepUpdateContext<'update, T, P>
 {
 }
-impl<'update, T: Transposer, P: SharedPointerKind> HandleInputContext<'update, T>
+impl<'update, T: Transposer, P: SharedPointerKind> HandleInputContextInner<'update, T>
     for SubStepUpdateContext<'update, T, P>
 {
 }
-impl<'update, T: Transposer, P: SharedPointerKind> HandleScheduleContext<'update, T>
+impl<'update, T: Transposer, P: SharedPointerKind> HandleScheduleContextInner<'update, T>
     for SubStepUpdateContext<'update, T, P>
 {
 }

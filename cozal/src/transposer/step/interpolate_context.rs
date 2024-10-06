@@ -5,7 +5,7 @@ use archery::SharedPointerKind;
 // use super::lazy_state::LazyState;
 use super::transposer_metadata::TransposerMetaData;
 use crate::transposer::context::{
-    CurrentTimeContext, InputStateManagerContext, InterpolateContext, LastUpdatedTimeContext,
+    CurrentTimeContext, InputStateManagerContext, InterpolateContext, InterpolateContextInner, LastUpdatedTimeContext
 };
 use crate::transposer::input_state_manager::InputStateManager;
 use crate::transposer::Transposer;
@@ -32,7 +32,7 @@ impl<'update, T: Transposer, P: SharedPointerKind> StepInterpolateContext<'updat
     }
 }
 
-impl<'update, T: Transposer, P: SharedPointerKind> InterpolateContext<'update, T>
+impl<'update, T: Transposer, P: SharedPointerKind> InterpolateContextInner<'update, T>
     for StepInterpolateContext<'update, T, P>
 {
 }

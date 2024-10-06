@@ -145,6 +145,8 @@ impl<T: Transposer, P: SharedPointerKind> Future for Interpolation<T, P> {
 }
 
 mod interpolate {
+    use crate::transposer::context::InterpolateContext;
+
     use super::*;
 
     pub type FutureImpl<T: Transposer, P: SharedPointerKind> = impl Future<Output = T::OutputState>;
@@ -163,7 +165,7 @@ mod interpolate {
             let mut context =
                 StepInterpolateContext::new(interpolation_time, metadata, input_state);
 
-            transposer.interpolate(&mut context).await
+            transposer.interpolate(InterpolateContext::new_mut(&mut context)).await
         }
     }
 }
