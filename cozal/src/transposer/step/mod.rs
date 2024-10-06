@@ -9,8 +9,8 @@ mod time;
 mod transposer_metadata;
 mod wrapped_transposer;
 
-// #[cfg(test)]
-// mod test;
+#[cfg(test)]
+mod test;
 
 use core::task::Waker;
 use std::any::TypeId;
@@ -32,6 +32,7 @@ use super::input_state_manager::InputStateManager;
 use super::output_event_manager::OutputEventManager;
 use super::{TransposerInput, TransposerInputEventHandler};
 
+#[derive(Debug)]
 enum StepStatus {
     // all sub steps are unsaturated.
     Unsaturated,
@@ -59,6 +60,7 @@ enum ActiveStepStatusMut<'a, 't, T: Transposer + 't, P: SharedPointerKind + 't> 
     Saturated(&'a mut BoxedSubStep<'t, T, P>),
 }
 
+#[derive(Debug)]
 pub struct Step<'t, T: Transposer + 't, P: SharedPointerKind + 't = ArcTK> {
     steps: Vec<BoxedSubStep<'t, T, P>>,
     status: StepStatus,
@@ -311,7 +313,10 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
             .map_err(|e| match e {
                 StartSaturateErr::SubStepTimeIsPast => panic!(),
                 StartSaturateErr::NotUnsaturated => SaturateErr::SelfNotUnsaturated,
-            })
+            })?;
+
+        self.status = StepStatus::Saturating(0);
+        Ok(())
     }
 
     pub fn desaturate(&mut self) {

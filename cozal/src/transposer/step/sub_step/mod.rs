@@ -26,6 +26,32 @@ pub struct BoxedSubStep<'t, T: Transposer + 't, P: SharedPointerKind + 't>(
     Box<dyn SubStep<T, P> + 't>,
 );
 
+impl<'t, T: Transposer + 't, P: SharedPointerKind + 't> std::fmt::Debug for BoxedSubStep<'t, T, P>
+    where T::Time: std::fmt::Debug
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let _type = if self.as_ref().is_input() {
+            "input"
+        } else if self.as_ref().is_init() {
+            "init"
+        } else {
+            "scheduled"
+        };
+        let status = if self.as_ref().is_unsaturated() {
+            "unsaturated"
+        } else if self.as_ref().is_saturating() {
+            "saturating"
+        } else {
+            "saturated"
+        };
+        f.debug_struct("BoxedSubStep")
+            .field("time", &self.as_ref().get_time())
+            .field("type", &_type)
+            .field("status", &status)
+            .finish()
+    }
+}
+
 impl<'t, T: Transposer + 't, P: SharedPointerKind + 't> BoxedSubStep<'t, T, P> {
     pub fn new(sub_step: Box<dyn SubStep<T, P> + 't>) -> Self {
         Self(sub_step)

@@ -160,7 +160,7 @@ pub trait EmitEventContext<T: Transposer> {
         T: 'a;
 }
 
-impl<C, T: Transposer> EmitEventContext<T> for C
+impl<C: ?Sized, T: Transposer> EmitEventContext<T> for C
 where
     C: OutputEventManagerContext<T>,
 {

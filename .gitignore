@@ -16,3 +16,4 @@ third_party/
 cache_root
 MediaDeviceSalts
 MediaDeviceSalts-journal
+rustc-ice-*.txt
