@@ -79,7 +79,6 @@ macro_rules! impl_single {
     (CurrentTimeContext) => {
         /// get the current time (either the time of the event currently being processed,
         /// or the time of the interpolation)
-        #[must_use]
         pub fn current_time(&self) -> T::Time {
             self.0.current_time()
         }
@@ -87,7 +86,6 @@ macro_rules! impl_single {
     (LastUpdatedTimeContext) => {
         /// get the time of the last processed event (init, input, or scheduled)
         /// does not consider events that were filtered out due to `can_handle` returning false.
-        #[must_use]
         pub fn last_updated_time(&self) -> T::Time {
             self.0.last_updated_time()
         }
@@ -98,7 +96,6 @@ macro_rules! impl_single {
         ///
         /// once the resulting future is awaited, the system will retrieve the input state
         /// for the given time from the input soure.
-        #[must_use]
         pub fn get_input_state<'fut, I: TransposerInput<Base = T>>(
             &'fut mut self,
             input: I,
@@ -113,7 +110,6 @@ macro_rules! impl_single {
         /// when you handle that scheduled event.
         ///
         /// the event is not emitted until the future is awaited.
-        #[must_use]
         pub fn emit_event(&mut self, payload: T::OutputEvent) -> impl '_ + Future<Output = ()> {
             EmitOutputFuture::new(self.0.get_output_event_manager(), payload)
         }
@@ -125,7 +121,6 @@ macro_rules! impl_single {
         /// before the current time.
         ///
         /// when using this method, there is no way to expire the event.
-        #[must_use]
         pub fn schedule_event(
             &mut self,
             time: T::Time,
@@ -140,7 +135,6 @@ macro_rules! impl_single {
         ///
         /// `ScheduleEventError::NewEventBeforeCurrent` will be emitted if the supplied time is
         /// before the current time.
-        #[must_use]
         pub fn schedule_event_expireable(
             &mut self,
             time: T::Time,
@@ -153,7 +147,6 @@ macro_rules! impl_single {
         /// expire the event corresponding to the supplied `ExpireHandle`
         ///
         /// if there is no corresponding event, `ExpireEventError::InvalidOrUsedHandle` will be emitted.
-        #[must_use]
         pub fn expire_event(
             &mut self,
             handle: ExpireHandle,

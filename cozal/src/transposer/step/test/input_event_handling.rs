@@ -66,15 +66,15 @@ impl TransposerInput for TestTransposerInput {
 }
 
 impl TransposerInputEventHandler<TestTransposerInput> for TestTransposer {
-    fn register_input(&mut self, input: TestTransposerInput) -> bool {
+    fn register_input(&mut self, _input: TestTransposerInput) -> bool {
         todo!()
     }
 
     async fn handle_input_event(
         &mut self,
-        input: &TestTransposerInput,
-        event: &u8,
-        cx: &mut HandleInputContext<'_, Self>,
+        _input: &TestTransposerInput,
+        _event: &u8,
+        _cx: &mut HandleInputContext<'_, Self>,
     ) {
         todo!()
     }
