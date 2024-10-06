@@ -1,20 +1,15 @@
 use std::hash::Hash;
 
-use context::{HandleInputContext, HandleScheduleContext, InitContext, InterpolateContext};
-
-pub mod context;
+mod context;
 // pub mod evaluate_to;
-pub mod expire_handle;
-pub mod input_state_manager;
+mod expire_handle;
+mod input_state_manager;
 mod output_event_manager;
 pub mod step;
 // mod test;
 
-mod prelude {
-    pub use super::Transposer;
-    pub use super::TransposerInput;
-    pub use super::TransposerInputEventHandler;
-}
+pub use context::{HandleInputContext, HandleScheduleContext, InitContext, InterpolateContext};
+pub use expire_handle::ExpireHandle;
 
 /// A `Transposer` is a type that can update itself in response to events.
 ///

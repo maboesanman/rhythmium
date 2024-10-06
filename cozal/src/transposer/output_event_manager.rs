@@ -73,7 +73,7 @@ pub struct EmitOutputFuture<'a, T: Transposer> {
     phantom: PhantomData<&'a mut OutputEventManager<T>>,
 }
 
-impl<'a, T: Transposer> EmitOutputFuture<'a, T> {
+impl<T: Transposer> EmitOutputFuture<'_, T> {
     pub fn new(mut manager: NonNull<OutputEventManager<T>>, value_to_emit: T::OutputEvent) -> Self {
         let manager_mut = unsafe { manager.as_mut() };
         if manager_mut.outputs_to_swallow > 0 {
@@ -92,7 +92,7 @@ impl<'a, T: Transposer> EmitOutputFuture<'a, T> {
     }
 }
 
-impl<'a, T: Transposer> Future for EmitOutputFuture<'a, T> {
+impl<T: Transposer> Future for EmitOutputFuture<'_, T> {
     type Output = ();
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {

@@ -27,7 +27,8 @@ pub struct BoxedSubStep<'t, T: Transposer + 't, P: SharedPointerKind + 't>(
 );
 
 impl<'t, T: Transposer + 't, P: SharedPointerKind + 't> std::fmt::Debug for BoxedSubStep<'t, T, P>
-    where T::Time: std::fmt::Debug
+where
+    T::Time: std::fmt::Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let _type = if self.as_ref().is_input() {

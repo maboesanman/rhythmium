@@ -5,7 +5,7 @@ use archery::{SharedPointer, SharedPointerKind};
 use super::sub_step_update_context::SubStepUpdateContext;
 use super::time::SubStepTime;
 use super::transposer_metadata::TransposerMetaData;
-use crate::transposer::context::{HandleInputContext, HandleScheduleContext, InitContext, ScheduleEventContext};
+use crate::transposer::context::{HandleInputContext, HandleScheduleContext, InitContext};
 use crate::transposer::input_state_manager::InputStateManager;
 use crate::transposer::output_event_manager::OutputEventManager;
 use crate::transposer::{Transposer, TransposerInput, TransposerInputEventHandler};
@@ -52,7 +52,9 @@ impl<T: Transposer, P: SharedPointerKind> WrappedTransposer<T, P> {
             shared_step_state,
         );
 
-        self.transposer.init(InitContext::new_mut(&mut context)).await;
+        self.transposer
+            .init(InitContext::new_mut(&mut context))
+            .await;
     }
 
     /// handle an input, and all scheduled events that occur at the same time.
@@ -74,7 +76,11 @@ impl<T: Transposer, P: SharedPointerKind> WrappedTransposer<T, P> {
 
         let mut context = SubStepUpdateContext::new(time, &mut self.metadata, shared_step_state);
         self.transposer
-            .handle_input_event(input, input_event, HandleInputContext::new_mut(&mut context))
+            .handle_input_event(
+                input,
+                input_event,
+                HandleInputContext::new_mut(&mut context),
+            )
             .await;
 
         self.metadata.last_updated = time;

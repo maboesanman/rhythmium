@@ -65,8 +65,8 @@ impl<'update, T: Transposer, P: SharedPointerKind> InputStateManagerContext<'upd
     }
 }
 
-impl<'update, T: Transposer, P: SharedPointerKind> OutputEventManagerContext<T>
-    for SubStepUpdateContext<'update, T, P>
+impl<T: Transposer, P: SharedPointerKind> OutputEventManagerContext<T>
+    for SubStepUpdateContext<'_, T, P>
 {
     fn get_output_event_manager(&mut self) -> NonNull<OutputEventManager<T>> {
         let mut shared_step_state: NonNull<(OutputEventManager<T>, InputStateManager<T>)> =
@@ -75,8 +75,8 @@ impl<'update, T: Transposer, P: SharedPointerKind> OutputEventManagerContext<T>
     }
 }
 
-impl<'update, T: Transposer, P: SharedPointerKind> ScheduleEventContext<T>
-    for SubStepUpdateContext<'update, T, P>
+impl<T: Transposer, P: SharedPointerKind> ScheduleEventContext<T>
+    for SubStepUpdateContext<'_, T, P>
 {
     fn schedule_event(
         &mut self,
@@ -113,9 +113,7 @@ impl<'update, T: Transposer, P: SharedPointerKind> ScheduleEventContext<T>
     }
 }
 
-impl<'update, T: Transposer, P: SharedPointerKind> ExpireEventContext<T>
-    for SubStepUpdateContext<'update, T, P>
-{
+impl<T: Transposer, P: SharedPointerKind> ExpireEventContext<T> for SubStepUpdateContext<'_, T, P> {
     fn expire_event(
         &mut self,
         handle: ExpireHandle,
@@ -124,24 +122,20 @@ impl<'update, T: Transposer, P: SharedPointerKind> ExpireEventContext<T>
     }
 }
 
-impl<'update, T: Transposer, P: SharedPointerKind> RngContext
-    for SubStepUpdateContext<'update, T, P>
-{
+impl<T: Transposer, P: SharedPointerKind> RngContext for SubStepUpdateContext<'_, T, P> {
     fn get_rng(&mut self) -> &mut dyn CryptoRngCore {
         &mut self.metadata.rng
     }
 }
 
-impl<'update, T: Transposer, P: SharedPointerKind> CurrentTimeContext<T>
-    for SubStepUpdateContext<'update, T, P>
-{
+impl<T: Transposer, P: SharedPointerKind> CurrentTimeContext<T> for SubStepUpdateContext<'_, T, P> {
     fn current_time(&self) -> <T as Transposer>::Time {
         self.time.time
     }
 }
 
-impl<'update, T: Transposer, P: SharedPointerKind> LastUpdatedTimeContext<T>
-    for SubStepUpdateContext<'update, T, P>
+impl<T: Transposer, P: SharedPointerKind> LastUpdatedTimeContext<T>
+    for SubStepUpdateContext<'_, T, P>
 {
     fn last_updated_time(&self) -> <T as Transposer>::Time {
         self.metadata.last_updated.time

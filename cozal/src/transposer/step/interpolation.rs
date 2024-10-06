@@ -165,7 +165,9 @@ mod interpolate {
             let mut context =
                 StepInterpolateContext::new(interpolation_time, metadata, input_state);
 
-            transposer.interpolate(InterpolateContext::new_mut(&mut context)).await
+            transposer
+                .interpolate(InterpolateContext::new_mut(&mut context))
+                .await
         }
     }
 }

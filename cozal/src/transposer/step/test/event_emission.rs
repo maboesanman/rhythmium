@@ -1,9 +1,9 @@
 use core::pin::Pin;
 
+use super::super::{pre_init_step::PreInitStep, StepPoll};
 use crate::util::dummy_waker::DummyWaker;
 use archery::ArcTK;
 use rand::Rng;
-use super::super::{pre_init_step::PreInitStep, StepPoll};
 
 use crate::transposer::context::{HandleScheduleContext, InitContext, InterpolateContext};
 use crate::transposer::step::Step;
@@ -22,7 +22,7 @@ impl Transposer for TestTransposer {
     type Scheduled = ();
 
     type OutputEvent = u8;
-    
+
     fn prepare_to_init(&mut self) -> bool {
         true
     }

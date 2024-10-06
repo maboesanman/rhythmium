@@ -19,7 +19,6 @@ use std::task::Poll;
 
 use archery::{ArcTK, SharedPointer, SharedPointerKind};
 use future_input_container::{FutureInputContainer, FutureInputContainerGuard};
-pub use interpolation::Interpolation;
 use pre_init_step::PreInitStep;
 use sub_step::init_sub_step::InitSubStep;
 use sub_step::scheduled_sub_step::ScheduledSubStep;
@@ -31,6 +30,8 @@ use crate::transposer::Transposer;
 use super::input_state_manager::InputStateManager;
 use super::output_event_manager::OutputEventManager;
 use super::{TransposerInput, TransposerInputEventHandler};
+
+pub use interpolation::Interpolation;
 
 #[derive(Debug)]
 enum StepStatus {

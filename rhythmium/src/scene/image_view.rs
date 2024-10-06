@@ -21,7 +21,7 @@ impl<'a> ImageViewBuilder<'a> {
     }
 }
 
-impl<'a> ViewBuilder for ImageViewBuilder<'a> {
+impl ViewBuilder for ImageViewBuilder<'_> {
     fn build(
         self: Box<Self>,
         shared_wgpu_state: Arc<SharedWgpuState>,

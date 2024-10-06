@@ -26,8 +26,8 @@ impl<'t, T: Transposer + 't, P: SharedPointerKind + 't> FutureInputContainer<'t,
     }
 }
 
-impl<'a, 't, T: Transposer, P: SharedPointerKind> FutureInputContainerGuard<'t, T, P>
-    for &'a mut Option<BoxedSubStep<'t, T, P>>
+impl<'t, T: Transposer, P: SharedPointerKind> FutureInputContainerGuard<'t, T, P>
+    for &mut Option<BoxedSubStep<'t, T, P>>
 {
     fn get_time(&self) -> T::Time {
         self.as_ref().unwrap().as_ref().get_time()
@@ -50,8 +50,8 @@ impl<'t, T: Transposer + 't, P: SharedPointerKind + 't> FutureInputContainer<'t,
     }
 }
 
-impl<'a, 't, T: Transposer, P: SharedPointerKind> FutureInputContainerGuard<'t, T, P>
-    for &'a mut BTreeSet<BoxedSubStep<'t, T, P>>
+impl<'t, T: Transposer, P: SharedPointerKind> FutureInputContainerGuard<'t, T, P>
+    for &mut BTreeSet<BoxedSubStep<'t, T, P>>
 {
     fn get_time(&self) -> T::Time {
         self.first().unwrap().as_ref().get_time()

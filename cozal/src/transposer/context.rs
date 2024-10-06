@@ -157,7 +157,7 @@ macro_rules! impl_single {
         pub fn expire_event(
             &mut self,
             handle: ExpireHandle,
-        ) -> Result<(T::Time, T::Scheduled), ExpireEventError>{
+        ) -> Result<(T::Time, T::Scheduled), ExpireEventError> {
             self.0.expire_event(handle)
         }
     };
@@ -190,10 +190,6 @@ pub trait InitContextInner<'a, T: Transposer>:
 }
 
 impl<'a, T: Transposer> InitContext<'a, T> {
-    pub(crate) fn new_ref<'b>(inner: &'b dyn InitContextInner<'a, T>) -> &'b Self {
-        unsafe { core::mem::transmute(inner) }
-    }
-
     pub(crate) fn new_mut<'b>(inner: &'b mut dyn InitContextInner<'a, T>) -> &'b mut Self {
         unsafe { core::mem::transmute(inner) }
     }
@@ -218,11 +214,9 @@ pub trait HandleScheduleContextInner<'a, T: Transposer>:
 }
 
 impl<'a, T: Transposer> HandleScheduleContext<'a, T> {
-    pub(crate) fn new_ref<'b>(inner: &'b dyn HandleScheduleContextInner<'a, T>) -> &'b Self {
-        unsafe { core::mem::transmute(inner) }
-    }
-
-    pub(crate) fn new_mut<'b>(inner: &'b mut dyn HandleScheduleContextInner<'a, T>) -> &'b mut Self {
+    pub(crate) fn new_mut<'b>(
+        inner: &'b mut dyn HandleScheduleContextInner<'a, T>,
+    ) -> &'b mut Self {
         unsafe { core::mem::transmute(inner) }
     }
 
@@ -250,10 +244,6 @@ pub trait HandleInputContextInner<'a, T: Transposer>:
 }
 
 impl<'a, T: Transposer> HandleInputContext<'a, T> {
-    pub(crate) fn new_ref<'b>(inner: &'b dyn HandleInputContextInner<'a, T>) -> &'b Self {
-        unsafe { core::mem::transmute(inner) }
-    }
-
     pub(crate) fn new_mut<'b>(inner: &'b mut dyn HandleInputContextInner<'a, T>) -> &'b mut Self {
         unsafe { core::mem::transmute(inner) }
     }
@@ -276,10 +266,6 @@ pub trait InterpolateContextInner<'a, T: Transposer>:
 }
 
 impl<'a, T: Transposer> InterpolateContext<'a, T> {
-    pub(crate) fn new_ref<'b>(inner: &'b dyn InterpolateContextInner<'a, T>) -> &'b Self {
-        unsafe { core::mem::transmute(inner) }
-    }
-
     pub(crate) fn new_mut<'b>(inner: &'b mut dyn InterpolateContextInner<'a, T>) -> &'b mut Self {
         unsafe { core::mem::transmute(inner) }
     }

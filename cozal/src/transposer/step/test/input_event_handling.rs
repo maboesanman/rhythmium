@@ -1,11 +1,13 @@
 use core::pin::Pin;
 
+use super::super::{pre_init_step::PreInitStep, StepPoll};
 use crate::util::dummy_waker::DummyWaker;
 use archery::ArcTK;
 use rand::Rng;
-use super::super::{pre_init_step::PreInitStep, StepPoll};
 
-use crate::transposer::context::{HandleInputContext, HandleScheduleContext, InitContext, InterpolateContext};
+use crate::transposer::context::{
+    HandleInputContext, HandleScheduleContext, InitContext, InterpolateContext,
+};
 use crate::transposer::step::Step;
 use crate::transposer::{Transposer, TransposerInput, TransposerInputEventHandler};
 
@@ -22,12 +24,12 @@ impl Transposer for TestTransposer {
     type Scheduled = ();
 
     type OutputEvent = u8;
-    
+
     fn prepare_to_init(&mut self) -> bool {
         true
     }
 
-    async fn init(&mut self,  cx: &mut InitContext<'_, Self>) {
+    async fn init(&mut self, cx: &mut InitContext<'_, Self>) {
         self.counter = 0;
         cx.schedule_event(1, ()).unwrap();
     }
@@ -35,7 +37,7 @@ impl Transposer for TestTransposer {
     async fn handle_scheduled_event(
         &mut self,
         _payload: Self::Scheduled,
-         cx:&mut  HandleScheduleContext<'_, Self>,
+        cx: &mut HandleScheduleContext<'_, Self>,
     ) {
         for i in 0..10 {
             cx.emit_event(i).await;
@@ -45,7 +47,7 @@ impl Transposer for TestTransposer {
         self.counter += 1;
     }
 
-    async fn interpolate(&self,  _cx: &mut InterpolateContext<'_, Self>) -> Self::OutputState {
+    async fn interpolate(&self, _cx: &mut InterpolateContext<'_, Self>) -> Self::OutputState {
         self.counter
     }
 }
@@ -55,11 +57,11 @@ struct TestTransposerInput;
 
 impl TransposerInput for TestTransposerInput {
     type Base = TestTransposer;
-    
+
     type InputEvent = u8;
-    
+
     type InputState = u8;
-    
+
     const SORT: u64 = 0;
 }
 
