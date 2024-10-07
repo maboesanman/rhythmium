@@ -5,6 +5,8 @@ mod context;
 mod expire_handle;
 mod input_state_manager;
 mod output_event_manager;
+
+/// The type that encapsulates the transposer as it updates over time.
 pub mod step;
 // mod test;
 
@@ -18,6 +20,9 @@ pub use expire_handle::ExpireHandle;
 ///
 /// it is *heavily* recommended to use immutable structure sharing data types (for example, the [`im`] crate)
 /// in the implementing struct, because [`clone`](Clone::clone) is called often and should be a cheap operation.
+///
+/// Additionally, is is recommended to put any somewhat large, readonly data in an [`Arc`] or [`Rc`], as this will
+/// reduce the amount of data that needs to be cloned.
 ///
 /// The name comes from the idea that we are converting a stream of events into another stream of events,
 /// perhaps in the way a stream of music notes can be *transposed* into another stream of music notes.
@@ -93,8 +98,13 @@ pub trait Transposer: Sized {
 /// This represents an input that your transposer expects to be present.
 /// This can be a zero-sized type, or a type that contains data.
 pub trait TransposerInput: 'static + Sized + Hash + Eq + Copy + Ord {
+    /// The base transposer that this input is for.
     type Base: TransposerInputEventHandler<Self>;
+
+    /// The event that this input can emit.
     type InputEvent: Ord;
+
+    /// The state that this input can produce.
     type InputState;
 
     /// This MUST be unique for each input that shares a base.
@@ -103,6 +113,8 @@ pub trait TransposerInput: 'static + Sized + Hash + Eq + Copy + Ord {
     const SORT: u64;
 }
 
+/// This trait is for handling input events.
+/// You need to implement this trait for your transposer to be able to handle input events.
 pub trait TransposerInputEventHandler<I: TransposerInput<Base = Self>>: Transposer {
     /// The function to register an input.
     /// This occurs before the init function is run.

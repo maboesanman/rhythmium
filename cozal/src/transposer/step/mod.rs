@@ -18,7 +18,6 @@ use std::ptr::NonNull;
 use std::task::Poll;
 
 use archery::{ArcTK, SharedPointer, SharedPointerKind};
-use pre_init_step::PreInitStep;
 use sub_step::init_sub_step::InitSubStep;
 use sub_step::scheduled_sub_step::ScheduledSubStep;
 use sub_step::{BoxedSubStep, StartSaturateErr};
@@ -32,7 +31,8 @@ use super::{TransposerInput, TransposerInputEventHandler};
 
 pub use future_input_container::{FutureInputContainer, FutureInputContainerGuard};
 pub use interpolation::Interpolation;
-pub use sub_step::boxed_input_sub_step::BoxedInputSubStep;
+pub use pre_init_step::PreInitStep;
+pub use sub_step::boxed_input::BoxedInput;
 
 #[derive(Debug)]
 enum StepStatus {
@@ -62,6 +62,33 @@ enum ActiveStepStatusMut<'a, 't, T: Transposer + 't, P: SharedPointerKind + 't> 
     Saturated(&'a mut BoxedSubStep<'t, T, P>),
 }
 
+/// A step is a structure that allows for the transposer to be thought of as a state machine.
+///
+/// A step represents the change that occurs to the transposer at a single point in time.
+///
+/// A step can be in one of three states:
+///
+/// - Unsaturated: The step is ready to recieve a transposer (and some additional metadata like the scheduled events)
+///   and begin processing it.
+///
+/// - Saturating: The step is in the process of saturating. This means there is some async method on the transposer
+///   that has not yet completed. This could be a future that is waiting on some input.
+///
+/// - Saturated: The step has completed saturating. This means that all async methods on the transposer have completed,
+///   and that the transposer is available to either perform interpolation or to be used in the next step.
+///
+/// A step can move between the states in the following ways:
+///
+/// - Unsaturated -> Saturating: When the `start_saturate_clone` or `start_saturate_take` methods are called.
+///
+/// - Saturating -> Saturated: When polling the step returns `Poll::Ready`.
+///
+/// - (Saturating or Saturated) -> Unsaturated: When the `desaturate` method is called.
+///
+/// - Saturated -> Unsaturated: When the `start_saturate_take` method is called on the _next_ step.
+///
+/// Steps are only created by calling `new_init` (at the very beginning to get things started) or by calling
+/// `next_unsaturated` or `next_scheduled_unsaturated` on an existing step.
 #[derive(Debug)]
 pub struct Step<'t, T: Transposer + 't, P: SharedPointerKind + 't = ArcTK> {
     steps: Vec<BoxedSubStep<'t, T, P>>,
@@ -141,6 +168,10 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
         &mut unsafe { input_state.as_mut() }.0
     }
 
+    /// Create new beginning step.
+    ///
+    /// This is the first step the transposer undergoes, whic his why it recieves the transposer as an argument, as
+    /// opposed to the other steps which get it from the previous step.
     pub fn new_init(
         transposer: T,
         pre_init_step: PreInitStep<T>,
@@ -172,6 +203,11 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
         })
     }
 
+    /// Create a new step that is ready to be saturated.
+    ///
+    /// This will compare the time of the next scheduled event in the current schedule with the time
+    /// of `next_inputs`, and either take the next input event from the container to produce a step, or
+    /// leave it in the container and produce a step that will handle the scheduled event.
     pub fn next_unsaturated<F: FutureInputContainer<'a, T, P>>(
         &self,
         next_inputs: &mut F,
@@ -248,6 +284,10 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
         }))
     }
 
+    /// Create a new step that is ready to be saturated.
+    ///
+    /// This will only create a step from a scheduled event, and should be used if you know there
+    /// isn't another input event in the future.
     pub fn next_scheduled_unsaturated(&self) -> Result<Option<Self>, NextUnsaturatedErr>
     where
         T: Clone,
@@ -255,6 +295,15 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
         self.next_unsaturated(&mut None)
     }
 
+    /// Begin saturating the step by taking the transposer and metadata from the previous step.
+    ///
+    /// This moves the previous step from Saturated to Unsaturated, and the current step from Unsaturated to Saturating.
+    ///
+    /// # Errors
+    ///
+    /// - If the previous step is not Saturated.
+    /// - If the current step is not Unsaturated.
+    /// - If the previous step's UUID does not match the current step's UUID. (only when debug assertions are enabled)
     pub fn start_saturate_take(&mut self, prev: &mut Self) -> Result<(), SaturateErr>
     where
         T: Clone,
@@ -267,6 +316,15 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
         self.start_saturate(prev.take()?)
     }
 
+    /// Begin saturating the step by cloning the transposer and metadata from the previous step.
+    ///
+    /// This moves the current step from Unsaturated to Saturating, without changing the previous step.
+    ///
+    /// # Errors
+    ///
+    /// - If the previous step is not Saturated.
+    /// - If the current step is not Unsaturated.
+    /// - If the previous step's UUID does not match the current step's UUID. (only when debug assertions are enabled)
     pub fn start_saturate_clone(&mut self, prev: &Self) -> Result<(), SaturateErr>
     where
         T: Clone,
@@ -321,15 +379,45 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
         Ok(())
     }
 
+    /// Desaturate the step.
+    ///
+    /// This will move the step from Saturated or Saturating to Unsaturated, and all sub steps will be desaturated.
+    ///
+    /// When you desaturate a step, subsequent saturations *WILL NOT* result in re-emissions of the events that
+    /// were emitted during the previous saturation, even if the previous saturation never completed. Think of this
+    /// as the step remembering the events that were emitted, and skipping them if they are emmitted when the step
+    /// is re-saturated. This will not prevent identical events from being emitted, however. The only observable
+    /// difference (from the perspective of the transposer) is that the `emit_event` futures will immediately return
+    /// `Poll::Ready` if the event was emitted during the previous saturation.
+    ///
+    /// This also resets the stored input state
     pub fn desaturate(&mut self) {
         match self.get_step_status_mut() {
             ActiveStepStatusMut::Saturated(step) => step.as_mut().desaturate(),
             ActiveStepStatusMut::Saturating(step) => step.as_mut().desaturate(),
             _ => {}
         }
+
+        Self::drop_shared_step_state(self.shared_step_state);
+        self.shared_step_state = Self::new_shared_step_state();
         self.status = StepStatus::Unsaturated;
     }
 
+    /// Poll a saturated step toward completion.
+    ///
+    /// While this resembles a future, it is not a future, and has more types of results.
+    ///
+    /// # Returns
+    ///
+    /// - If the step is ready, this will move the step from Saturating to Saturated, and return `Ok(StepPoll::Ready)`.
+    /// - If the step is not ready:
+    ///     - If the step has emitted an event, and is waiting for the event to be extracted, this will return `Ok(StepPoll::Emitted(event))`.
+    ///     - If the step has requested an input state and is waiting for it to be provided, this will return `Ok(StepPoll::StateRequested(type_id))`.
+    ///
+    /// # Errors
+    ///
+    /// - If the step is unsaturated, this will return `Err(PollErr::Unsaturated)`.
+    /// - If the step is saturated, this will return `Err(PollErr::Saturated)`.
     pub fn poll(&mut self, waker: &Waker) -> Result<StepPoll<T>, PollErr>
     where
         T: Clone,
@@ -399,10 +487,17 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
         }
     }
 
+    /// Get the type id of the input that was requeted by the step during polling.
+    ///
+    /// This will return `None` if the step has not requested an input.
     pub fn get_requested_input_type_id(&self) -> Option<TypeId> {
         self.get_input_state().get_requested_input_type_id()
     }
 
+    /// Get the requested input that was requested by the step during polling.
+    ///
+    /// This will return `None` if the step has not requested an input, or if the input requested
+    /// was not of the type `I`.
     pub fn get_requested_input<I: TransposerInput<Base = T>>(&mut self) -> Option<I>
     where
         T: TransposerInputEventHandler<I>,
@@ -410,6 +505,10 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
         self.get_input_state_mut().get_requested_input()
     }
 
+    /// Provide the input state that was requested by the step during polling.
+    ///
+    /// This will return `Ok(())` if the input state was successfully provided, and `Err(input_state)` if the
+    /// input state was not requested, or if the input state was not of the correct type.
     pub fn provide_input_state<I: TransposerInput<Base = T>>(
         &mut self,
         input: I,
@@ -424,6 +523,10 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
             .map_err(|ptr| *unsafe { Box::from_raw(ptr.as_ptr()) })
     }
 
+    /// Begin interpolating the outut state of the step to the given time.
+    ///
+    /// This will return an `Interpolation` object that can be used like a future. While this is a future,
+    /// it must be polled manually since input state may need to be provided between polls.
     pub fn interpolate(&self, time: T::Time) -> Result<Interpolation<T, P>, InterpolateErr>
     where
         T: Clone,
@@ -441,7 +544,11 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
         Ok(Interpolation::new(time, wrapped_transposer))
     }
 
-    pub fn drain_inputs(mut self) -> impl IntoIterator<Item = BoxedInputSubStep<'a, T, P>> {
+    /// Discard the step, extracting and returning all input events, so they can be reused, perhaps with
+    /// new events added, or some of the events removed.
+    ///
+    /// They will be emitted in sorted order (the order the transposer would see them).
+    pub fn drain_inputs(mut self) -> impl IntoIterator<Item = BoxedInput<'a, T, P>> {
         // need to desaturate before dropping self, since saturating steps may point to shared state.
         for step in &mut self.steps {
             step.as_mut().desaturate();
@@ -452,59 +559,105 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
         steps.into_iter().filter_map(|step| step.try_into().ok())
     }
 
+    /// Get the time of the step.
     pub fn get_time(&self) -> T::Time {
         self.time
     }
 
+    /// true if the step is unsaturated.
     pub fn is_unsaturated(&self) -> bool {
         matches!(self.status, StepStatus::Unsaturated)
     }
 
+    /// true if the step is saturating.
     pub fn is_saturating(&self) -> bool {
         matches!(self.status, StepStatus::Saturating(_))
     }
 
+    /// true if the step is saturated.
     pub fn is_saturated(&self) -> bool {
         matches!(self.status, StepStatus::Saturated)
     }
 
+    /// true if the step might still produce events.
+    ///
+    /// generally this will only be false if the step has ever been fully saturated.
     pub fn can_produce_events(&self) -> bool {
         self.can_produce_events
     }
 }
 
+/// The result of polling a step.
 #[derive(Debug, PartialEq, Eq)]
 pub enum StepPoll<T: Transposer> {
+    /// The step has emitted an event. The waker may never be called, and the caller is responsible for
+    /// calling `poll` again after handling the event.
     Emitted(T::OutputEvent),
+
+    /// The step has requested an input state. The waker may never be called, and the caller is responsible for
+    /// calling `poll` again after providing the requested input state.
+    ///
+    /// the type id is the type id of the input that was requested.
+    ///
+    /// the specific input can be retrieved by calling `get_requested_input` on the step, then provided by calling
+    /// `provide_input_state` on the step.
     StateRequested(TypeId),
+
+    /// The step is still pending. The waker will be called when the step is ready to be polled again.
     Pending,
+
+    /// The step is now saturated.
     Ready,
 }
 
+/// The error result of polling a step.
 #[derive(Debug, PartialEq, Eq)]
 pub enum PollErr {
+    /// The step is unsaturated.
     Unsaturated,
+
+    /// The step is saturated.
     Saturated,
 }
 
+/// The error result of interpolating a step.
 #[derive(Debug)]
 pub enum InterpolateErr {
+    /// The step is not saturated.
     NotSaturated,
+
+    /// The time to interpolate to is in the past.
+    ///
+    /// This is only available when debug assertions are enabled.
     #[cfg(debug_assertions)]
     TimePast,
 }
 
+/// The error result of getting the next unsaturated step.
 #[derive(Debug)]
 pub enum NextUnsaturatedErr {
+    /// The step is not saturated.
     NotSaturated,
+
+    /// The input event is in the past or present.
+    ///
+    /// This is only available when debug assertions are enabled.
     #[cfg(debug_assertions)]
     InputPastOrPresent,
 }
 
+/// The error result of starting to saturate a step.
 #[derive(Debug)]
 pub enum SaturateErr {
+    /// The previous step is not saturated.
     PreviousNotSaturated,
+
+    /// The current step is not unsaturated.
     SelfNotUnsaturated,
+
+    /// The previous step's UUID does not match the current step's UUID.
+    ///
+    /// This is only available when debug assertions are enabled.
     #[cfg(debug_assertions)]
     IncorrectPrevious,
 }

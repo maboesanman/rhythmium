@@ -4,6 +4,10 @@
 #![allow(async_fn_in_trait)]
 
 pub mod source;
+
+/// The transposer module contains the types needed to create your own transposer,
+/// as well as the step module for driving the transposer.
+#[warn(missing_docs)]
 pub mod transposer;
 mod util;
 

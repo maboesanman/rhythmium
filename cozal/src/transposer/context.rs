@@ -193,6 +193,9 @@ impl<'a, T: Transposer> InitContext<'a, T> {
     impl_single!(InputStateManagerContext);
     impl_single!(OutputEventManagerContext);
 }
+
+/// A struct for accessing the functions available to the `Transposer::handle_scheduled_event` function
+#[repr(transparent)]
 pub struct HandleScheduleContext<'a, T: Transposer>(dyn HandleScheduleContextInner<'a, T>);
 
 pub trait HandleScheduleContextInner<'a, T: Transposer>:
@@ -222,6 +225,7 @@ impl<'a, T: Transposer> HandleScheduleContext<'a, T> {
     impl_single!(OutputEventManagerContext);
 }
 
+/// A struct for accessing the functions available to the `TransposerInputHandler::handle_input` function
 #[repr(transparent)]
 pub struct HandleInputContext<'a, T: Transposer>(dyn HandleInputContextInner<'a, T>);
 
@@ -250,6 +254,7 @@ impl<'a, T: Transposer> HandleInputContext<'a, T> {
     impl_single!(ScheduleEventContext);
 }
 
+/// A struct for accessing the functions available to the `Transposer::interpolate` function
 #[repr(transparent)]
 pub struct InterpolateContext<'a, T: Transposer>(dyn InterpolateContextInner<'a, T>);
 

@@ -81,23 +81,28 @@ impl<T: Transposer> PartialEq for DynInputRegistration<T> {
 
 impl<T: Transposer> Eq for DynInputRegistration<T> {}
 
+/// A struct containing all the input registrations for a transposer.
+/// This is used to register inputs before the transposer is initialized, and verify that all
+/// required inputs are present.
 pub struct PreInitStep<T: Transposer> {
     registrations: Vec<DynInputRegistration<T>>,
 }
 
 impl<T: Transposer> Default for PreInitStep<T> {
     fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<T: Transposer> PreInitStep<T> {
-    pub fn new() -> Self {
         Self {
             registrations: Vec::new(),
         }
     }
+}
 
+impl<T: Transposer> PreInitStep<T> {
+    /// Create a new PreInitStep.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Add an input to the PreInitStep.
     pub fn add_input<I>(&mut self, input: I)
     where
         I: TransposerInput<Base = T>,
@@ -106,6 +111,7 @@ impl<T: Transposer> PreInitStep<T> {
         self.registrations.push(DynInputRegistration::new(input));
     }
 
+    /// register all inputs, and run the transposer's `prepare_to_init` function.
     pub fn execute(mut self, mut transposer: T) -> Result<T, T> {
         self.registrations.sort();
 
