@@ -18,7 +18,6 @@ use std::ptr::NonNull;
 use std::task::Poll;
 
 use archery::{ArcTK, SharedPointer, SharedPointerKind};
-use future_input_container::{FutureInputContainer, FutureInputContainerGuard};
 use pre_init_step::PreInitStep;
 use sub_step::init_sub_step::InitSubStep;
 use sub_step::scheduled_sub_step::ScheduledSubStep;
@@ -31,7 +30,9 @@ use super::input_state_manager::InputStateManager;
 use super::output_event_manager::OutputEventManager;
 use super::{TransposerInput, TransposerInputEventHandler};
 
+pub use future_input_container::{FutureInputContainer, FutureInputContainerGuard};
 pub use interpolation::Interpolation;
+pub use sub_step::boxed_input_sub_step::BoxedInputSubStep;
 
 #[derive(Debug)]
 enum StepStatus {
@@ -225,7 +226,7 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
                         None => break,
                     };
                     front = new_front;
-                    steps.push(item);
+                    steps.push(item.into());
                 }
                 steps
             }
@@ -438,6 +439,17 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
         }
 
         Ok(Interpolation::new(time, wrapped_transposer))
+    }
+
+    pub fn drain_inputs(mut self) -> impl IntoIterator<Item = BoxedInputSubStep<'a, T, P>> {
+        // need to desaturate before dropping self, since saturating steps may point to shared state.
+        for step in &mut self.steps {
+            step.as_mut().desaturate();
+        }
+
+        let steps = core::mem::take(&mut self.steps);
+
+        steps.into_iter().filter_map(|step| step.try_into().ok())
     }
 
     pub fn get_time(&self) -> T::Time {

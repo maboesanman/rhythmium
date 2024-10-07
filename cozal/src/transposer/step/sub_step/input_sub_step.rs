@@ -110,6 +110,10 @@ where
     {
         BoxedSubStep::new(Box::new(Self::new(time, input, input_event)))
     }
+
+    pub fn get_input(&self) -> &I {
+        &self.data.input
+    }
 }
 
 unsafe impl<T, P, I> SubStep<T, P> for InputSubStep<T, P, I>
