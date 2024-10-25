@@ -4,6 +4,9 @@ description = "A Rhythm Game Client"
 version.workspace = true
 edition.workspace = true
 
+[lib]
+doctest = false
+
 [build-dependencies]
 cmake = "0.1"
 bindgen = "0.69"
