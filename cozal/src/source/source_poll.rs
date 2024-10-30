@@ -39,12 +39,26 @@ pub enum Interrupt<E> {
     Finalize,
 }
 
+impl<E> Interrupt<E> {
+    pub fn map_event<F, U>(self, f: F) -> Interrupt<U>
+    where
+        F: FnOnce(E) -> U,
+    {
+        match self {
+            Interrupt::Event(e) => Interrupt::Event(f(e)),
+            Interrupt::FinalizedEvent(e) => Interrupt::FinalizedEvent(f(e)),
+            Interrupt::Rollback => Interrupt::Rollback,
+            Interrupt::Finalize => Interrupt::Finalize,
+        }
+    }
+}
+
 #[non_exhaustive]
-pub enum SourcePollErr<T, Err> {
+pub enum SourcePollErr<T> {
     OutOfBoundsChannel,
     PollAfterAdvance { advanced: T },
     PollBeforeDefault,
-    SpecificError(Err),
+    SpecificError(anyhow::Error),
 }
 
-pub type TrySourcePoll<T, E, S, Err> = Result<SourcePoll<T, E, S>, SourcePollErr<T, Err>>;
+pub type TrySourcePoll<T, E, S> = Result<SourcePoll<T, E, S>, SourcePollErr<T>>;

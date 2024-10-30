@@ -35,9 +35,6 @@ pub trait Source {
     /// The type of states emitted by the source.
     type State;
 
-    /// The type of any custom errors for the source.
-    type Error;
-
     /// Attempt to retrieve the state of the source at `time`, registering the current task for wakeup in certain situations.
     ///
     /// # Return value
@@ -57,7 +54,7 @@ pub trait Source {
         &mut self,
         time: Self::Time,
         cx: SourceContext,
-    ) -> TrySourcePoll<Self::Time, Self::Event, Self::State, Self::Error>;
+    ) -> TrySourcePoll<Self::Time, Self::Event, Self::State>;
 
     /// Attempt to retrieve the state of the source at `time`, registering the current task for wakeup in certain situations. Also inform the source that the state emitted from this call is exempt from the requirement to be informed of future invalidations (that the source can "forget" about this call to poll when determining how far to roll back).
     ///
@@ -66,7 +63,7 @@ pub trait Source {
         &mut self,
         time: Self::Time,
         cx: SourceContext,
-    ) -> TrySourcePoll<Self::Time, Self::Event, Self::State, Self::Error> {
+    ) -> TrySourcePoll<Self::Time, Self::Event, Self::State> {
         self.poll(time, cx)
     }
 
@@ -77,7 +74,7 @@ pub trait Source {
         &mut self,
         time: Self::Time,
         all_channel_waker: Waker,
-    ) -> TrySourcePoll<Self::Time, Self::Event, (), Self::Error>;
+    ) -> TrySourcePoll<Self::Time, Self::Event, ()>;
 
     /// Inform the source it is no longer obligated to retain progress made on `channel`
     fn release_channel(&mut self, channel: usize);

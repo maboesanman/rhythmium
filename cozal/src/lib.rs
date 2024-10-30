@@ -2,6 +2,7 @@
 #![feature(type_alias_impl_trait)]
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(async_fn_in_trait)]
+#![feature(ptr_metadata)]
 
 pub mod source;
 

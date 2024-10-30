@@ -91,6 +91,8 @@ enum ActiveStepStatusMut<'a, 't, T: Transposer + 't, P: SharedPointerKind + 't> 
 /// `next_unsaturated` or `next_scheduled_unsaturated` on an existing step.
 #[derive(Debug)]
 pub struct Step<'t, T: Transposer + 't, P: SharedPointerKind + 't = ArcTK> {
+    sequence_number: usize,
+
     steps: Vec<BoxedSubStep<'t, T, P>>,
     status: StepStatus,
 
@@ -190,6 +192,7 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
             InitSubStep::new_boxed(transposer, rng_seed, start_time, shared_step_state);
 
         Ok(Self {
+            sequence_number: 0,
             steps: vec![init_sub_step],
             status: StepStatus::Saturating(0),
             time: start_time,
@@ -271,6 +274,7 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
         };
 
         Ok(Some(Self {
+            sequence_number: self.sequence_number + 1,
             steps,
             status: StepStatus::Unsaturated,
             time,
@@ -586,6 +590,26 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
         self.can_produce_events
     }
 }
+
+impl<'a, T: Transposer, P: SharedPointerKind> Ord for Step<'a, T, P> {
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        self.sequence_number.cmp(&other.sequence_number)
+    }
+}
+
+impl<'a, T: Transposer, P: SharedPointerKind> PartialOrd for Step<'a, T, P> {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<'a, T: Transposer, P: SharedPointerKind> PartialEq for Step<'a, T, P> {
+    fn eq(&self, other: &Self) -> bool {
+        self.sequence_number == other.sequence_number
+    }
+}
+
+impl<'a, T: Transposer, P: SharedPointerKind> Eq for Step<'a, T, P> {}
 
 /// The result of polling a step.
 #[derive(Debug, PartialEq, Eq)]
