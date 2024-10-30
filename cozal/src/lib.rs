@@ -3,6 +3,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(async_fn_in_trait)]
 #![feature(ptr_metadata)]
+#![feature(trait_upcasting)]
 
 pub mod source;
 
