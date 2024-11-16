@@ -10,41 +10,7 @@ use crate::{
     transposer::{Transposer, TransposerInput, TransposerInputEventHandler},
 };
 
-unsafe trait ErasedInputTrait<T: Transposer> {
-    fn get_input_type(&self) -> TypeId;
 
-    fn get_input_type_value_hash(&self, state: &mut dyn Hasher);
-
-    fn inputs_eq(&self, other: &dyn ErasedInputTrait<T>) -> bool;
-
-    fn get_raw_input(&self) -> *const ();
-}
-
-unsafe impl<I: TransposerInput> ErasedInputTrait<I::Base> for I {
-    fn get_input_type(&self) -> TypeId {
-        any::TypeId::of::<I>()
-    }
-
-    fn get_input_type_value_hash(&self, mut state: &mut dyn Hasher) {
-        self.hash(&mut state);
-    }
-
-    fn inputs_eq(&self, other: &dyn ErasedInputTrait<I::Base>) -> bool {
-        if self.get_input_type() != other.get_input_type() {
-            return false;
-        }
-
-        unsafe {
-            let other_input = &*(other.get_raw_input() as *const I);
-
-            self == other_input
-        }
-    }
-
-    fn get_raw_input(&self) -> *const () {
-        self as *const I as *const ()
-    }
-}
 
 unsafe trait ErasedInputSourceTrait<T: Transposer>: ErasedInputTrait<T> {
     fn get_raw_src_data(&self) -> *const ();

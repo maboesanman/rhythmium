@@ -1,94 +1,89 @@
 use std::{
-    any::TypeId,
-    collections::HashMap,
-    future::Future,
-    marker::PhantomData,
-    pin::Pin,
-    ptr::NonNull,
-    task::{Context, Poll, Waker},
+    borrow::Borrow, collections::HashSet, future::Future, hash::{Hash, Hasher}, marker::PhantomData, pin::Pin, ptr::NonNull, task::{Context, Poll, Waker}
 };
 
 use crate::transposer::{Transposer, TransposerInput, TransposerInputEventHandler};
 
-pub struct InputStateManager<T> {
-    request: Option<TypeId>,
-    states: HashMap<TypeId, Box<dyn InputStateMapErased>>,
-    phantom: PhantomData<T>,
+use super::input_erasure::{ErasedInput, HasErasedInput, HasInput};
+
+
+pub struct InputStateManager<T: Transposer> {
+    request: RequestStatus<T>,
+    states: HashSet<StateItem<T>>,
 }
 
-struct InputStateMap<I: TransposerInput> {
-    requested_input: Option<(I, Waker)>,
-    states: HashMap<I, NonNull<I::InputState>>,
-}
-
-trait InputStateMapErased {
-    // input is owned.
-    fn set_request(&mut self, input: Option<NonNull<()>>);
-
-    fn get_request_waker(&self) -> Option<&Waker>;
-
-    // result is not owned.
-    fn get_request(&self) -> Option<NonNull<()>>;
-
-    // neither input nor result are owned pointers.
-    fn get(&self, input: NonNull<()>) -> Option<NonNull<()>>;
-
-    // neither input nor result are owned pointers.
-    fn insert(&mut self, input: NonNull<()>, state: NonNull<()>) -> Option<NonNull<()>>;
-}
-
-impl<I: TransposerInput> InputStateMapErased for InputStateMap<I> {
-    fn set_request(&mut self, input: Option<NonNull<()>>) {
-        self.requested_input = input.map(|i| unsafe { i.cast().read() });
-    }
-
-    fn get_request_waker(&self) -> Option<&Waker> {
-        self.requested_input.as_ref().map(|(_, waker)| waker)
-    }
-
-    fn get_request(&self) -> Option<NonNull<()>> {
-        self.requested_input
-            .as_ref()
-            .map(|i| NonNull::from(i).cast())
-    }
-
-    fn get(&self, input: NonNull<()>) -> Option<NonNull<()>> {
-        let input: I = unsafe { input.cast().read() };
-        self.states.get(&input).map(|s| s.cast())
-    }
-
-    fn insert(&mut self, input: NonNull<()>, state: NonNull<()>) -> Option<NonNull<()>> {
-        let input: I = unsafe { input.cast().read() };
-        self.states.insert(input, state.cast()).map(|s| s.cast())
-    }
-}
-
-impl<T> Default for InputStateManager<T> {
+impl<T: Transposer> Default for InputStateManager<T> {
     fn default() -> Self {
-        Self {
-            request: None,
-            states: HashMap::new(),
-            phantom: PhantomData,
-        }
+        Self { request: Default::default(), states: Default::default() }
+    }
+}
+
+#[repr(transparent)]
+struct StateItem<T: Transposer>(Box<dyn HasErasedInputState<T>>);
+
+impl<T: Transposer> Hash for StateItem<T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.get_input_type_value_hash(state);
+    }
+}
+
+impl<T: Transposer> PartialEq for StateItem<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.inputs_eq(other.0.as_ref())
+    }
+}
+
+impl<T: Transposer> Eq for StateItem<T> {}
+
+impl<T: Transposer> Borrow<ErasedInput<T>> for StateItem<T> {
+    fn borrow(&self) -> &ErasedInput<T> {
+        let inner: &dyn HasErasedInput<T> = self.0.as_ref();
+        inner.into()
+    }
+}
+
+#[derive(Default)]
+enum RequestStatus<T: Transposer> {
+    Requested(Waker, Box<ErasedInput<T>>),
+    Accepted(Waker),
+
+    #[default]
+    None,
+}
+
+pub struct InputState<I: TransposerInput> {
+    input: I,
+    state: I::InputState,
+}
+
+impl<I: TransposerInput> HasInput<I::Base> for InputState<I> {
+    type Input = I;
+
+    fn get_input(&self) -> &Self::Input {
+        &self.input
+    }
+}
+
+trait HasErasedInputState<T: Transposer>: HasErasedInput<T> {
+    // this returns an &'_ I::InputState
+    fn get_input_state(&self) -> NonNull<()>;
+}
+
+impl<I: TransposerInput> HasErasedInputState<I::Base> for InputState<I> {
+    fn get_input_state(&self) -> NonNull<()> {
+        NonNull::from(&self.state).cast()
     }
 }
 
 impl<T: Transposer> InputStateManager<T> {
-    pub fn get_requested_input_type_id(&self) -> Option<TypeId> {
-        self.request
-    }
-
-    pub fn get_requested_input<I>(&self) -> Option<I>
-    where
-        I: TransposerInput<Base = T>,
-        T: TransposerInputEventHandler<I>,
-    {
-        unsafe {
-            self.states
-                .get(&TypeId::of::<I>())?
-                .get_request()?
-                .cast()
-                .read()
+    pub fn accept_request(&mut self) -> Option<Box<ErasedInput<T>>> {
+        match core::mem::take(&mut self.request) {
+            RequestStatus::Requested(waker, input) => {
+                self.request = RequestStatus::Accepted(waker);
+                Some(input)
+            }
+            RequestStatus::Accepted(_) => panic!("should't be attempting to accept while already accepted"),
+            RequestStatus::None => None,
         }
     }
 
@@ -101,27 +96,22 @@ impl<T: Transposer> InputStateManager<T> {
         I: TransposerInput<Base = T>,
         T: TransposerInputEventHandler<I>,
     {
-        let outer_map_entry = self.states.entry(TypeId::of::<I>());
-
-        let inner_map = outer_map_entry.or_insert_with(|| {
-            Box::new(InputStateMap::<I> {
-                requested_input: Some((input, waker)),
-                states: HashMap::new(),
-            })
-        });
-
-        let input_erased = NonNull::from(&input);
-
-        if let Some(input_state_erased) = inner_map.get(input_erased.cast()) {
-            return Some(input_state_erased.cast());
+        match self.request {
+            RequestStatus::None => {},
+            _ => panic!("shouldn't be requesting while already requested"),
         }
 
-        if self.request.is_some() {
-            return None;
+        let query: &dyn HasErasedInput<T> = &input;
+        let query: &ErasedInput<T> = query.into();
+
+        if let Some(item) = self.states.get(query) {
+            // SAFETY: we know that the item found must match the query type
+            return Some(item.0.get_input_state().cast())
         }
 
-        self.request = Some(TypeId::of::<I>());
-        inner_map.set_request(Some(input_erased.cast()));
+        let boxed: Box<dyn HasErasedInput<T>> = Box::new(input);
+
+        self.request = RequestStatus::Requested(waker, boxed.into());
 
         None
     }
@@ -129,30 +119,32 @@ impl<T: Transposer> InputStateManager<T> {
     pub fn provide_input_state<I>(
         &mut self,
         input: I,
-        state: NonNull<I::InputState>,
-    ) -> Result<(), NonNull<I::InputState>>
+        state: I::InputState,
+    ) -> Result<(), I::InputState>
     where
         I: TransposerInput<Base = T>,
         T: TransposerInputEventHandler<I>,
     {
-        match self.request {
-            Some(type_id) => {
-                if type_id != TypeId::of::<I>() {
-                    return Err(state);
-                }
-            }
-            None => return Err(state),
+        let waker = match &self.request {
+            RequestStatus::Requested(..) => return Err(state),
+            RequestStatus::Accepted(waker) => waker,
+            RequestStatus::None => return Err(state),
+        };
+
+        let query: &dyn HasErasedInput<T> = &input;
+        let query: &ErasedInput<T> = query.into();
+
+        if self.states.contains(query) {
+            return Err(state);
         }
+        
+        let item = StateItem(Box::new(InputState { input, state }));
 
-        let inner = self.states.get_mut(&TypeId::of::<I>()).unwrap();
+        self.states.insert(item);
 
-        if let Some(waker) = inner.get_request_waker() {
-            waker.wake_by_ref();
-        }
+        waker.wake_by_ref();
 
-        inner.set_request(None);
-
-        inner.insert(NonNull::from(&input).cast(), state.cast());
+        self.request = RequestStatus::None;
 
         Ok(())
     }

@@ -1,7 +1,7 @@
 // mod duplicate;
 // mod offload;
 // mod multiplex;
-mod transpose;
+pub mod transpose;
 // mod concurrent;
 // pub mod interrupt_iterator;
 pub mod interrupt_stream;

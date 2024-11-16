@@ -25,6 +25,7 @@ use wrapped_transposer::WrappedTransposer;
 
 use crate::transposer::Transposer;
 
+use super::input_erasure::ErasedInput;
 use super::input_state_manager::InputStateManager;
 use super::output_event_manager::OutputEventManager;
 use super::{TransposerInput, TransposerInputEventHandler};
@@ -445,7 +446,7 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
                         break Ok(StepPoll::Emitted(output_event));
                     }
 
-                    if let Some(type_id) = self.get_input_state_mut().get_requested_input_type_id()
+                    if let Some(type_id) = self.get_input_state_mut().accept_request()
                     {
                         break Ok(StepPoll::StateRequested(type_id));
                     }
@@ -491,24 +492,6 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
         }
     }
 
-    /// Get the type id of the input that was requeted by the step during polling.
-    ///
-    /// This will return `None` if the step has not requested an input.
-    pub fn get_requested_input_type_id(&self) -> Option<TypeId> {
-        self.get_input_state().get_requested_input_type_id()
-    }
-
-    /// Get the requested input that was requested by the step during polling.
-    ///
-    /// This will return `None` if the step has not requested an input, or if the input requested
-    /// was not of the type `I`.
-    pub fn get_requested_input<I: TransposerInput<Base = T>>(&mut self) -> Option<I>
-    where
-        T: TransposerInputEventHandler<I>,
-    {
-        self.get_input_state_mut().get_requested_input()
-    }
-
     /// Provide the input state that was requested by the step during polling.
     ///
     /// This will return `Ok(())` if the input state was successfully provided, and `Err(input_state)` if the
@@ -521,10 +504,7 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
     where
         T: TransposerInputEventHandler<I>,
     {
-        let input_state = NonNull::from(Box::leak(Box::new(input_state)));
-        self.get_input_state_mut()
-            .provide_input_state(input, input_state)
-            .map_err(|ptr| *unsafe { Box::from_raw(ptr.as_ptr()) })
+        self.get_input_state_mut().provide_input_state(input, input_state)
     }
 
     /// Begin interpolating the outut state of the step to the given time.
@@ -612,7 +592,7 @@ impl<'a, T: Transposer, P: SharedPointerKind> PartialEq for Step<'a, T, P> {
 impl<'a, T: Transposer, P: SharedPointerKind> Eq for Step<'a, T, P> {}
 
 /// The result of polling a step.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(PartialEq, Eq)]
 pub enum StepPoll<T: Transposer> {
     /// The step has emitted an event. The waker may never be called, and the caller is responsible for
     /// calling `poll` again after handling the event.
@@ -625,13 +605,24 @@ pub enum StepPoll<T: Transposer> {
     ///
     /// the specific input can be retrieved by calling `get_requested_input` on the step, then provided by calling
     /// `provide_input_state` on the step.
-    StateRequested(TypeId),
+    StateRequested(Box<ErasedInput<T>>),
 
     /// The step is still pending. The waker will be called when the step is ready to be polled again.
     Pending,
 
     /// The step is now saturated.
     Ready,
+}
+
+impl<T: Transposer> std::fmt::Debug for StepPoll<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            StepPoll::Emitted(_) => write!(f, "StepPoll::Emitted"),
+            StepPoll::StateRequested(_) => write!(f, "StepPoll::StateRequested"),
+            StepPoll::Pending => write!(f, "StepPoll::Pending"),
+            StepPoll::Ready => write!(f, "StepPoll::Ready"),
+        }
+    }
 }
 
 /// The error result of polling a step.

@@ -5,6 +5,7 @@ mod context;
 mod expire_handle;
 mod input_state_manager;
 mod output_event_manager;
+pub mod input_erasure;
 
 /// The type that encapsulates the transposer as it updates over time.
 pub mod step;
