@@ -1,44 +1,20 @@
 use std::{
-    borrow::Borrow, collections::HashSet, future::Future, hash::{Hash, Hasher}, marker::PhantomData, pin::Pin, ptr::NonNull, task::{Context, Poll, Waker}
+    borrow::Borrow, collections::HashSet, future::Future, marker::PhantomData, pin::Pin, ptr::NonNull, task::{Context, Poll, Waker}
 };
 
 use crate::transposer::{Transposer, TransposerInput, TransposerInputEventHandler};
 
-use super::input_erasure::{ErasedInput, HasErasedInput, HasInput};
+use super::input_erasure::{ErasedInput, ErasedInputState, HasErasedInput, HasInput};
 
 
 pub struct InputStateManager<T: Transposer> {
     request: RequestStatus<T>,
-    states: HashSet<StateItem<T>>,
+    states: HashSet<Box<ErasedInputState<T>>>,
 }
 
 impl<T: Transposer> Default for InputStateManager<T> {
     fn default() -> Self {
         Self { request: Default::default(), states: Default::default() }
-    }
-}
-
-#[repr(transparent)]
-struct StateItem<T: Transposer>(Box<dyn HasErasedInputState<T>>);
-
-impl<T: Transposer> Hash for StateItem<T> {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.0.get_input_type_value_hash(state);
-    }
-}
-
-impl<T: Transposer> PartialEq for StateItem<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.0.inputs_eq(other.0.as_ref())
-    }
-}
-
-impl<T: Transposer> Eq for StateItem<T> {}
-
-impl<T: Transposer> Borrow<ErasedInput<T>> for StateItem<T> {
-    fn borrow(&self) -> &ErasedInput<T> {
-        let inner: &dyn HasErasedInput<T> = self.0.as_ref();
-        inner.into()
     }
 }
 
@@ -106,7 +82,7 @@ impl<T: Transposer> InputStateManager<T> {
 
         if let Some(item) = self.states.get(query) {
             // SAFETY: we know that the item found must match the query type
-            return Some(item.0.get_input_state().cast())
+            return Some(item.as_dyn().get_input_state().cast())
         }
 
         let boxed: Box<dyn HasErasedInput<T>> = Box::new(input);
@@ -116,31 +92,23 @@ impl<T: Transposer> InputStateManager<T> {
         None
     }
 
-    pub fn provide_input_state<I>(
+    pub fn provide_input_state(
         &mut self,
-        input: I,
-        state: I::InputState,
-    ) -> Result<(), I::InputState>
-    where
-        I: TransposerInput<Base = T>,
-        T: TransposerInputEventHandler<I>,
-    {
+        erased_state: Box<ErasedInputState<T>>
+    ) -> Result<(), Box<ErasedInputState<T>>> {
         let waker = match &self.request {
-            RequestStatus::Requested(..) => return Err(state),
+            RequestStatus::Requested(..) => return Err(erased_state),
             RequestStatus::Accepted(waker) => waker,
-            RequestStatus::None => return Err(state),
+            RequestStatus::None => return Err(erased_state),
         };
 
-        let query: &dyn HasErasedInput<T> = &input;
-        let query: &ErasedInput<T> = query.into();
+        let query: &ErasedInput<T> = erased_state.as_ref().borrow();
 
         if self.states.contains(query) {
-            return Err(state);
+            return Err(erased_state);
         }
-        
-        let item = StateItem(Box::new(InputState { input, state }));
 
-        self.states.insert(item);
+        self.states.insert(erased_state);
 
         waker.wake_by_ref();
 

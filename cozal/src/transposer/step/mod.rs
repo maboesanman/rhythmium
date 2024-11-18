@@ -25,7 +25,7 @@ use wrapped_transposer::WrappedTransposer;
 
 use crate::transposer::Transposer;
 
-use super::input_erasure::ErasedInput;
+use super::input_erasure::{ErasedInput, ErasedInputState};
 use super::input_state_manager::InputStateManager;
 use super::output_event_manager::OutputEventManager;
 use super::{TransposerInput, TransposerInputEventHandler};
@@ -496,15 +496,11 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
     ///
     /// This will return `Ok(())` if the input state was successfully provided, and `Err(input_state)` if the
     /// input state was not requested, or if the input state was not of the correct type.
-    pub fn provide_input_state<I: TransposerInput<Base = T>>(
+    pub fn provide_input_state(
         &mut self,
-        input: I,
-        input_state: I::InputState,
-    ) -> Result<(), I::InputState>
-    where
-        T: TransposerInputEventHandler<I>,
-    {
-        self.get_input_state_mut().provide_input_state(input, input_state)
+        erased_state: Box<ErasedInputState<T>>
+    ) -> Result<(), Box<ErasedInputState<T>>> {
+        self.get_input_state_mut().provide_input_state(erased_state)
     }
 
     /// Begin interpolating the outut state of the step to the given time.

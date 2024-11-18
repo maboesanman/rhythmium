@@ -5,6 +5,8 @@
 #![feature(ptr_metadata)]
 #![feature(trait_upcasting)]
 
+#![recursion_limit = "1024"]
+
 pub mod source;
 
 /// The transposer module contains the types needed to create your own transposer,
