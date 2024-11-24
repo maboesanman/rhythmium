@@ -245,6 +245,7 @@ impl WebView {
             "http://webglsamples.org/aquarium/aquarium.html",
             // "https://www.google.com",
             // "https://www.youtube.com/embed/DkHDLYPa71o?autoplay=1",
+            // "https://codepen.io/Alina_Niko/pen/eYqyYyP",
             &browser_settings,
         );
         let browser_host = browser.get_host();

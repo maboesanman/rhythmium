@@ -28,14 +28,12 @@ pub fn main() {
     let proxy = event_loop.create_proxy();
     let other_proxy = proxy.clone();
 
-    // this sends a "CatchUpOnCefWork" event every 50ms to the event loop.
-    // I'm not sure what situations I'm not calling the do_work function, but
-    // I'm missing something and I'm not sure what, so for now we just do a bunch of extra catch up work.
+    // this sends a "DoCefWorkNow" event every 10ms to the event loop.
     thread::spawn(move || loop {
         other_proxy
-            .send_event(RhythmiumEvent::CatchUpOnCefWork)
+            .send_event(RhythmiumEvent::DoCefWorkNow)
             .unwrap();
-        thread::sleep(std::time::Duration::from_millis(50));
+        thread::sleep(std::time::Duration::from_millis(10));
     });
 
     if let Err(e) = initialize_from_env(&cef_app::get_settings(), || RhythmiumCefApp::new(proxy)) {
@@ -111,5 +109,4 @@ pub enum RhythmiumEvent {
     RenderFrame,
     DoCefWorkNow,
     DoCefWorkLater(u64),
-    CatchUpOnCefWork,
 }

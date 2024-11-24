@@ -1,5 +1,5 @@
 pub use core::fmt::Debug;
-use std::{sync::Arc, time::Duration};
+use std::{sync::Arc, time::{Duration, Instant}};
 
 use rust_cef::functions::message_loop::do_message_loop_work;
 use wgpu::{CommandEncoder, TextureView};
@@ -7,7 +7,7 @@ use winit::{
     application::ApplicationHandler,
     dpi::{LogicalSize, PhysicalSize},
     event::WindowEvent,
-    event_loop::ActiveEventLoop,
+    event_loop::{ActiveEventLoop, ControlFlow},
     window::WindowAttributes,
 };
 
@@ -43,6 +43,7 @@ enum ActiveViewInner {
 pub struct ActiveViewInit {
     shared_wgpu_state: Arc<SharedWgpuState>,
     surface: RootSurface,
+    next_cef_work: Option<Instant>,
 }
 
 pub struct ActiveView {
@@ -91,6 +92,7 @@ impl ActiveView {
         self.inner = ActiveViewInner::Initialized(ActiveViewInit {
             shared_wgpu_state,
             surface,
+            next_cef_work: None,
         });
     }
 
@@ -110,13 +112,28 @@ impl ActiveView {
 }
 
 impl ApplicationHandler<RhythmiumEvent> for ActiveView {
-    fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         self.try_init(event_loop);
+
+        let next_cef_work = &mut self.assume_init_mut().next_cef_work;
+
+        if let Some(instant) = *next_cef_work {
+            if Instant::now() >= instant {
+                do_message_loop_work();
+                *next_cef_work = None;
+            }
+        }
+    }
+
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        if let Some(instant) = self.assume_init().next_cef_work {
+            event_loop.set_control_flow(ControlFlow::WaitUntil(instant));
+        }
     }
 
     fn window_event(
         &mut self,
-        event_loop: &winit::event_loop::ActiveEventLoop,
+        event_loop: &ActiveEventLoop,
         _window_id: winit::window::WindowId,
         event: WindowEvent,
     ) {
@@ -142,7 +159,7 @@ impl ApplicationHandler<RhythmiumEvent> for ActiveView {
 
     fn new_events(
         &mut self,
-        _event_loop: &winit::event_loop::ActiveEventLoop,
+        _event_loop: &ActiveEventLoop,
         cause: winit::event::StartCause,
     ) {
         if cause == winit::event::StartCause::Init {
@@ -155,17 +172,16 @@ impl ApplicationHandler<RhythmiumEvent> for ActiveView {
             RhythmiumEvent::DoCefWorkNow => {
                 do_message_loop_work();
             }
-            RhythmiumEvent::DoCefWorkLater(_) => {
-                panic!()
-            }
-            RhythmiumEvent::CatchUpOnCefWork => loop {
-                let start = std::time::Instant::now();
-                do_message_loop_work();
-                if start.elapsed() < Duration::from_micros(500) {
-                    break;
+            RhythmiumEvent::DoCefWorkLater(milliseconds) => {
+                let next_cef_work = &mut self.assume_init_mut().next_cef_work;
+                if milliseconds < 1 {
+                    *next_cef_work = None;
+                    do_message_loop_work();
+                } else {
+                    *next_cef_work = Some(Instant::now() + Duration::from_millis(milliseconds));
                 }
-            },
-            _ => {}
+            }
+            RhythmiumEvent::RenderFrame => {},
         }
     }
 }
