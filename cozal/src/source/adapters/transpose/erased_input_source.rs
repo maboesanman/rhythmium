@@ -1,4 +1,5 @@
-use std::borrow::Borrow;
+use std::collections::HashSet;
+use std::{borrow::Borrow, cell::UnsafeCell};
 
 use std::hash::Hash;
 
@@ -113,7 +114,7 @@ where
         self.source.advance(time)
     }
 
-    fn max_channel(&self) -> std::num::NonZeroUsize {
+    fn max_channel(&mut self) -> std::num::NonZeroUsize {
         self.source.max_channel()
     }
 }
@@ -133,7 +134,35 @@ where
 }
 
 #[repr(transparent)]
-struct ErasedInputSource<T: Transposer + 'static>(Box<dyn ErasedSourceTrait<T>>);
+pub struct ErasedInputSource<T: Transposer + 'static>(UnsafeCell<Box<dyn ErasedSourceTrait<T>>>);
+
+impl<T: Transposer + 'static> ErasedInputSource<T> {
+    pub fn new<I, Src>(input: I, source: Src) -> Self
+    where
+        T: Clone,
+        I: TransposerInput<Base = T>,
+        Src: Source<
+                Time = <I::Base as Transposer>::Time,
+                Event = I::InputEvent,
+                State = I::InputState,
+            > + 'static,
+    {
+        let inner = ErasedInputSourceImpl { input, source };
+        let inner: Box<dyn ErasedSourceTrait<T>> = Box::new(inner);
+        let inner = UnsafeCell::new(inner);
+        Self(inner)
+    }
+
+    pub unsafe fn get_src_mut(
+        &self,
+    ) -> &mut dyn Source<
+        Time = T::Time,
+        Event = BoxedInput<'static, T, ArcTK>,
+        State = Box<ErasedInputState<T>>,
+    > {
+        unsafe { &mut *self.0.get() }.as_mut()
+    }
+}
 
 impl<T: Transposer + 'static> Source for ErasedInputSource<T> {
     type Time = T::Time;
@@ -145,7 +174,7 @@ impl<T: Transposer + 'static> Source for ErasedInputSource<T> {
         time: Self::Time,
         cx: SourceContext,
     ) -> TrySourcePoll<Self::Time, Self::Event, Self::State> {
-        self.0.poll(time, cx)
+        self.0.get_mut().poll(time, cx)
     }
 
     fn poll_forget(
@@ -153,7 +182,7 @@ impl<T: Transposer + 'static> Source for ErasedInputSource<T> {
         time: Self::Time,
         cx: SourceContext,
     ) -> TrySourcePoll<Self::Time, Self::Event, Self::State> {
-        self.0.poll_forget(time, cx)
+        self.0.get_mut().poll_forget(time, cx)
     }
 
     fn poll_events(
@@ -161,31 +190,32 @@ impl<T: Transposer + 'static> Source for ErasedInputSource<T> {
         time: Self::Time,
         all_channel_waker: std::task::Waker,
     ) -> TrySourcePoll<Self::Time, Self::Event, ()> {
-        self.0.poll_events(time, all_channel_waker)
+        self.0.get_mut().poll_events(time, all_channel_waker)
     }
 
     fn release_channel(&mut self, channel: usize) {
-        self.0.release_channel(channel)
+        self.0.get_mut().release_channel(channel)
     }
 
     fn advance(&mut self, time: Self::Time) {
-        self.0.advance(time)
+        self.0.get_mut().advance(time)
     }
 
-    fn max_channel(&self) -> std::num::NonZeroUsize {
-        self.0.max_channel()
+    fn max_channel(&mut self) -> std::num::NonZeroUsize {
+        self.0.get_mut().max_channel()
     }
 }
 
 impl<T: Transposer + 'static> Hash for ErasedInputSource<T> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.0.get_input_type_value_hash(state);
+        unsafe { (*self.0.get()).as_ref() }.get_input_type_value_hash(state);
     }
 }
 
 impl<T: Transposer + 'static> PartialEq for ErasedInputSource<T> {
     fn eq(&self, other: &Self) -> bool {
-        self.0.inputs_eq(other.0.as_ref())
+        let (s, o) = unsafe { ((*self.0.get()).as_ref(), (*other.0.get()).as_ref()) };
+        s.inputs_eq(o)
     }
 }
 
@@ -193,8 +223,32 @@ impl<T: Transposer + 'static> Eq for ErasedInputSource<T> {}
 
 impl<T: Transposer + 'static> Borrow<ErasedInput<T>> for ErasedInputSource<T> {
     fn borrow(&self) -> &ErasedInput<T> {
-        let inner_ref = self.0.as_ref();
+        let inner_ref = unsafe { (*self.0.get()).as_ref() };
         let inner_ref_casted: &dyn HasErasedInput<T> = inner_ref;
         inner_ref_casted.into()
+    }
+}
+
+pub struct ErasedInputSourceCollection<T: Transposer + 'static>(HashSet<ErasedInputSource<T>>);
+
+impl<T: Transposer + 'static> ErasedInputSourceCollection<T> {
+    pub fn new(inputs: HashSet<ErasedInputSource<T>>) -> Self {
+        Self(inputs)
+    }
+
+    pub fn get_source_mut(
+        &mut self,
+        input: &ErasedInput<T>,
+    ) -> Option<
+        &mut dyn Source<
+            Time = T::Time,
+            Event = BoxedInput<'static, T, ArcTK>,
+            State = Box<ErasedInputState<T>>,
+        >,
+    > {
+        match self.0.get(input) {
+            Some(source) => Some(unsafe { source.get_src_mut() }),
+            None => None,
+        }
     }
 }

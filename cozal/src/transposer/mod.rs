@@ -5,6 +5,8 @@ mod context;
 mod expire_handle;
 mod input_state_manager;
 mod output_event_manager;
+
+/// Types for interacting with type erased inputs for a transposer.
 pub mod input_erasure;
 
 /// The type that encapsulates the transposer as it updates over time.

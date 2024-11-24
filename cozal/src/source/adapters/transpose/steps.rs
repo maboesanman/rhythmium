@@ -1,54 +1,49 @@
-use std::collections::VecDeque;
+use std::collections::{BTreeSet, VecDeque};
 use std::ops::{Range, RangeInclusive};
 use std::ptr::NonNull;
 use std::slice::SliceIndex;
 use std::task::Poll;
 
-use transposer::schedule_storage::StorageFamily;
-// use super::transpose_step_metadata::TransposeStepMetadata;
-use transposer::step::{Interpolation, Step};
-use transposer::Transposer;
-use util::extended_entry::vecdeque::{get_ext_entry, ExtEntry};
-use util::vecdeque_helpers::get_with_next_mut;
+use archery::ArcTK;
 
-use super::input_buffer::{InputBuffer, InputBufferEntry};
-use super::storage::{DummySendStorage, TransposeStorage};
+use crate::transposer::step::{BoxedInput, Interpolation, PreInitStep, Step};
+use crate::transposer::Transposer;
+
 
 // a collection of Rc which are guranteed not to be cloned outside the collection is Send
 // whenever the same collection, but with Arc would be Send, so we do an unsafe impl for exactly that situation.
-unsafe impl<T: Transposer> Send for Steps<T> where Step<T, DummySendStorage>: Send {}
 
-pub struct Steps<T: Transposer> {
+pub struct Steps<T: Transposer + 'static> {
     steps:             VecDeque<StepWrapper<T>>,
     num_deleted_steps: usize,
 }
 
-impl<T: Transposer> Steps<T> {
-    pub fn new(transposer: T, rng_seed: [u8; 32]) -> Self {
+impl<T: Transposer + Clone> Steps<T> {
+    pub fn new(transposer: T, pre_init_step: PreInitStep<T>, start_time: T::Time, rng_seed: [u8; 32]) -> Result<Self, T> {
         let mut steps = VecDeque::new();
-        steps.push_back(StepWrapper::new_init(transposer, rng_seed));
-        Self {
+        steps.push_back(StepWrapper::new_init(transposer, pre_init_step, start_time, rng_seed)?);
+        Ok(Self {
             steps,
             num_deleted_steps: 0,
-        }
+        })
     }
 
-    pub fn poll<S: StorageFamily>(
+    pub fn poll(
         &mut self,
         time: T::Time,
-        input_buffer: &mut InputBuffer<T>,
-    ) -> StepsPoll<T, S> {
+        input_buffer: &mut BTreeSet<BoxedInput<'static, T, ArcTK>>,
+    ) -> StepsPoll<T> {
         todo!()
     }
 
-    pub fn try_poll_shared<S: StorageFamily>(&self, time: T::Time) -> Option<Interpolation<T, S>> {
+    pub fn try_poll_shared(&self, time: T::Time) -> Option<Interpolation<T, ArcTK>> {
         todo!()
     }
 
     pub fn rollback(
         &mut self,
         time: T::Time,
-        input_buffer: &mut InputBuffer<T>,
+        input_buffer: &mut BTreeSet<BoxedInput<'static, T, ArcTK>>,
     ) -> StepsRollback<T> {
         todo!()
     }
@@ -85,7 +80,7 @@ impl<T: Transposer> Steps<T> {
         // this is just mimicking partition_point, because vecdeque isn't actually contiguous
         let mut i = match self
             .steps
-            .binary_search_by_key(&time, |s| s.step.raw_time())
+            .binary_search_by_key(&time, |s| s.step.get_time())
         {
             Ok(i) => i,
             Err(i) => i.checked_sub(1).ok_or(())?,
@@ -130,13 +125,13 @@ impl<T: Transposer> Steps<T> {
     pub fn delete_before(&mut self, time: T::Time) {}
 }
 
-pub struct StepsPoll<T: Transposer, S: StorageFamily> {
+pub struct StepsPoll<T: Transposer> {
     completed_steps: Option<RangeInclusive<usize>>,
-    result:          StepsPollResult<T, S>,
+    result:          StepsPollResult<T>,
 }
 
-pub enum StepsPollResult<T: Transposer, S: StorageFamily> {
-    Ready(Interpolation<T, S>),
+pub enum StepsPollResult<T: Transposer> {
+    Ready(Interpolation<T, ArcTK>),
     Pending(/* step_id */ usize),
     NeedsState(/* step_id */ usize),
     Event(/* step_id */ usize, T::Time, T::OutputEvent),
@@ -147,21 +142,21 @@ pub struct StepsRollback<T: Transposer> {
     rollback_time:  Option<T::Time>,
 }
 
-pub struct StepWrapper<T: Transposer> {
-    pub step:             Step<T, TransposeStorage>,
+pub struct StepWrapper<T: Transposer + 'static> {
+    pub step:             Step<'static, T, ArcTK>,
     pub first_emitted_id: Option<usize>,
 }
 
-impl<T: Transposer> StepWrapper<T> {
-    pub fn new_init(transposer: T, rng_seed: [u8; 32]) -> Self {
-        Self {
-            step:             Step::new_init(transposer, rng_seed),
+impl<T: Transposer + Clone> StepWrapper<T> {
+    pub fn new_init(transposer: T, pre_init_step: PreInitStep<T>, start_time: T::Time, rng_seed: [u8; 32]) -> Result<Self, T> {
+        Ok(Self {
+            step:             Step::new_init(transposer, pre_init_step, start_time, rng_seed)?,
             first_emitted_id: None,
-        }
+        })
     }
 }
 
-pub enum BeforeStatus<'a, T: Transposer> {
+pub enum BeforeStatus<'a, T: Transposer+ 'static> {
     SaturatedImmediate(&'a StepWrapper<T>),
     SaturatedDistant(&'a mut StepWrapper<T>, &'a mut StepWrapper<T>),
     Saturating(&'a mut StepWrapper<T>),

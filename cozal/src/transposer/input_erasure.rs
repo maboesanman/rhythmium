@@ -188,6 +188,7 @@ impl<T: Transposer> ErasedInputState<T> {
         inner.into()
     }
 
+    /// Get a dyn reference to the inner trait object.
     pub fn as_dyn(&self) -> &dyn HasErasedInputState<T> {
         &self.0
     }

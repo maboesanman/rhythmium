@@ -87,5 +87,5 @@ pub trait Source {
     /// The maximum value which can be used as the channel for a poll call.
     ///
     /// all channels between 0 and max_channel() inclusive can be used as a channel.
-    fn max_channel(&self) -> NonZeroUsize;
+    fn max_channel(&mut self) -> NonZeroUsize;
 }
