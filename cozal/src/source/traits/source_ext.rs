@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use futures_core::Future;
+use futures::Future;
 
 use super::Source;
 use crate::source::adapters::interrupt_stream::InterruptStream;

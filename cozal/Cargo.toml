@@ -7,10 +7,11 @@ edition.workspace = true
 [dependencies]
 anyhow = "1.0.75"
 rpds = "1.1.0"
-futures-core = "0.3.30"
-futures-channel = "0.3.30"
-futures-util = "0.3.30"
-futures-executor = "0.3.30"
+futures = "0.3.31"
+futures-channel = "0.3.31"
+futures-util = "0.3.31"
+futures-executor = "0.3.31"
+futures-test = "0.3.31"
 uuid = { version = "1.10.0", features = ["v4"] }
 type_erased_vec = "0.2.0"
 rand.workspace = true

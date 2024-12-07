@@ -52,7 +52,7 @@ impl<I: TransposerInput> HasErasedInputState<I::Base> for InputState<I> {
 }
 
 impl<T: Transposer> InputStateManager<T> {
-    pub fn accept_request(&mut self) -> Option<Box<ErasedInput<T>>> {
+    pub fn try_accept_request(&mut self) -> Option<Box<ErasedInput<T>>> {
         match core::mem::take(&mut self.request) {
             RequestStatus::Requested(waker, input) => {
                 self.request = RequestStatus::Accepted(waker);

@@ -6,8 +6,8 @@ use crate::source::source_poll::TrySourcePoll;
 #[derive(Clone)]
 pub struct SourceContext {
     pub channel: usize,
-    pub one_channel_waker: Waker,
-    pub all_channel_waker: Waker,
+    pub channel_waker: Waker,
+    pub interrupt_waker: Waker,
 }
 
 impl SourceContext {
@@ -73,7 +73,7 @@ pub trait Source {
     fn poll_events(
         &mut self,
         time: Self::Time,
-        all_channel_waker: Waker,
+        interrupt_waker: Waker,
     ) -> TrySourcePoll<Self::Time, Self::Event, ()>;
 
     /// Inform the source it is no longer obligated to retain progress made on `channel`

@@ -3,7 +3,7 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::Instant;
 
-use futures_core::Stream;
+use futures::Stream;
 
 use crate::source::SourcePoll;
 

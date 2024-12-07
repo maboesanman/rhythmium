@@ -57,16 +57,11 @@ pub struct Transpose<T: Transposer + 'static> {
     input_buffer: BTreeSet<BoxedInput<'static, T, ArcTK>>,
 
 
-    last_scheduled: Option<T::Time>,
-
     // the all channel waker to keep up to date.
     all_channel_waker: Weak<ReplaceWaker>,
 
     // the time to use for poll_events calls.
-    // this should be the time of the latest emitted state,
-    // or the currently saturating/unsaturated "original" step,
-    // whichever is later
-    events_poll_time: T::Time,
+    latest_polled_time: T::Time,
 
     // current channel obligations
     // channel_statuses: ChannelStatuses<T>,

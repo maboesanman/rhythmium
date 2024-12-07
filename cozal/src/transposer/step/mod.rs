@@ -13,7 +13,6 @@ mod wrapped_transposer;
 mod test;
 
 use core::task::Waker;
-use std::any::TypeId;
 use std::ptr::NonNull;
 use std::task::Poll;
 
@@ -28,7 +27,6 @@ use crate::transposer::Transposer;
 use super::input_erasure::{ErasedInput, ErasedInputState};
 use super::input_state_manager::InputStateManager;
 use super::output_event_manager::OutputEventManager;
-use super::{TransposerInput, TransposerInputEventHandler};
 
 pub use future_input_container::{FutureInputContainer, FutureInputContainerGuard};
 pub use interpolation::Interpolation;
@@ -155,10 +153,6 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
                 ActiveStepStatusMut::Saturated(step)
             }
         }
-    }
-
-    fn get_input_state(&self) -> &InputStateManager<T> {
-        &unsafe { self.shared_step_state.as_ref() }.1
     }
 
     fn get_input_state_mut(&mut self) -> &mut InputStateManager<T> {
@@ -446,9 +440,9 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
                         break Ok(StepPoll::Emitted(output_event));
                     }
 
-                    if let Some(type_id) = self.get_input_state_mut().accept_request()
+                    if let Some(erased_input) = self.get_input_state_mut().try_accept_request()
                     {
-                        break Ok(StepPoll::StateRequested(type_id));
+                        break Ok(StepPoll::StateRequested(erased_input));
                     }
 
                     break Ok(StepPoll::Pending);
