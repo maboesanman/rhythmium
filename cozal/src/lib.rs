@@ -4,6 +4,7 @@
 #![allow(async_fn_in_trait)]
 #![feature(ptr_metadata)]
 #![feature(trait_upcasting)]
+#![feature(btree_set_entry)]
 
 #![recursion_limit = "1024"]
 

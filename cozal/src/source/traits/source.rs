@@ -14,6 +14,14 @@ impl SourceContext {
     pub fn change_channel(&mut self, new_channel: usize) {
         self.channel = new_channel;
     }
+
+    pub fn with_interrupt_only(&self) -> Self {
+        Self {
+            channel: 0,
+            channel_waker: self.interrupt_waker.clone(),
+            interrupt_waker: self.interrupt_waker.clone(),
+        }
+    }
 }
 
 /// An interface for querying partially complete sources of [states](`Source::State`) and [events](`Source::Events`)
@@ -84,8 +92,14 @@ pub trait Source {
     /// Calling poll before this time should result in `SourcePollError::PollAfterAdvance`
     fn advance(&mut self, time: Self::Time);
 
+    /// Inform the source that you will never call poll or poll_forget ever again. You may still call poll_events.
+    /// 
+    /// This is useful for callers which do not care about the state of the source, and only care about events.
+    /// Some combinators may be able to drop some input sources if callers don't care about events.
+    fn advance_final(&mut self);
+
     /// The maximum value which can be used as the channel for a poll call.
     ///
     /// all channels between 0 and max_channel() inclusive can be used as a channel.
-    fn max_channel(&mut self) -> NonZeroUsize;
+    fn max_channel(&self) -> NonZeroUsize;
 }

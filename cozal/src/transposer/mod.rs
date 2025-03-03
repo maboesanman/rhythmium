@@ -112,7 +112,7 @@ pub trait TransposerInput: 'static + Sized + Hash + Eq + Copy + Ord {
 
     /// This MUST be unique for each input that shares a base.
     ///
-    /// in particular, two inputs with the same Base and SORT, and different InputEvents can result in UB.
+    /// in particular, two inputs with the same Base and SORT, must be of the same type.
     const SORT: u64;
 }
 

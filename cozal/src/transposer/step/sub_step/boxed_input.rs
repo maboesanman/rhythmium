@@ -1,8 +1,8 @@
-use std::{any::TypeId, cmp::Ordering};
+use std::{any::TypeId, cmp::Ordering, hash::{Hash, Hasher}};
 
 use archery::{ArcTK, SharedPointerKind};
 
-use crate::transposer::{Transposer, TransposerInput, TransposerInputEventHandler};
+use crate::transposer::{input_erasure::HasErasedInput, Transposer, TransposerInput, TransposerInputEventHandler};
 
 use super::{input_sub_step::InputSubStep, BoxedSubStep, SubStep};
 
@@ -128,6 +128,10 @@ impl<'t, T: Transposer + 't, P: SharedPointerKind + 't> BoxedInput<'t, T, P> {
             Ok(value) => value == input,
             Err(_) => false,
         }
+    }
+
+    pub fn get_input_hash(&self) -> u64 {
+        self.0.as_ref().input_hash().unwrap()
     }
 }
 

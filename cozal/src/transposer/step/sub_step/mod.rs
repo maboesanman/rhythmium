@@ -104,6 +104,9 @@ pub unsafe trait SubStep<T: Transposer, P: SharedPointerKind> {
     fn is_scheduled(&self) -> bool {
         false
     }
+    fn input_hash(&self) -> Option<u64> {
+        None
+    }
 
     fn sort_phase(&self) -> usize;
 

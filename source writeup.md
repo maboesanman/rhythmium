@@ -1,66 +1,312 @@
-mod expire_handle_factory;
-mod future_input_container;
-mod interpolate_context;
-mod interpolation;
-mod pre_init_step;
-mod sub_step;
-mod sub_step_update_context;
-mod time;
-mod transposer_metadata;
-mod wrapped_transposer;
+I'm trying to build a library on which i will build some rhythm games.
 
-#[cfg(test)]
-mod test;
+The library does a few things:
+- support out of order handling of "events" (could be the beginning of a note's jugement window, the end of a note's jugement window, a keypress from the player, etc)
+- support rollback of events
+- support "interpolated" state, which is used when determining what a frame should look like (where exactly should you draw the arrow in ddr for example)
+- variable timestep (the game should "jump" to the next event, not wait a specific constant interval)
 
-use core::task::Waker;
-use std::ptr::NonNull;
-use std::task::Poll;
+The architecture generally works like this:
 
-use archery::{ArcTK, SharedPointer, SharedPointerKind};
-use sub_step::init_sub_step::InitSubStep;
-use sub_step::scheduled_sub_step::ScheduledSubStep;
-use sub_step::{BoxedSubStep, StartSaturateErr};
-use wrapped_transposer::WrappedTransposer;
+one important type is the `Source` type, which can be thought of as a combination of a "Stream" of interrupts which can be polled for state at a specific time. like streams there are combinator functions which may combine sources, transform sources, etc. Eventually i will have a scene editor where users can pipe sources together to create a playable game.
 
-use crate::transposer::Transposer;
+here is the trait definition for `Source`:
+```rust
+/// An interface for querying partially complete sources of [states](`Source::State`) and [events](`Source::Events`)
+///
+/// The [`Source`] trait is the core abstraction for the entire cozal library. Everything is designed around the idea of making chains of [`Source`]s
+///
+/// When a type implements Source, it models two things:
+///
+/// - A timestamped set of events
+/// - A function (in the mathematical sense) mapping `Source::Time` to `Source::State`
+/// 
+/// Generally, the source is used by polling for a state, and being interrupted with events you must handle. You may also be informed of previously emitted states/events being invalidated.
+pub trait Source {
+    /// The type used for timestamping events and states.
+    type Time: Ord + Copy;
 
-use super::input_erasure::{ErasedInput, ErasedInputState};
-use super::input_state_manager::InputStateManager;
-use super::output_event_manager::OutputEventManager;
+    /// The type of events emitted by the source.
+    type Event;
 
-pub use future_input_container::{FutureInputContainer, FutureInputContainerGuard};
-pub use interpolation::Interpolation;
-pub use pre_init_step::PreInitStep;
-pub use sub_step::boxed_input::BoxedInput;
+    /// The type of states emitted by the source.
+    type State;
 
-#[derive(Debug)]
-enum StepStatus {
-    // all sub steps are unsaturated.
-    Unsaturated,
-    // all steps before step[i] are saturated. step[i] is saturating. all steps after step[i] are unsaturated.
-    Saturating(usize),
-    // all sub steps are saturated. there are no remaining scheduled sub steps at this time.
-    Saturated,
+    /// Attempt to retrieve the state of the source at `time`, registering the current task for wakeup in certain situations.
+    ///
+    /// # Return value
+    ///
+    /// There are several possible return values, each indicating a distinct source state for a time `t`:
+    ///
+    /// - `SourcePoll::Ready { state, next_event_at }` indicates the source has produced a state for `t`. `state` is the state produced, and `next_event_at` is the time of the next event, if known. If `next_event_at` is `None`, the source does not know about any events after `t`, and the caller need not poll again until the interrupt waker is woken. The source MUST wake the caller when next_event_at would change (From None to Some, Some(x) to Some(y), or Some to None). If the source knows about one future event at t1 and returns Some(t1),then later finds out about another at t2 after the first, it doesn't need to wake the caller since both scenarios would return Some(t1).
+    /// 
+    /// - `SourcePoll::Interrupt { time, interrupt }` indicates the source has produced an interrupt that must be handled before the state for time `t` can be calculated/emitted. `time` is the time of the interrupt (which must be less than or equal to t), and `interrupt` is the interrupt itself. The caller may do whatever they want with the interrupt but they must  The source MUST wake the caller when the interrupt waker is woken.
+    /// 
+    /// - `SourcePoll::Pending` indicates the source is not ready to return a state or an interrupt, and will wake on one of the provided wakers when progress is able to be made. If a source returns pending, it is expected not to undo or discard any progress when polled on different channels, no matter what time they poll on. Interrupts are channel-less, and wake the most recently provided interrupt waker. State progress is channel specific, and wakes the state waker.
+    /// 
+    /// polling with the same channel but a different time when the previous state hasn't returned yet may undo or throw away progress. The caller is expected to continue polling for the same exact time (per channel) until a state is available.
+    fn poll(
+        &mut self,
+        time: Self::Time,
+        cx: SourceContext,
+    ) -> TrySourcePoll<Self::Time, Self::Event, Self::State>;
+
+    /// Attempt to retrieve the state of the source at `time`, registering the current task for wakeup in certain situations. Also inform the source that the state emitted from this call is exempt from the requirement to be informed of future invalidations (that the source can "forget" about this call to poll when determining how far to roll back).
+    ///
+    /// If you do not need to be notified that this state has been invalidated (if for example you polled in order to render to the screen, so finding out your previous frame was wrong means nothing because you can't go back and change it) then this function should be preferred.
+    /// 
+    /// The emitted interrupts from this method still need to be considered invalid when rolled back. only the state invalidation is affected by the choice to use this over `poll`
+    fn poll_forget(
+        &mut self,
+        time: Self::Time,
+        cx: SourceContext,
+    ) -> TrySourcePoll<Self::Time, Self::Event, Self::State> {
+        self.poll(time, cx)
+    }
+
+    /// Attempt to determine information about the set of events before `time` without generating a state. this function behaves the same as [`poll_forget`](Source::poll_forget) but returns `()` instead of [`State`](Source::State). This function should be used in all situations when the state is not actually needed, as the implementer of the trait may be able to do less work.
+    ///
+    /// If you do not need to use the state, this should be preferred over poll. For example, if you are simply verifying the source does not have new events before a time t, poll_ignore_state could be faster than poll (with a custom implementation).
+    fn poll_events(
+        &mut self,
+        time: Self::Time,
+        interrupt_waker: Waker,
+    ) -> TrySourcePoll<Self::Time, Self::Event, ()>;
+
+    /// Inform the source it is no longer obligated to retain progress made on `channel`
+    fn release_channel(&mut self, channel: usize);
+
+    /// Inform the source that you (the caller) will never poll before `time` again on any channel.
+    ///
+    /// Calling poll before this time should result in `SourcePollError::PollAfterAdvance`
+    fn advance(&mut self, time: Self::Time);
+
+    /// The maximum value which can be used as the channel for a poll call.
+    ///
+    /// all channels in 0..max_channel() are valid (note that 0 is always an option)
+    fn max_channel(&mut self) -> NonZeroUsize;
 }
 
-enum ActiveStepStatusRef<'a, T: Transposer, P: SharedPointerKind> {
-    // reference to the first unsaturated sub step.
-    Unsaturated,
-    // reference to the currently saturating sub step.
-    Saturating,
-    // reference to the last saturated sub step.
-    Saturated(&'a SharedPointer<WrappedTransposer<T, P>, P>),
+/// information on how to wake the caller, and the obligations of the source to wake the caller.
+#[derive(Clone)]
+pub struct SourceContext {
+    /// The channel the source is currently polling on
+    pub channel: usize,
+
+    /// The waker to wake the caller when the source may make progress generating the requested state
+    pub channel_waker: Waker,
+
+    /// The waker to wake the caller when the source may produce an interrupt
+    pub interrupt_waker: Waker,
 }
 
-enum ActiveStepStatusMut<'a, 't, T: Transposer + 't, P: SharedPointerKind + 't> {
-    // reference to the first unsaturated sub step.
-    Unsaturated(&'a mut BoxedSubStep<'t, T, P>),
-    // reference to the currently saturating sub step.
-    Saturating(&'a mut BoxedSubStep<'t, T, P>),
-    // reference to the last saturated sub step.
-    Saturated(&'a mut BoxedSubStep<'t, T, P>),
+/// A modified version of [`futures::task::Poll`] For sources
+pub enum SourcePoll<T, E, S> {
+    /// Indicates the poll is complete
+    Ready {
+        /// The requested state
+        state: S,
+        /// The time of the next known event, if known.
+        /// 
+        /// This is the mechanism the source uses to let the caller sleep until the next event is available.
+        next_event_at: Option<T>,
+    },
+
+    /// Indicates information must be handled before state is emitted
+    Interrupt {
+        /// The time the interrupt occurs
+        time: T,
+
+        /// The value of the interrupt
+        interrupt: Interrupt<E>,
+    },
+
+    /// pending operation. caller will be woken up when progress can be made
+    /// the channel this poll used must be retained.
+    Pending,
 }
 
+/// The type of interrupt emitted from the source
+pub enum Interrupt<E> {
+    /// A new event is available.
+    Event(E),
+
+    /// An event followed by a finalize, for convenience.
+    /// This should be identical to returning an event then a finalize for the same time.
+    /// Useful for sources which never emit Rollbacks, so they can simply emit this interrupt
+    /// for every event and nothing else.
+    FinalizedEvent(E),
+
+    /// All events previously emitted at or after time T must be discarded.
+    /// 
+    /// All states previously produced by `poll(t)` (not `poll_forget`) where t is at or after time T must be discarded.
+    Rollback,
+  
+    /// No event will ever be emitted before time T again.
+    /// 
+    /// This is critical for callers to determine when they can drop certain events they may have been holding on to in case of interrupts.
+    Finalize,
+}
+
+#[non_exhaustive]
+pub enum SourcePollErr<T> {
+    OutOfBoundsChannel,
+    PollAfterAdvance { advanced: T },
+    PollBeforeDefault,
+    SpecificError(anyhow::Error),
+}
+
+pub type TrySourcePoll<T, E, S> = Result<SourcePoll<T, E, S>, SourcePollErr<T>>;
+```
+
+I am working on creating a specific Source implementation that uses another trait to describe logic for combining and responding to multiple input sources.
+
+The trait is called `Transposer`
+
+```rust
+/// A `Transposer` is a type that can update itself in response to events.
+///
+/// the purpose of this type is to provide an abstraction for game logic which can be used to add rollback and
+/// realtime event scheduling, replays, and possibly more.
+///
+/// it is *heavily* recommended to use immutable structure sharing data types (for example, the [`im`] crate)
+/// in the implementing struct, because [`clone`](Clone::clone) is called often and should be a cheap operation.
+///
+/// Additionally, is is recommended to put any somewhat large, readonly data in an [`Arc`] or [`Rc`], as this will
+/// reduce the amount of data that needs to be cloned.
+///
+/// The name comes from the idea that we are converting a stream of events into another stream of events,
+/// perhaps in the way a stream of music notes can be *transposed* into another stream of music notes.
+pub trait Transposer: Sized {
+    /// The type used as the 'time' for events. This must be Ord and Copy because it is frequently used for comparisons,
+    /// and it must be [`Default`] because the default value is used for the timestamp of events emitted.
+    /// by the init function.
+    type Time: Copy + Ord + Unpin;
+
+    /// The type of the output payloads.
+    ///
+    /// The output events are of type `Event<Self::Time, RollbackPayload<Self::Output>>`
+    ///
+    /// If a rollback must occur which invalidates previously yielded events, an event of type
+    /// `Event<Self::Time, RollbackPayload::Rollback>` will be emitted.
+    type OutputEvent;
+
+    /// The type of the interpolation.
+    ///
+    /// This represents the "continuous" game state, and is produced on demand via the interpolate method
+    type OutputState;
+
+    /// The type of the payloads of scheduled events
+    ///
+    /// the events in the schedule are all of type `Event<Self::Time, Self::Scheduled>`
+    type Scheduled: Clone;
+
+    /// The function to finalize all inputs and prepare for initialization.
+    ///
+    /// This function is called after all the supplied inputs' register_input functions have been called.
+    /// If the registered inputs are not sufficient for the transposer to operate, this function should return false,
+    /// and the transposer will not be initialized.
+    ///
+    /// If the registered inputs _are_ sufficient, this function should return true.
+    fn prepare_to_init(&mut self) -> bool;
+
+    /// The function to initialize your transposer's events.
+    ///
+    /// You should initialize your transposer like any other struct.
+    /// This function is for initializing the schedule events.
+    ///
+    /// Additionally, this function serves as the validation for the inputs that have been registered.
+    /// If this transposer requires a specific input to have been registered, but it was not,
+    /// this function should return false.
+    ///
+    /// `cx` is a context object for performing additional operations.
+    /// For more information on `cx` see the [`InitContext`] documentation.
+    async fn init(&mut self, cx: &mut InitContext<'_, Self>);
+
+    /// The function to respond to internally scheduled events.
+    ///
+    /// `time` and `payload` correspond with the event to be handled.
+    ///
+    /// `cx` is a context object for performing additional operations like scheduling events.
+    /// For more information on `cx` see the [`UpdateContext`] documentation.
+    async fn handle_scheduled_event(
+        &mut self,
+        payload: Self::Scheduled,
+        cx: &mut HandleScheduleContext<'_, Self>,
+    );
+
+    /// The function to interpolate between states
+    ///
+    /// handle_input and handle_scheduled only operate on discrete times.
+    /// If you want the state between two of these times, you have to calculate it.
+    ///
+    /// `base_time` is the time of the `self` parameter
+    /// `interpolated_time` is the time being requested `self`
+    /// `cx is a context object for performing additional operations like requesting state.
+    async fn interpolate(&self, cx: &mut InterpolateContext<'_, Self>) -> Self::OutputState;
+}
+
+/// This represents an input that your transposer expects to be present.
+/// This can be a zero-sized type, or a type that contains data.
+pub trait TransposerInput: 'static + Sized + Hash + Eq + Copy + Ord {
+    /// The base transposer that this input is for.
+    type Base: TransposerInputEventHandler<Self>;
+
+    /// The event that this input can emit.
+    type InputEvent: Ord;
+
+    /// The state that this input can produce.
+    type InputState;
+
+    /// This MUST be unique for each input that shares a base.
+    ///
+    /// in particular, two inputs with the same Base and SORT, must be of the same type.
+    const SORT: u64;
+}
+
+/// This trait is for handling input events.
+/// You need to implement this trait for your transposer to be able to handle input events.
+pub trait TransposerInputEventHandler<I: TransposerInput<Base = Self>>: Transposer {
+    /// The function to register an input.
+    /// This occurs before the init function is run.
+    /// return false if the input is not valid for whatever reason.
+    ///
+    /// `input` is the specific input.
+    ///
+    /// `cx` is a context object for performing additional operations like scheduling events.
+    /// For more information on `cx` see the [`UpdateContext`] documentation.
+    fn register_input(&mut self, input: I) -> bool;
+
+    /// The function to respond to input.
+    ///
+    /// `input` is the specific input the event is from.
+    ///
+    /// `event` is the event to be handled.
+    ///
+    /// `cx` is a context object for performing additional operations like scheduling events.
+    /// For more information on `cx` see the [`UpdateContext`] documentation.
+    async fn handle_input_event(
+        &mut self,
+        input: &I,
+        event: &I::InputEvent,
+        cx: &mut HandleInputContext<'_, Self>,
+    );
+
+    /// Filter out events you know you can't do anything with.
+    /// This reduces the amount of events you have to remember for rollback to work.
+    ///
+    /// Note that this has access to very little information. This is meant to be an
+    /// optimization, which is why the default implementation is to simply always return `true`
+    fn can_handle(time: Self::Time, event: &I::InputEvent) -> bool {
+        let _ = (time, event);
+        true
+    }
+}
+```
+
+Transposers are wrapped up in something called a `Step`, which allows us to encalsulate the transposer logic in a consistent way.
+
+```rust
 /// A step is a structure that allows for the transposer to be thought of as a state machine.
 ///
 /// A step represents the change that occurs to the transposer at a single point in time.
@@ -608,17 +854,6 @@ pub enum StepPoll<T: Transposer> {
     Ready,
 }
 
-impl<T: Transposer> std::fmt::Debug for StepPoll<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            StepPoll::Emitted(_) => write!(f, "StepPoll::Emitted"),
-            StepPoll::StateRequested(_) => write!(f, "StepPoll::StateRequested"),
-            StepPoll::Pending => write!(f, "StepPoll::Pending"),
-            StepPoll::Ready => write!(f, "StepPoll::Ready"),
-        }
-    }
-}
-
 /// The error result of polling a step.
 #[derive(Debug, PartialEq, Eq)]
 pub enum PollErr {
@@ -670,3 +905,21 @@ pub enum SaturateErr {
     #[cfg(debug_assertions)]
     IncorrectPrevious,
 }
+```
+
+
+With these three pieces, how can i make a valid source which takes in some sources matching the transposer inputs and a transposer, and implements the Source trait?
+
+i believe it needs to keep track of:
+
+- the list of all steps since the earliest finalize of the inputs
+- the lastest finalize time of each input
+- which state wakers to call when each active interpolation may progress
+- which state wakers to call when a previously saturated step may progress towards re-saturation
+- the last interrupt waker
+- whether or not each input had woken the interrupt waker
+- which steps pulled state from which inputs
+- active interpolations
+- each channel that returned pending and why it returned pending
+
+what do you think of this approach?

@@ -12,9 +12,7 @@ use archery::{SharedPointer, SharedPointerKind};
 
 use super::{BoxedSubStep, StartSaturateErr, SubStep, INPUT_SUB_STEP_SORT_PHASE};
 use crate::transposer::{
-    input_state_manager::InputStateManager,
-    step::{wrapped_transposer::WrappedTransposer, OutputEventManager, PollErr},
-    Transposer, TransposerInput, TransposerInputEventHandler,
+    input_erasure::{HasErasedInputExt, HasInput}, input_state_manager::InputStateManager, step::{wrapped_transposer::WrappedTransposer, OutputEventManager, PollErr}, Transposer, TransposerInput, TransposerInputEventHandler
 };
 
 pub struct InputSubStep<T: Transposer, P: SharedPointerKind, I: TransposerInput<Base = T>>
@@ -116,6 +114,19 @@ where
     }
 }
 
+impl<T, P, I> HasInput<T> for InputSubStep<T, P, I>
+where
+    T: Transposer + TransposerInputEventHandler<I> + Clone,
+    P: SharedPointerKind,
+    I: TransposerInput<Base = T>,
+{
+    type Input = I;
+
+    fn get_input(&self) -> &Self::Input {
+        &self.data.input
+    }
+}
+
 unsafe impl<T, P, I> SubStep<T, P> for InputSubStep<T, P, I>
 where
     T: Transposer + TransposerInputEventHandler<I> + Clone,
@@ -128,6 +139,10 @@ where
 
     fn input_sort(&self) -> Option<(u64, TypeId)> {
         Some((I::SORT, TypeId::of::<I>()))
+    }
+
+    fn input_hash(&self) -> Option<u64> {
+        Some(self.get_hash())
     }
 
     fn is_unsaturated(&self) -> bool {

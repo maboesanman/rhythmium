@@ -18,9 +18,27 @@ pub unsafe trait HasErasedInput<T: Transposer> {
     /// This must check if the input type is the same and then compare the input values.
     fn inputs_eq(&self, other: &dyn HasErasedInput<T>) -> bool;
 
+    /// Get the sort value of the input.
+    fn input_sort(&self) -> u64;
+
+    /// Compare the input values.
+    fn inputs_cmp(&self, other: &dyn HasErasedInput<T>) -> std::cmp::Ordering;
+
     /// Get the raw pointer to the input.
     fn get_raw_input(&self) -> NonNull<()>;
+
+    fn clone_input(&self) -> Box<ErasedInput<T>>;
 }
+
+pub trait HasErasedInputExt<T: Transposer>: HasErasedInput<T> {
+    fn get_hash(&self) -> u64 {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        self.get_input_type_value_hash(&mut hasher);
+        hasher.finish()
+    }
+}
+
+impl<T: Transposer, U: HasErasedInput<T> + ?Sized> HasErasedInputExt<T> for U {}
 
 /// used to implement HasErasedInput automatically much easier.
 pub trait HasInput<T: Transposer> {
@@ -52,8 +70,32 @@ unsafe impl<T: Transposer, U: HasInput<T>> HasErasedInput<T> for U {
         self_input == other_input
     }
 
+    fn input_sort(&self) -> u64 {
+        U::Input::SORT
+    }
+
+    fn inputs_cmp(&self, other: &dyn HasErasedInput<T>) -> std::cmp::Ordering {
+        match U::Input::SORT.cmp(&other.input_sort()) {
+            std::cmp::Ordering::Equal => {},
+            other => return other,
+        }
+
+        if self.get_input_type() != other.get_input_type() {
+            panic!("two different input types with the same sort value");
+        }
+
+        let self_input = self.get_input();
+        let other_input = unsafe { (other.get_raw_input().cast::<U::Input>()).as_ref() };
+
+        self_input.cmp(other_input)
+    }
+
     fn get_raw_input(&self) -> NonNull<()> {
         NonNull::from(self.get_input()).cast()
+    }
+
+    fn clone_input(&self) -> Box<ErasedInput<T>> {
+        ErasedInput::new(*self.get_input())
     }
 }
 
@@ -92,6 +134,12 @@ impl<T: Transposer> ErasedInput<T>
         let inner: Box<dyn HasErasedInput<T>> = Box::new(InnerErasedInput(input));
         inner.into()
     }
+
+    // pub fn get_hash(&self) -> u64 {
+    //     let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    //     self.hash(&mut hasher);
+    //     hasher.finish()
+    // }
 }
 
 impl<T: Transposer> Hash for ErasedInput<T> {
@@ -103,6 +151,18 @@ impl<T: Transposer> Hash for ErasedInput<T> {
 impl<T: Transposer> PartialEq for ErasedInput<T> {
     fn eq(&self, other: &Self) -> bool {
         self.0.inputs_eq(&other.0)
+    }
+}
+
+impl<T: Transposer> Ord for ErasedInput<T> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.0.inputs_cmp(&other.0)
+    }
+}
+
+impl<T: Transposer> PartialOrd for ErasedInput<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
     }
 }
 
@@ -121,8 +181,20 @@ unsafe impl<T: Transposer> HasErasedInput<T> for ErasedInput<T> {
         self.0.inputs_eq(other)
     }
 
+    fn input_sort(&self) -> u64 {
+        self.0.input_sort()
+    }
+    
+    fn inputs_cmp(&self, other: &dyn HasErasedInput<T>) -> std::cmp::Ordering {
+        self.0.inputs_cmp(other)
+    }
+
     fn get_raw_input(&self) -> NonNull<()> {
         self.0.get_raw_input()
+    }
+
+    fn clone_input(&self) -> Box<ErasedInput<T>> {
+        self.0.clone_input()
     }
 }
 
@@ -221,8 +293,20 @@ unsafe impl<T: Transposer> HasErasedInput<T> for ErasedInputState<T> {
         self.0.inputs_eq(other)
     }
 
+    fn input_sort(&self) -> u64 {
+        self.0.input_sort()
+    }
+    
+    fn inputs_cmp(&self, other: &dyn HasErasedInput<T>) -> std::cmp::Ordering {
+        self.0.inputs_cmp(other)
+    }
+
     fn get_raw_input(&self) -> NonNull<()> {
         self.0.get_raw_input()
+    }
+    
+    fn clone_input(&self) -> Box<ErasedInput<T>> {
+        self.0.clone_input()
     }
 }
 

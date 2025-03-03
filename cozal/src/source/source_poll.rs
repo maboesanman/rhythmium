@@ -1,4 +1,6 @@
 /// A modified version of [`futures::task::Poll`], which has two new variants:
+/// 
+#[derive(Debug)]
 pub enum SourcePoll<T, E, S> {
     /// Indicates the poll is complete
     Ready {
@@ -22,6 +24,27 @@ pub enum SourcePoll<T, E, S> {
     Pending,
 }
 
+impl<T, E, S> SourcePoll<T, E, S> {
+    pub fn map_state<F, U>(self, f: F) -> SourcePoll<T, E, U>
+    where
+        F: FnOnce(S) -> U,
+    {
+        match self {
+            SourcePoll::Ready { state, next_event_at } => SourcePoll::Ready {
+                state: f(state),
+                next_event_at,
+            },
+            SourcePoll::Interrupt { time, interrupt } => SourcePoll::Interrupt {
+                time,
+                interrupt,
+            },
+            SourcePoll::Pending => SourcePoll::Pending,
+        }
+    }
+}
+
+
+#[derive(Debug)]
 /// The type of interrupt emitted from the source
 pub enum Interrupt<E> {
     /// A new event is available.
@@ -37,6 +60,10 @@ pub enum Interrupt<E> {
     Rollback,
     /// No event will ever be emitted before time T again.
     Finalize,
+
+    /// No interrupt will ever be emitted ever again.
+    /// The associated time is the time of the last emitted event.
+    Complete,
 }
 
 impl<E> Interrupt<E> {
@@ -49,10 +76,12 @@ impl<E> Interrupt<E> {
             Interrupt::FinalizedEvent(e) => Interrupt::FinalizedEvent(f(e)),
             Interrupt::Rollback => Interrupt::Rollback,
             Interrupt::Finalize => Interrupt::Finalize,
+            Interrupt::Complete => Interrupt::Complete,
         }
     }
 }
 
+#[derive(Debug)]
 #[non_exhaustive]
 pub enum SourcePollErr<T> {
     OutOfBoundsChannel,
