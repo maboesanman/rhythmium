@@ -1,5 +1,8 @@
 pub use core::fmt::Debug;
-use std::{sync::Arc, time::{Duration, Instant}};
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use rust_cef::functions::message_loop::do_message_loop_work;
 use wgpu::{CommandEncoder, TextureView};
@@ -157,11 +160,7 @@ impl ApplicationHandler<RhythmiumEvent> for ActiveView {
         }
     }
 
-    fn new_events(
-        &mut self,
-        _event_loop: &ActiveEventLoop,
-        cause: winit::event::StartCause,
-    ) {
+    fn new_events(&mut self, _event_loop: &ActiveEventLoop, cause: winit::event::StartCause) {
         if cause == winit::event::StartCause::Init {
             self.ready_init();
         }
@@ -181,7 +180,7 @@ impl ApplicationHandler<RhythmiumEvent> for ActiveView {
                     *next_cef_work = Some(Instant::now() + Duration::from_millis(milliseconds));
                 }
             }
-            RhythmiumEvent::RenderFrame => {},
+            RhythmiumEvent::RenderFrame => {}
         }
     }
 }

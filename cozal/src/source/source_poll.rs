@@ -1,5 +1,5 @@
 /// A modified version of [`futures::task::Poll`], which has two new variants:
-/// 
+///
 #[derive(Debug)]
 pub enum SourcePoll<T, E, S> {
     /// Indicates the poll is complete
@@ -30,19 +30,18 @@ impl<T, E, S> SourcePoll<T, E, S> {
         F: FnOnce(S) -> U,
     {
         match self {
-            SourcePoll::Ready { state, next_event_at } => SourcePoll::Ready {
+            SourcePoll::Ready {
+                state,
+                next_event_at,
+            } => SourcePoll::Ready {
                 state: f(state),
                 next_event_at,
             },
-            SourcePoll::Interrupt { time, interrupt } => SourcePoll::Interrupt {
-                time,
-                interrupt,
-            },
+            SourcePoll::Interrupt { time, interrupt } => SourcePoll::Interrupt { time, interrupt },
             SourcePoll::Pending => SourcePoll::Pending,
         }
     }
 }
-
 
 #[derive(Debug)]
 /// The type of interrupt emitted from the source

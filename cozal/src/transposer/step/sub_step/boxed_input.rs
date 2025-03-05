@@ -1,14 +1,17 @@
-use std::{any::TypeId, cmp::Ordering, hash::{Hash, Hasher}};
+use std::{any::TypeId, cmp::Ordering};
 
 use archery::{ArcTK, SharedPointerKind};
 
-use crate::transposer::{input_erasure::HasErasedInput, Transposer, TransposerInput, TransposerInputEventHandler};
+use crate::transposer::{Transposer, TransposerInput, TransposerInputEventHandler,
+};
 
 use super::{input_sub_step::InputSubStep, BoxedSubStep, SubStep};
 
 /// A single type-erased input.
 #[repr(transparent)]
-pub struct BoxedInput<'t, T: Transposer + 't, P: SharedPointerKind + 't = ArcTK>(BoxedSubStep<'t, T, P>);
+pub struct BoxedInput<'t, T: Transposer + 't, P: SharedPointerKind + 't = ArcTK>(
+    BoxedSubStep<'t, T, P>,
+);
 
 impl<'t, T: Transposer + 't, P: SharedPointerKind + 't> TryFrom<BoxedSubStep<'t, T, P>>
     for BoxedInput<'t, T, P>

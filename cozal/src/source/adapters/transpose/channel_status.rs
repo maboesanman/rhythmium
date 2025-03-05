@@ -2,11 +2,6 @@ use archery::ArcTK;
 
 use crate::transposer::{step::Interpolation, Transposer};
 
-use super::{erased_input_source_collection::ErasedInputSourceCollection, input_source_metadata::InputSourceMetaData};
-
-
-
-
 pub struct ChannelUsage<T: Transposer> {
     pub status: ChannelStatus<T>,
     pub poll_time: T::Time,
@@ -17,7 +12,7 @@ pub struct ChannelUsage<T: Transposer> {
 pub enum PollType {
     Poll,
     PollForget,
-    PollEvents
+    PollEvents,
 }
 
 pub enum ChannelStatus<T: Transposer> {
@@ -27,7 +22,7 @@ pub enum ChannelStatus<T: Transposer> {
         input_channel: u64,
     },
     Interpolation {
-        interpolation: Interpolation<T, ArcTK>
+        interpolation: Interpolation<T, ArcTK>,
     },
     InterpolationInput {
         interpolation: Interpolation<T, ArcTK>,

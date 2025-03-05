@@ -294,21 +294,33 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
         }
 
         if events_only {
-            return
+            return;
         }
 
         // delete interpolation if the previous call to this channel was something else.
         // update channel waker otherwise
-        if let std::collections::hash_map::Entry::Occupied(mut channel_entry) = self.wakers.channels.entry(cx.channel) {
-            if let hashbrown::hash_map::Entry::Occupied(interpolation_entry) = self.interpolations.entry(channel_entry.get().interpolation_uuid) {
+        if let std::collections::hash_map::Entry::Occupied(mut channel_entry) =
+            self.wakers.channels.entry(cx.channel)
+        {
+            if let hashbrown::hash_map::Entry::Occupied(interpolation_entry) = self
+                .interpolations
+                .entry(channel_entry.get().interpolation_uuid)
+            {
                 let (prev_forget, interpolation) = interpolation_entry.get();
                 if *prev_forget != forget || interpolation.get_time() != poll_time {
                     interpolation_entry.remove();
                     match channel_entry.remove().input_state_status {
-                        Status::Ready { input_hash, input_channel } |
-                        Status::Pending { input_hash, input_channel } => {
-                            self.channel_reservations.clear_channel(input_hash, input_channel);
-                        },
+                        Status::Ready {
+                            input_hash,
+                            input_channel,
+                        }
+                        | Status::Pending {
+                            input_hash,
+                            input_channel,
+                        } => {
+                            self.channel_reservations
+                                .clear_channel(input_hash, input_channel);
+                        }
                         _ => {}
                     }
                 } else {

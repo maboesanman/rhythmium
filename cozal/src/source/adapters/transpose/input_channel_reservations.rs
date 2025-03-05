@@ -1,9 +1,11 @@
-use std::collections::{btree_set::{Entry, VacantEntry}, BTreeSet};
+use std::collections::{
+    btree_set::{Entry, VacantEntry},
+    BTreeSet,
+};
 
 pub struct InputChannelReservations {
     pub input_channels: BTreeSet<InputChannelReservation>,
 }
-
 
 #[derive(Hash, Ord, PartialEq, PartialOrd, Eq, Clone)]
 pub struct InputChannelReservation {
@@ -19,9 +21,12 @@ impl InputChannelReservations {
     }
 
     /// Find the first available channel for the specified input.
-    /// 
+    ///
     /// This returns a VacantEntry, which can be used to perform the insertion.
-    pub fn get_first_available_channel(&mut self, input_hash: u64) -> VacantEntry<InputChannelReservation>{
+    pub fn get_first_available_channel(
+        &mut self,
+        input_hash: u64,
+    ) -> VacantEntry<InputChannelReservation> {
         let start_key = InputChannelReservation {
             input_hash,
             input_channel: 0,
@@ -52,6 +57,9 @@ impl InputChannelReservations {
     }
 
     pub fn clear_channel(&mut self, input_hash: u64, input_channel: usize) {
-        self.input_channels.remove(&InputChannelReservation { input_hash, input_channel });
+        self.input_channels.remove(&InputChannelReservation {
+            input_hash,
+            input_channel,
+        });
     }
 }

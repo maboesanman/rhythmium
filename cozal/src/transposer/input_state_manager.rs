@@ -1,11 +1,16 @@
 use std::{
-    borrow::Borrow, collections::HashSet, future::Future, marker::PhantomData, pin::Pin, ptr::NonNull, task::{Context, Poll, Waker}
+    borrow::Borrow,
+    collections::HashSet,
+    future::Future,
+    marker::PhantomData,
+    pin::Pin,
+    ptr::NonNull,
+    task::{Context, Poll, Waker},
 };
 
 use crate::transposer::{Transposer, TransposerInput, TransposerInputEventHandler};
 
 use super::input_erasure::{ErasedInput, ErasedInputState, HasErasedInput, HasInput};
-
 
 pub struct InputStateManager<T: Transposer> {
     request: RequestStatus<T>,
@@ -14,7 +19,10 @@ pub struct InputStateManager<T: Transposer> {
 
 impl<T: Transposer> Default for InputStateManager<T> {
     fn default() -> Self {
-        Self { request: Default::default(), states: Default::default() }
+        Self {
+            request: Default::default(),
+            states: Default::default(),
+        }
     }
 }
 
@@ -58,7 +66,9 @@ impl<T: Transposer> InputStateManager<T> {
                 self.request = RequestStatus::Accepted(waker);
                 Some(input)
             }
-            RequestStatus::Accepted(_) => panic!("should't be attempting to accept while already accepted"),
+            RequestStatus::Accepted(_) => {
+                panic!("should't be attempting to accept while already accepted")
+            }
             RequestStatus::None => None,
         }
     }
@@ -73,7 +83,7 @@ impl<T: Transposer> InputStateManager<T> {
         T: TransposerInputEventHandler<I>,
     {
         match self.request {
-            RequestStatus::None => {},
+            RequestStatus::None => {}
             _ => panic!("shouldn't be requesting while already requested"),
         }
 
@@ -82,7 +92,7 @@ impl<T: Transposer> InputStateManager<T> {
 
         if let Some(item) = self.states.get(query) {
             // SAFETY: we know that the item found must match the query type
-            return Some(item.as_dyn().get_input_state().cast())
+            return Some(item.as_dyn().get_input_state().cast());
         }
 
         let boxed: Box<dyn HasErasedInput<T>> = Box::new(input);
@@ -94,7 +104,7 @@ impl<T: Transposer> InputStateManager<T> {
 
     pub fn provide_input_state(
         &mut self,
-        erased_state: Box<ErasedInputState<T>>
+        erased_state: Box<ErasedInputState<T>>,
     ) -> Result<(), Box<ErasedInputState<T>>> {
         let waker = match &self.request {
             RequestStatus::Requested(..) => return Err(erased_state),

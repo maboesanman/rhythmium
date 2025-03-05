@@ -1,4 +1,4 @@
-use std::{collections::BTreeSet, convert::identity, task::Waker};
+use std::{collections::BTreeSet, task::Waker};
 
 use archery::ArcTK;
 
@@ -9,7 +9,6 @@ use crate::{
         Source, SourcePoll,
     },
     transposer::{input_erasure::ErasedInputState, step::BoxedInput, Transposer},
-    util::{observing_waker::WakeObserver, replace_mut},
 };
 
 use super::erased_input_source_collection::{ErasedInputSourceCollection, ErasedInputSourceGuard};
@@ -53,8 +52,8 @@ impl<T: Transposer + 'static> InputSourceMetaData<T> {
 
 impl<T: Transposer + 'static> ErasedInputSourceGuard<'_, T, InputSourceMetaData<T>> {
     // only returns none when an unobserved interrupt occurs.
-    fn poll_inner<'a, 'b, S>(
-        &'a mut self,
+    fn poll_inner<'b, S>(
+        &mut self,
         poll: SourcePoll<T::Time, BoxedInput<'b, T>, S>,
         poll_time: T::Time,
         forget: bool,

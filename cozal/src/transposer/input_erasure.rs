@@ -1,15 +1,19 @@
-use std::{any::TypeId, borrow::Borrow, hash::{Hash, Hasher}, ptr::NonNull};
+use std::{
+    any::TypeId,
+    borrow::Borrow,
+    hash::{Hash, Hasher},
+    ptr::NonNull,
+};
 
 use super::{Transposer, TransposerInput};
 
 /// A trait that allows for type erased interaction with an input.
 pub unsafe trait HasErasedInput<T: Transposer> {
-
     /// Get the type of the input that this type holds.
     fn get_input_type(&self) -> TypeId;
 
     /// Get the hash of the input type and value.
-    /// 
+    ///
     /// first hashes TypeId::of::<Self::Input>() and then hashes the input value.
     fn get_input_type_value_hash(&self, state: &mut dyn Hasher);
 
@@ -76,7 +80,7 @@ unsafe impl<T: Transposer, U: HasInput<T>> HasErasedInput<T> for U {
 
     fn inputs_cmp(&self, other: &dyn HasErasedInput<T>) -> std::cmp::Ordering {
         match U::Input::SORT.cmp(&other.input_sort()) {
-            std::cmp::Ordering::Equal => {},
+            std::cmp::Ordering::Equal => {}
             other => return other,
         }
 
@@ -127,8 +131,7 @@ impl<I: TransposerInput> HasInput<I::Base> for InnerErasedInput<I> {
     }
 }
 
-impl<T: Transposer> ErasedInput<T>
-{
+impl<T: Transposer> ErasedInput<T> {
     /// Create a new ErasedInput from a concrete TransposerInput.
     pub fn new<I: TransposerInput<Base = T>>(input: I) -> Box<Self> {
         let inner: Box<dyn HasErasedInput<T>> = Box::new(InnerErasedInput(input));
@@ -184,7 +187,7 @@ unsafe impl<T: Transposer> HasErasedInput<T> for ErasedInput<T> {
     fn input_sort(&self) -> u64 {
         self.0.input_sort()
     }
-    
+
     fn inputs_cmp(&self, other: &dyn HasErasedInput<T>) -> std::cmp::Ordering {
         self.0.inputs_cmp(other)
     }
@@ -251,11 +254,8 @@ unsafe impl<I: TransposerInput> HasErasedInputState<I::Base> for InnerErasedInpu
 
 impl<T: Transposer> ErasedInputState<T> {
     /// Create a new ErasedInput from a concrete TransposerInput.
-    pub fn new<I: TransposerInput<Base = T>>(input: I, input_state: I::InputState) -> Box<Self>{
-        let inner = InnerErasedInputState {
-            input,
-            input_state,
-        };
+    pub fn new<I: TransposerInput<Base = T>>(input: I, input_state: I::InputState) -> Box<Self> {
+        let inner = InnerErasedInputState { input, input_state };
         let inner: Box<dyn HasErasedInputState<T>> = Box::new(inner);
         inner.into()
     }
@@ -296,7 +296,7 @@ unsafe impl<T: Transposer> HasErasedInput<T> for ErasedInputState<T> {
     fn input_sort(&self) -> u64 {
         self.0.input_sort()
     }
-    
+
     fn inputs_cmp(&self, other: &dyn HasErasedInput<T>) -> std::cmp::Ordering {
         self.0.inputs_cmp(other)
     }
@@ -304,7 +304,7 @@ unsafe impl<T: Transposer> HasErasedInput<T> for ErasedInputState<T> {
     fn get_raw_input(&self) -> NonNull<()> {
         self.0.get_raw_input()
     }
-    
+
     fn clone_input(&self) -> Box<ErasedInput<T>> {
         self.0.clone_input()
     }

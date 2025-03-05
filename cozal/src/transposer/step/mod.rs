@@ -444,8 +444,7 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
                         break Ok(StepPoll::Emitted(output_event));
                     }
 
-                    if let Some(erased_input) = self.get_input_state_mut().try_accept_request()
-                    {
+                    if let Some(erased_input) = self.get_input_state_mut().try_accept_request() {
                         break Ok(StepPoll::StateRequested(erased_input));
                     }
 
@@ -496,7 +495,7 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
     /// input state was not requested, or if the input state was not of the correct type.
     pub fn provide_input_state(
         &mut self,
-        erased_state: Box<ErasedInputState<T>>
+        erased_state: Box<ErasedInputState<T>>,
     ) -> Result<(), Box<ErasedInputState<T>>> {
         self.get_input_state_mut().provide_input_state(erased_state)
     }
@@ -565,25 +564,25 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
     }
 }
 
-impl<'a, T: Transposer, P: SharedPointerKind> Ord for Step<'a, T, P> {
+impl<T: Transposer, P: SharedPointerKind> Ord for Step<'_, T, P> {
     fn cmp(&self, other: &Self) -> core::cmp::Ordering {
         self.sequence_number.cmp(&other.sequence_number)
     }
 }
 
-impl<'a, T: Transposer, P: SharedPointerKind> PartialOrd for Step<'a, T, P> {
+impl<T: Transposer, P: SharedPointerKind> PartialOrd for Step<'_, T, P> {
     fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<'a, T: Transposer, P: SharedPointerKind> PartialEq for Step<'a, T, P> {
+impl<T: Transposer, P: SharedPointerKind> PartialEq for Step<'_, T, P> {
     fn eq(&self, other: &Self) -> bool {
         self.sequence_number == other.sequence_number
     }
 }
 
-impl<'a, T: Transposer, P: SharedPointerKind> Eq for Step<'a, T, P> {}
+impl<T: Transposer, P: SharedPointerKind> Eq for Step<'_, T, P> {}
 
 /// The result of polling a step.
 #[derive(PartialEq, Eq)]

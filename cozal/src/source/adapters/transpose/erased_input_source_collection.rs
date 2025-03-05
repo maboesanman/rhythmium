@@ -184,9 +184,7 @@ impl<T: Transposer + 'static> Borrow<ErasedInput<T>> for ErasedInputSource<T> {
     }
 }
 
-pub struct ErasedInputSourceCollection<T: Transposer + 'static, M>(
-    HashTable<TableEntry<T, M>>,
-);
+pub struct ErasedInputSourceCollection<T: Transposer + 'static, M>(HashTable<TableEntry<T, M>>);
 
 struct TableEntry<T: Transposer + 'static, M> {
     hash: u64,
@@ -202,7 +200,7 @@ impl<T: Transposer + 'static, M: Default> TableEntry<T, M> {
         Self {
             hash,
             input,
-            metadata
+            metadata,
         }
     }
 }
@@ -248,35 +246,27 @@ impl<T: Transposer + 'static, M> ErasedInputSourceCollection<T, M> {
         move |entry| <ErasedInputSource<T> as Borrow<ErasedInput<T>>>::borrow(&entry.input) == input
     }
 
-    pub fn get_input<'a, 'b>(
+    pub fn get_input<'a>(
         &'a mut self,
-        input: &'b ErasedInput<T>,
+        input: &ErasedInput<T>,
     ) -> Option<ErasedInputSourceGuard<'a, T, M>> {
         self.0
             .find_mut(Self::hash(input), Self::eq(input))
             .map(TableEntry::into_guard)
     }
 
-    pub fn get_input_by_hash(
-        &mut self,
-        input_hash: u64
-    ) -> Option<ErasedInputSourceGuard<T, M>> {
+    pub fn get_input_by_hash(&mut self, input_hash: u64) -> Option<ErasedInputSourceGuard<T, M>> {
         self.0
             .find_mut(input_hash, |entry| entry.hash == input_hash)
             .map(TableEntry::into_guard)
     }
 
-
     pub fn iter(&self) -> impl Iterator<Item = (&ErasedInputSource<T>, &M)> {
-        self.0
-            .iter()
-            .map(|entry| (&entry.input, &entry.metadata))
+        self.0.iter().map(|entry| (&entry.input, &entry.metadata))
     }
 
     pub fn iter_mut(&mut self) -> impl Iterator<Item = ErasedInputSourceGuard<T, M>> {
-        self.0
-            .iter_mut()
-            .map(TableEntry::into_guard)
+        self.0.iter_mut().map(TableEntry::into_guard)
     }
 
     pub fn iter_with_hashes(&self) -> impl Iterator<Item = (u64, &ErasedInputSource<T>, &M)> {
@@ -292,7 +282,7 @@ impl<T: Transposer + 'static, M> ErasedInputSourceCollection<T, M> {
 
 impl<'a, T: Transposer + 'static, M> ErasedInputSourceGuard<'a, T, M> {
     pub fn get_input_key(&self) -> &ErasedInput<T> {
-        (&*self.source).borrow()
+        (*self.source).borrow()
     }
 
     pub fn get_source(
@@ -337,7 +327,6 @@ impl<'a, T: Transposer + 'static, M> ErasedInputSourceGuard<'a, T, M> {
     }
 
     pub fn into_input_mut(self) -> (&'a ErasedInput<T>, &'a mut M) {
-        ((&*self.source).borrow(), self.metadata)
+        ((*self.source).borrow(), self.metadata)
     }
 }
-

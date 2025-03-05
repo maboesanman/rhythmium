@@ -93,7 +93,7 @@ pub trait Source {
     fn advance(&mut self, time: Self::Time);
 
     /// Inform the source that you will never call poll or poll_forget ever again. You may still call poll_events.
-    /// 
+    ///
     /// This is useful for callers which do not care about the state of the source, and only care about events.
     /// Some combinators may be able to drop some input sources if callers don't care about events.
     fn advance_final(&mut self);

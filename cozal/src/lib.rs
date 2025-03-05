@@ -6,7 +6,6 @@
 #![feature(trait_upcasting)]
 #![feature(btree_set_entry)]
 #![feature(hash_extract_if)]
-
 #![recursion_limit = "1024"]
 
 pub mod source;
