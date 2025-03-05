@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+// #![allow(dead_code)]
 
 use archery::ArcTK;
 use erased_input_source_collection::ErasedInputSourceCollection;
@@ -16,12 +16,14 @@ use transpose_interrupt_waker::{
     ChannelItem, Status, StepItem, TransposeInterruptWakerInner, TransposeWakerObserver,
 };
 
-mod channel_status;
+mod builder;
 mod erased_input_source_collection;
 mod input_channel_reservations;
 mod input_source_metadata;
 mod steps;
 mod transpose_interrupt_waker;
+
+pub use builder::TransposeBuilder;
 
 use crate::source::source_poll::{Interrupt, TrySourcePoll};
 use crate::source::traits::SourceContext;
@@ -346,6 +348,7 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
 
     /// None here means there will never be an event ever again.
     /// Some(None) means we have yet to finalize anything. sort of the opposite.
+    #[allow(dead_code)]
     fn calculate_finalize_time(&self) -> Option<Option<T::Time>> {
         if *self.complete {
             return None;
@@ -627,12 +630,6 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
             }
         }
     }
-}
-
-enum PollVariant {
-    Poll(SourceContext),
-    PollForget(SourceContext),
-    PollEvents(Waker),
 }
 
 impl<T: Transposer + Clone + 'static> Source for Transpose<T> {

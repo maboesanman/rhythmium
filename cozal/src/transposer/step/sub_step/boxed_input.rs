@@ -2,8 +2,7 @@ use std::{any::TypeId, cmp::Ordering};
 
 use archery::{ArcTK, SharedPointerKind};
 
-use crate::transposer::{Transposer, TransposerInput, TransposerInputEventHandler,
-};
+use crate::transposer::{Transposer, TransposerInput, TransposerInputEventHandler};
 
 use super::{input_sub_step::InputSubStep, BoxedSubStep, SubStep};
 
@@ -133,6 +132,7 @@ impl<'t, T: Transposer + 't, P: SharedPointerKind + 't> BoxedInput<'t, T, P> {
         }
     }
 
+    /// Get the hash of this input without needing the concrete type.
     pub fn get_input_hash(&self) -> u64 {
         self.0.as_ref().input_hash().unwrap()
     }

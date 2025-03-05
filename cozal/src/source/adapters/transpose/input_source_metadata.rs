@@ -13,6 +13,7 @@ use crate::{
 
 use super::erased_input_source_collection::{ErasedInputSourceCollection, ErasedInputSourceGuard};
 
+#[derive(Debug, Clone)]
 pub struct InputSourceMetaData<T: Transposer + 'static> {
     next_scheduled_time: Option<T::Time>,
     finalized_time: Option<T::Time>,
@@ -20,8 +21,8 @@ pub struct InputSourceMetaData<T: Transposer + 'static> {
     observed_times: BTreeSet<T::Time>,
 }
 
-impl<T: Transposer + 'static> InputSourceMetaData<T> {
-    pub fn new() -> Self {
+impl<T: Transposer + 'static> Default for InputSourceMetaData<T> {
+    fn default() -> Self {
         Self {
             next_scheduled_time: None,
             finalized_time: None,
@@ -29,17 +30,19 @@ impl<T: Transposer + 'static> InputSourceMetaData<T> {
             observed_times: BTreeSet::new(),
         }
     }
+}
 
+impl<T: Transposer + 'static> InputSourceMetaData<T> {
     pub fn next_scheduled_time(&self) -> Option<T::Time> {
         self.next_scheduled_time
     }
 
-    pub fn might_interrupt(&self, time: T::Time) -> bool {
-        match self.next_scheduled_time {
-            Some(next) => next <= time,
-            None => false,
-        }
-    }
+    // pub fn might_interrupt(&self, time: T::Time) -> bool {
+    //     match self.next_scheduled_time {
+    //         Some(next) => next <= time,
+    //         None => false,
+    //     }
+    // }
 
     pub fn finalized_time(&self) -> Option<T::Time> {
         self.finalized_time

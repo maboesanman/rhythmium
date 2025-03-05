@@ -165,10 +165,6 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
         &mut unsafe { input_state.as_mut() }.0
     }
 
-    pub fn get_sequence_number(&self) -> usize {
-        self.sequence_number
-    }
-
     /// Create new beginning step.
     ///
     /// This is the first step the transposer undergoes, whic his why it recieves the transposer as an argument, as
