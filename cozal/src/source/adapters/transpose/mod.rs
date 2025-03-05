@@ -23,6 +23,9 @@ mod input_source_metadata;
 mod steps;
 mod transpose_interrupt_waker;
 
+#[cfg(test)]
+mod test;
+
 pub use builder::TransposeBuilder;
 
 use crate::source::source_poll::{Interrupt, TrySourcePoll};

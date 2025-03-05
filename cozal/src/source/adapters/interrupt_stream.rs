@@ -17,7 +17,8 @@ pub struct InterruptStream<Src: Source<Time = Instant>, Fut: Future<Output = ()>
 }
 
 impl<Src: Source<Time = Instant>, Fut: Future<Output = ()>> InterruptStream<Src, Fut> {
-    pub fn new(source: Src, wait_fn: fn(Instant) -> Fut) -> Self {
+    pub fn new(mut source: Src, wait_fn: fn(Instant) -> Fut) -> Self {
+        source.advance_final();
         Self {
             source: Box::new(source),
             current_wait: None,
@@ -32,7 +33,6 @@ impl<Src: Source<Time = Instant>, Fut: Future<Output = ()>> Stream for Interrupt
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
         let poll_time = Instant::now();
-        this.source.advance(poll_time);
         let poll = this.source.poll_events(poll_time, cx.waker().clone());
 
         let poll = match poll {
@@ -45,6 +45,10 @@ impl<Src: Source<Time = Instant>, Fut: Future<Output = ()>> Stream for Interrupt
                 state: _,
                 next_event_at,
             } => next_event_at,
+            SourcePoll::Interrupt {
+                interrupt: Interrupt::Complete,
+                ..
+            } => return Poll::Ready(None),
             SourcePoll::Interrupt { time, interrupt } => {
                 return Poll::Ready(Some((time, interrupt)))
             }

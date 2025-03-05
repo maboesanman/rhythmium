@@ -242,19 +242,6 @@ impl<T: Transposer + 'static, M> ErasedInputSourceCollection<T, M> {
         item.hash
     }
 
-    fn eq(input: &ErasedInput<T>) -> impl '_ + FnMut(&TableEntry<T, M>) -> bool {
-        move |entry| <ErasedInputSource<T> as Borrow<ErasedInput<T>>>::borrow(&entry.input) == input
-    }
-
-    pub fn get_input<'a>(
-        &'a mut self,
-        input: &ErasedInput<T>,
-    ) -> Option<ErasedInputSourceGuard<'a, T, M>> {
-        self.0
-            .find_mut(Self::hash(input), Self::eq(input))
-            .map(TableEntry::into_guard)
-    }
-
     pub fn get_input_by_hash(&mut self, input_hash: u64) -> Option<ErasedInputSourceGuard<T, M>> {
         self.0
             .find_mut(input_hash, |entry| entry.hash == input_hash)
@@ -274,17 +261,9 @@ impl<T: Transposer + 'static, M> ErasedInputSourceCollection<T, M> {
             .iter()
             .map(|entry| (entry.hash, &entry.input, &entry.metadata))
     }
-
-    pub fn hashes(&self) -> impl Iterator<Item = u64> + '_ {
-        self.0.iter().map(|entry| entry.hash)
-    }
 }
 
-impl<'a, T: Transposer + 'static, M> ErasedInputSourceGuard<'a, T, M> {
-    pub fn get_input_key(&self) -> &ErasedInput<T> {
-        (*self.source).borrow()
-    }
-
+impl<T: Transposer + 'static, M> ErasedInputSourceGuard<'_, T, M> {
     pub fn get_source(
         &self,
     ) -> &dyn Source<
@@ -305,28 +284,7 @@ impl<'a, T: Transposer + 'static, M> ErasedInputSourceGuard<'a, T, M> {
         self.source.0.as_mut()
     }
 
-    pub fn get_metadata(&self) -> &M {
-        self.metadata
-    }
-
     pub fn get_metadata_mut(&mut self) -> &mut M {
         self.metadata
-    }
-
-    pub fn into_source_mut(
-        self,
-    ) -> (
-        &'a mut dyn Source<
-            Time = T::Time,
-            Event = BoxedInput<'static, T, ArcTK>,
-            State = Box<ErasedInputState<T>>,
-        >,
-        &'a mut M,
-    ) {
-        (self.source.0.as_mut(), self.metadata)
-    }
-
-    pub fn into_input_mut(self) -> (&'a ErasedInput<T>, &'a mut M) {
-        ((*self.source).borrow(), self.metadata)
     }
 }
