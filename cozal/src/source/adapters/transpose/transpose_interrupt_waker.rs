@@ -1,62 +1,151 @@
 use std::{
     collections::{HashMap, VecDeque},
+    ops::{Deref, DerefMut},
     sync::Arc,
     task::Waker,
 };
 
 use futures::task::{waker, ArcWake};
-use parking_lot::{Mutex, MutexGuard};
+use parking_lot::Mutex;
 
 pub struct TransposeWakerObserver {
-    inner: Arc<Mutex<TransposeInterruptWakerInner>>,
+    inner: Arc<Mutex<TransposeInterruptWakerContainer>>,
+}
+
+pub struct InnerGuard {
+    inner: Option<TransposeInterruptWakerInner>,
+    container: Arc<Mutex<TransposeInterruptWakerContainer>>,
+}
+
+impl Deref for InnerGuard {
+    type Target = TransposeInterruptWakerInner;
+
+    fn deref(&self) -> &Self::Target {
+        self.inner.as_ref().unwrap()
+    }
+}
+
+impl DerefMut for InnerGuard {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.inner.as_mut().unwrap()
+    }
+}
+
+impl Drop for InnerGuard {
+    fn drop(&mut self) {
+        let mut lock = self.container.lock();
+
+        let deferred = match &mut *lock {
+            TransposeInterruptWakerContainer::Working(deferred_wakes) => {
+                core::mem::take(deferred_wakes)
+            }
+            TransposeInterruptWakerContainer::Rest(_) => Vec::new(),
+        };
+
+        for deferred_item in deferred {
+            deferred_item.wake(self.inner.as_mut().unwrap());
+        }
+
+        *lock = TransposeInterruptWakerContainer::Rest(core::mem::take(&mut self.inner).unwrap())
+    }
 }
 
 impl TransposeWakerObserver {
     pub fn new() -> Self {
         Self {
-            inner: Arc::new(Mutex::new(TransposeInterruptWakerInner::new())),
+            inner: Arc::new(Mutex::new(TransposeInterruptWakerContainer::Rest(
+                TransposeInterruptWakerInner::new(),
+            ))),
         }
     }
 
-    pub fn lock(&self) -> MutexGuard<'_, TransposeInterruptWakerInner> {
-        self.inner.lock()
+    pub fn lock(&self) -> InnerGuard {
+        let mut lock = self.inner.lock();
+        let inner = core::mem::replace(
+            &mut *lock,
+            TransposeInterruptWakerContainer::Working(Vec::new()),
+        );
+        let inner = match inner {
+            TransposeInterruptWakerContainer::Rest(i) => i,
+            _ => panic!(),
+        };
+        drop(lock);
+        InnerGuard {
+            inner: Some(inner),
+            container: self.inner.clone(),
+        }
     }
 
     pub fn get_source_interrupt_waker(&self, source_hash: u64) -> Waker {
-        waker(Arc::new(SourceInterruptWaker {
-            source_hash,
+        waker(Arc::new(WrappedWaker {
+            data: SourceInterruptWakerData { source_hash },
             inner: self.inner.clone(),
         }))
     }
 
     pub fn get_source_channel_waker(&self, source_hash: u64, interpolation_uuid: u64) -> Waker {
-        waker(Arc::new(SourceChannelWaker {
-            source_hash,
-            interpolation_uuid,
+        waker(Arc::new(WrappedWaker {
+            data: SourceChannelWakerData {
+                source_hash,
+                interpolation_uuid,
+            },
             inner: self.inner.clone(),
         }))
     }
 
     pub fn get_source_step_waker(&self, source_hash: u64, step_uuid: u64) -> Waker {
-        waker(Arc::new(SourceStepWaker {
-            source_hash,
-            step_uuid,
+        waker(Arc::new(WrappedWaker {
+            data: SourceStepWakerData {
+                source_hash,
+                step_uuid,
+            },
             inner: self.inner.clone(),
         }))
     }
 
     pub fn get_step_waker(&self, step_uuid: u64) -> Waker {
-        waker(Arc::new(StepWaker {
-            step_uuid,
+        waker(Arc::new(WrappedWaker {
+            data: StepWakerData { step_uuid },
             inner: self.inner.clone(),
         }))
     }
 
     pub fn get_interpolation_waker(&self, interpolation_uuid: u64) -> Waker {
-        waker(Arc::new(InterpolationWaker {
-            interpolation_uuid,
+        waker(Arc::new(WrappedWaker {
+            data: InterpolationWakerData { interpolation_uuid },
             inner: self.inner.clone(),
         }))
+    }
+}
+
+#[derive(Debug)]
+enum TransposeInterruptWakerContainer {
+    Working(Vec<DeferredWake>),
+    Rest(TransposeInterruptWakerInner),
+}
+
+#[derive(Debug, Clone)]
+enum DeferredWake {
+    SourceInterrupt(SourceInterruptWakerData),
+    SourceChannel(SourceChannelWakerData),
+    Step(StepWakerData),
+    SourceStep(SourceStepWakerData),
+    Interpolation(InterpolationWakerData),
+}
+
+impl WakerData for DeferredWake {
+    fn wake(&self, inner: &mut TransposeInterruptWakerInner) {
+        match self {
+            DeferredWake::SourceInterrupt(d) => d.wake(inner),
+            DeferredWake::SourceChannel(d) => d.wake(inner),
+            DeferredWake::Step(d) => d.wake(inner),
+            DeferredWake::SourceStep(d) => d.wake(inner),
+            DeferredWake::Interpolation(d) => d.wake(inner),
+        }
+    }
+
+    fn defer(&self) -> DeferredWake {
+        self.clone()
     }
 }
 
@@ -78,7 +167,11 @@ impl TransposeInterruptWakerInner {
             state_interrupt_woken: VecDeque::new(),
             state_interrupt_pending: VecDeque::new(),
             // need to mark interpolation as ready to poll so we bootstrap somewhere
-            step_item: Some(StepItem { step_uuid: 0, step_woken: true, input_state_status: Status::None }),
+            step_item: Some(StepItem {
+                step_uuid: 0,
+                step_woken: true,
+                input_state_status: Status::None,
+            }),
             interrupt_waker: Waker::noop().clone(),
             channels: HashMap::new(),
         }
@@ -114,46 +207,70 @@ pub enum Status {
 }
 
 #[derive(Debug, Clone)]
-struct SourceInterruptWaker {
-    source_hash: u64,
-    inner: Arc<Mutex<TransposeInterruptWakerInner>>,
+struct WrappedWaker<D> {
+    data: D,
+    inner: Arc<Mutex<TransposeInterruptWakerContainer>>,
 }
 
-impl ArcWake for SourceInterruptWaker {
+trait WakerData: Send + Sync {
+    fn wake(&self, inner: &mut TransposeInterruptWakerInner);
+
+    fn defer(&self) -> DeferredWake;
+}
+
+impl<D: WakerData> ArcWake for WrappedWaker<D> {
     fn wake_by_ref(arc_self: &Arc<Self>) {
-        let mut inner = arc_self.inner.lock();
-
-        if let Some(pos) = inner
-            .state_interrupt_pending
-            .iter()
-            .position(|&x| x == arc_self.source_hash)
-        {
-            inner.state_interrupt_pending.remove(pos);
-        } else if inner.state_interrupt_woken.contains(&arc_self.source_hash) {
-            return;
+        let mut container = arc_self.inner.lock();
+        match &mut *container {
+            TransposeInterruptWakerContainer::Working(items) => {
+                items.push(arc_self.data.defer());
+            }
+            TransposeInterruptWakerContainer::Rest(inner) => {
+                arc_self.data.wake(inner);
+            }
         }
-
-        inner.state_interrupt_woken.push_back(arc_self.source_hash);
-        inner.interrupt_waker.wake_by_ref();
     }
 }
 
-#[derive(Debug, Clone)]
-struct SourceChannelWaker {
-    interpolation_uuid: u64,
+#[derive(Debug, Clone, Copy)]
+struct SourceInterruptWakerData {
     source_hash: u64,
-    inner: Arc<Mutex<TransposeInterruptWakerInner>>,
 }
 
-impl ArcWake for SourceChannelWaker {
-    fn wake_by_ref(arc_self: &Arc<Self>) {
-        let mut inner = arc_self.inner.lock();
+impl WakerData for SourceInterruptWakerData {
+    fn wake(&self, inner: &mut TransposeInterruptWakerInner) {
+        if let Some(pos) = inner
+            .state_interrupt_pending
+            .iter()
+            .position(|&x| x == self.source_hash)
+        {
+            inner.state_interrupt_pending.remove(pos);
+        } else if inner.state_interrupt_woken.contains(&self.source_hash) {
+            return;
+        }
 
+        inner.state_interrupt_woken.push_back(self.source_hash);
+        inner.interrupt_waker.wake_by_ref();
+    }
+
+    fn defer(&self) -> DeferredWake {
+        DeferredWake::SourceInterrupt(*self)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct SourceChannelWakerData {
+    interpolation_uuid: u64,
+    source_hash: u64,
+}
+
+impl WakerData for SourceChannelWakerData {
+    fn wake(&self, inner: &mut TransposeInterruptWakerInner) {
         let channel_item = inner.channels.values_mut().find(|channel_item| {
-            channel_item.interpolation_uuid == arc_self.interpolation_uuid
+            channel_item.interpolation_uuid == self.interpolation_uuid
                 && match channel_item.input_state_status {
                     Status::Ready { .. } => false,
-                    Status::Pending { input_hash, .. } => input_hash == arc_self.source_hash,
+                    Status::Pending { input_hash, .. } => input_hash == self.source_hash,
                     Status::None => false,
                 }
         });
@@ -177,24 +294,25 @@ impl ArcWake for SourceChannelWaker {
             _ => panic!(),
         };
     }
+
+    fn defer(&self) -> DeferredWake {
+        DeferredWake::SourceChannel(*self)
+    }
 }
 
-#[derive(Debug, Clone)]
-struct StepWaker {
+#[derive(Debug, Clone, Copy)]
+struct StepWakerData {
     step_uuid: u64,
-    inner: Arc<Mutex<TransposeInterruptWakerInner>>,
 }
 
-impl ArcWake for StepWaker {
-    fn wake_by_ref(arc_self: &Arc<Self>) {
-        let mut inner = arc_self.inner.lock();
-
+impl WakerData for StepWakerData {
+    fn wake(&self, inner: &mut TransposeInterruptWakerInner) {
         let step_item = match &mut inner.step_item {
             Some(s) => s,
             None => return,
         };
 
-        if step_item.step_uuid != arc_self.step_uuid {
+        if step_item.step_uuid != self.step_uuid {
             return;
         }
 
@@ -205,25 +323,26 @@ impl ArcWake for StepWaker {
         step_item.step_woken = true;
         inner.interrupt_waker.wake_by_ref();
     }
+
+    fn defer(&self) -> DeferredWake {
+        DeferredWake::Step(*self)
+    }
 }
 
-#[derive(Debug, Clone)]
-struct SourceStepWaker {
+#[derive(Debug, Clone, Copy)]
+struct SourceStepWakerData {
     step_uuid: u64,
     source_hash: u64,
-    inner: Arc<Mutex<TransposeInterruptWakerInner>>,
 }
 
-impl ArcWake for SourceStepWaker {
-    fn wake_by_ref(arc_self: &Arc<Self>) {
-        let mut inner = arc_self.inner.lock();
-
+impl WakerData for SourceStepWakerData {
+    fn wake(&self, inner: &mut TransposeInterruptWakerInner) {
         let step_item = match &mut inner.step_item {
             Some(s) => s,
             None => return,
         };
 
-        if step_item.step_uuid != arc_self.step_uuid {
+        if step_item.step_uuid != self.step_uuid {
             return;
         }
 
@@ -232,7 +351,7 @@ impl ArcWake for SourceStepWaker {
             input_channel,
         } = step_item.input_state_status
         {
-            if input_hash != arc_self.source_hash {
+            if input_hash != self.source_hash {
                 return;
             }
 
@@ -243,20 +362,21 @@ impl ArcWake for SourceStepWaker {
             inner.interrupt_waker.wake_by_ref();
         }
     }
+
+    fn defer(&self) -> DeferredWake {
+        DeferredWake::SourceStep(*self)
+    }
 }
 
-#[derive(Debug, Clone)]
-struct InterpolationWaker {
+#[derive(Debug, Clone, Copy)]
+struct InterpolationWakerData {
     interpolation_uuid: u64,
-    inner: Arc<Mutex<TransposeInterruptWakerInner>>,
 }
 
-impl ArcWake for InterpolationWaker {
-    fn wake_by_ref(arc_self: &Arc<Self>) {
-        let mut inner = arc_self.inner.lock();
-
+impl WakerData for InterpolationWakerData {
+    fn wake(&self, inner: &mut TransposeInterruptWakerInner) {
         let channel_item = inner.channels.values_mut().find(|channel_item| {
-            channel_item.interpolation_uuid == arc_self.interpolation_uuid
+            channel_item.interpolation_uuid == self.interpolation_uuid
                 && !channel_item.interpolation_woken
         });
 
@@ -267,5 +387,9 @@ impl ArcWake for InterpolationWaker {
 
         channel_item.interpolation_woken = true;
         channel_item.waker.wake_by_ref();
+    }
+
+    fn defer(&self) -> DeferredWake {
+        DeferredWake::Interpolation(*self)
     }
 }

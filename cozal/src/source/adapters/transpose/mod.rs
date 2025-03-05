@@ -5,7 +5,6 @@ use erased_input_source_collection::ErasedInputSourceCollection;
 use hashbrown::{HashMap, HashSet};
 use input_channel_reservations::InputChannelReservations;
 use input_source_metadata::InputSourceMetaData;
-use parking_lot::MutexGuard;
 use std::collections::BTreeSet;
 use std::future::Future;
 use std::num::NonZeroUsize;
@@ -13,7 +12,7 @@ use std::pin::Pin;
 use std::task::{Context, Poll, Waker};
 use steps::StepList;
 use transpose_interrupt_waker::{
-    ChannelItem, Status, StepItem, TransposeInterruptWakerInner, TransposeWakerObserver,
+    ChannelItem, InnerGuard, Status, StepItem, TransposeWakerObserver,
 };
 
 mod builder;
@@ -80,19 +79,13 @@ struct TransposeLocked<'a, T: Transposer + 'static> {
     channel_reservations: &'a mut InputChannelReservations,
 
     // input_channel_statuses: InputChannelStatuses<T>,
-    wakers: MutexGuard<'a, TransposeInterruptWakerInner>,
+    wakers: InnerGuard,
 
     // trying to lock this will always deadlock
     outer_wakers: &'a TransposeWakerObserver,
 
     complete: &'a mut bool,
     last_finalize: &'a mut T::Time,
-}
-
-impl<T: Transposer + 'static> Drop for TransposeLocked<'_, T> {
-    fn drop(&mut self) {
-        // clean up, if i do any mutex swapping.
-    }
 }
 
 impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
@@ -410,11 +403,15 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
             // start a step saturation if we need to.
             if self.wakers.step_item.is_none() {
                 if let Some((step_a, step_b)) = self.steps.get_last_two_steps() {
-                    if step_b.step.is_unsaturated() {
-                        if step_b.step.get_time() <= *self.wavefront_time {
-                            step_b.step.start_saturate_clone(&step_a.step).unwrap();
-                            self.wakers.step_item = Some(StepItem { step_uuid: step_b.uuid, step_woken: true, input_state_status: Status::None });
-                        }
+                    if step_b.step.is_unsaturated()
+                        && step_b.step.get_time() <= *self.wavefront_time
+                    {
+                        step_b.step.start_saturate_clone(&step_a.step).unwrap();
+                        self.wakers.step_item = Some(StepItem {
+                            step_uuid: step_b.uuid,
+                            step_woken: true,
+                            input_state_status: Status::None,
+                        });
                     }
                 }
             }
