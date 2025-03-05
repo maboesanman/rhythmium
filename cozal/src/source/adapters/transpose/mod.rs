@@ -141,12 +141,8 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
         let last_step = self.steps.get_last_step();
         if last_step.step.is_saturated() {
             if let Some(next_step) = last_step.step.next_unsaturated(self.input_buffer).unwrap() {
-                let next_step = self.steps.push_step(next_step);
-                self.wakers.step_item = Some(StepItem {
-                    step_uuid: next_step.uuid,
-                    step_woken: true,
-                    input_state_status: Status::None,
-                });
+                self.steps.push_step(next_step);
+                self.wakers.step_item = None;
             } else {
                 self.wakers.step_item = None;
             }
@@ -411,6 +407,18 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
                 break Ok(SourcePoll::Pending);
             }
 
+            // start a step saturation if we need to.
+            if self.wakers.step_item.is_none() {
+                if let Some((step_a, step_b)) = self.steps.get_last_two_steps() {
+                    if step_b.step.is_unsaturated() {
+                        if step_b.step.get_time() <= *self.wavefront_time {
+                            step_b.step.start_saturate_clone(&step_a.step).unwrap();
+                            self.wakers.step_item = Some(StepItem { step_uuid: step_b.uuid, step_woken: true, input_state_status: Status::None });
+                        }
+                    }
+                }
+            }
+
             // step polling (+ input states initiated by step polls)
             if let Some(step_item) = &mut self.wakers.step_item {
                 if let Status::Ready {
@@ -474,14 +482,10 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
                             .next_unsaturated(self.input_buffer)
                             .unwrap()
                         {
-                            let next_step = self.steps.push_step(next_step);
-                            if next_step.step.get_time() <= *self.wavefront_time {
-                                step_item.step_uuid = next_step.uuid;
-                                step_item.step_woken = true;
-                                continue;
-                            }
+                            self.steps.push_step(next_step);
                         }
                         self.wakers.step_item = None;
+                        continue;
                     }
                     StepPoll::Emitted(e) => {
                         break Ok(SourcePoll::Interrupt {

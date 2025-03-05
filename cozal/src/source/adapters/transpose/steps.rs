@@ -51,13 +51,16 @@ impl<T: Transposer + Clone> StepList<T> {
         self.steps.back().unwrap()
     }
 
-    pub fn push_step(&mut self, step: Step<'static, T, ArcTK>) -> &mut StepWrapper<T> {
+    pub fn push_step(&mut self, step: Step<'static, T, ArcTK>) {
         self.steps.push_back(StepWrapper {
             uuid: self.next_step_uuid,
             step,
         });
         self.next_step_uuid += 1;
-        self.steps.back_mut().unwrap()
+    }
+
+    pub fn get_last_two_steps(&mut self) -> Option<(&mut StepWrapper<T>, &mut StepWrapper<T>)> {
+        get_last_two_mut(&mut self.steps)
     }
 
     pub fn create_interpolation(&self, time: T::Time) -> Interpolation<T, ArcTK> {
@@ -113,6 +116,12 @@ impl<T: Transposer + Clone> StepWrapper<T> {
     pub fn new(step: Step<'static, T, ArcTK>, uuid: u64) -> Self {
         Self { uuid, step }
     }
+}
+
+fn get_last_two_mut<T>(deque: &mut VecDeque<T>) -> Option<(&mut T, &mut T)> {
+    let i = deque.len().checked_sub(2)?;
+    let (a, b) = get_adjacent_mut(deque, i)?;
+    Some((a, b?))
 }
 
 fn get_adjacent_mut<T>(deque: &mut VecDeque<T>, i: usize) -> Option<(&mut T, Option<&mut T>)> {

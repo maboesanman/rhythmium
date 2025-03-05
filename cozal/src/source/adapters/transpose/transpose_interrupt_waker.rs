@@ -77,7 +77,8 @@ impl TransposeInterruptWakerInner {
         Self {
             state_interrupt_woken: VecDeque::new(),
             state_interrupt_pending: VecDeque::new(),
-            step_item: None,
+            // need to mark interpolation as ready to poll so we bootstrap somewhere
+            step_item: Some(StepItem { step_uuid: 0, step_woken: true, input_state_status: Status::None }),
             interrupt_waker: Waker::noop().clone(),
             channels: HashMap::new(),
         }
