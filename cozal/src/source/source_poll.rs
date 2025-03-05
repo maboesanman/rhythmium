@@ -83,11 +83,11 @@ impl<E> Interrupt<E> {
 
 #[derive(Debug)]
 #[non_exhaustive]
-pub enum SourcePollErr<T> {
+pub enum SourcePollErr {
     OutOfBoundsChannel,
-    PollAfterAdvance { advanced: T },
+    PollAfterAdvance,
     PollBeforeDefault,
     SpecificError(anyhow::Error),
 }
 
-pub type TrySourcePoll<T, E, S> = Result<SourcePoll<T, E, S>, SourcePollErr<T>>;
+pub type TrySourcePoll<T, E, S> = Result<SourcePoll<T, E, S>, SourcePollErr>;

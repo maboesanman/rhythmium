@@ -38,6 +38,10 @@ impl<T: Transposer + Clone> StepList<T> {
         })
     }
 
+    pub fn len(&self) -> usize {
+        self.steps.len()
+    }
+
     fn get_step_index_by_uuid(&self, uuid: u64) -> Option<usize> {
         self.steps.binary_search_by_key(&uuid, |w| w.uuid).ok()
     }
@@ -55,8 +59,8 @@ impl<T: Transposer + Clone> StepList<T> {
         get_adjacent_mut(&mut self.steps, index)
     }
 
-    pub fn get_last_step(&self) -> &Step<T, ArcTK> {
-        &self.steps.back().unwrap().step
+    pub fn get_last_step(&self) -> &StepWrapper<T> {
+        &self.steps.back().unwrap()
     }
 
     pub fn push_step(&mut self, step: Step<'static, T, ArcTK>) -> &mut StepWrapper<T> {

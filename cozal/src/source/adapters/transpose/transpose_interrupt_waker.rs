@@ -81,12 +81,6 @@ impl TransposeInterruptWakerInner {
             channels: HashMap::new(),
         }
     }
-
-    pub fn register_context(&mut self, cx: &SourceContext) {
-        self.interrupt_waker = cx.interrupt_waker.clone();
-        // self.channels.get_mut(&cx.channel)
-        todo!()
-    }
 }
 
 #[derive(Debug, Clone)]

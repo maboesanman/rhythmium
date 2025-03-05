@@ -184,7 +184,7 @@ impl<T: Transposer + 'static> Source for ErasedInputSourceGuard<'_, T, InputSour
 }
 
 impl<T: Transposer + 'static> ErasedInputSourceCollection<T, InputSourceMetaData<T>> {
-    /// call advance on the input sources as needed, and produce a finalized time to possibly emit.
+    /// call advance on the input sources as needed based on the advance time and the finalize time of other steps.
     pub fn handle_advance_and_finalize(&mut self, advance_time: T::Time) {
         if let Some(Some(time_to_advance_to)) = self
             .iter()
