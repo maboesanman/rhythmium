@@ -4,6 +4,8 @@ use std::collections::HashSet;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::num::NonZeroUsize;
 
+use crate::source::source_poll::Interrupt;
+use crate::transposer::TransposerInputEventHandler;
 use crate::{
     source::{source_poll::TrySourcePoll, traits::SourceContext, Source, SourcePoll},
     transposer::{
@@ -28,6 +30,39 @@ impl<I: TransposerInput, Src> HasInput<I::Base> for ErasedInputSourceImpl<I, Src
     }
 }
 
+impl<I, Src> ErasedInputSourceImpl<I, Src>
+where
+    I: TransposerInput,
+    Src: Source<Time = <I::Base as Transposer>::Time, Event = I::InputEvent, State = I::InputState>,
+    I::Base: Clone,
+{
+    fn resolve_interrupts(
+        &self,
+        time: <I::Base as Transposer>::Time,
+        interrupt: Interrupt<I::InputEvent>,
+    ) -> Option<Interrupt<BoxedInput<'static, I::Base, ArcTK>>> {
+        match interrupt {
+            Interrupt::Event(event) => {
+                if !<I::Base as TransposerInputEventHandler<I>>::can_handle(time, &event) {
+                    None
+                } else {
+                    Some(Interrupt::Event(BoxedInput::new(time, self.input, event)))
+                }
+            }
+            Interrupt::FinalizedEvent(event) => {
+                if !<I::Base as TransposerInputEventHandler<I>>::can_handle(time, &event) {
+                    Some(Interrupt::Finalize)
+                } else {
+                    Some(Interrupt::Event(BoxedInput::new(time, self.input, event)))
+                }
+            }
+            Interrupt::Rollback => Some(Interrupt::Rollback),
+            Interrupt::Finalize => Some(Interrupt::Finalize),
+            Interrupt::Complete => Some(Interrupt::Complete),
+        }
+    }
+}
+
 impl<I, Src> Source for ErasedInputSourceImpl<I, Src>
 where
     I: TransposerInput,
@@ -43,22 +78,27 @@ where
         time: Self::Time,
         cx: SourceContext,
     ) -> TrySourcePoll<Self::Time, Self::Event, Self::State> {
-        match self.source.poll(time, cx)? {
-            SourcePoll::Ready {
-                state,
-                next_event_at,
-            } => {
-                let state = ErasedInputState::new(self.input, state);
-                Ok(SourcePoll::Ready {
+        loop {
+            break match self.source.poll(time, cx.clone())? {
+                SourcePoll::Ready {
                     state,
                     next_event_at,
-                })
-            }
-            SourcePoll::Interrupt { time, interrupt } => {
-                let interrupt = interrupt.map_event(|e| BoxedInput::new(time, self.input, e));
-                Ok(SourcePoll::Interrupt { time, interrupt })
-            }
-            SourcePoll::Pending => Ok(SourcePoll::Pending),
+                } => {
+                    let state = ErasedInputState::new(self.input, state);
+                    Ok(SourcePoll::Ready {
+                        state,
+                        next_event_at,
+                    })
+                }
+                SourcePoll::Interrupt { time, interrupt } => {
+                    let interrupt = match self.resolve_interrupts(time, interrupt) {
+                        Some(i) => i,
+                        None => continue,
+                    };
+                    Ok(SourcePoll::Interrupt { time, interrupt })
+                }
+                SourcePoll::Pending => Ok(SourcePoll::Pending),
+            };
         }
     }
 
@@ -67,22 +107,27 @@ where
         time: Self::Time,
         cx: SourceContext,
     ) -> TrySourcePoll<Self::Time, Self::Event, Self::State> {
-        match self.source.poll_forget(time, cx)? {
-            SourcePoll::Ready {
-                state,
-                next_event_at,
-            } => {
-                let state = ErasedInputState::new(self.input, state);
-                Ok(SourcePoll::Ready {
+        loop {
+            break match self.source.poll_forget(time, cx.clone())? {
+                SourcePoll::Ready {
                     state,
                     next_event_at,
-                })
-            }
-            SourcePoll::Interrupt { time, interrupt } => {
-                let interrupt = interrupt.map_event(|e| BoxedInput::new(time, self.input, e));
-                Ok(SourcePoll::Interrupt { time, interrupt })
-            }
-            SourcePoll::Pending => Ok(SourcePoll::Pending),
+                } => {
+                    let state = ErasedInputState::new(self.input, state);
+                    Ok(SourcePoll::Ready {
+                        state,
+                        next_event_at,
+                    })
+                }
+                SourcePoll::Interrupt { time, interrupt } => {
+                    let interrupt = match self.resolve_interrupts(time, interrupt) {
+                        Some(i) => i,
+                        None => continue,
+                    };
+                    Ok(SourcePoll::Interrupt { time, interrupt })
+                }
+                SourcePoll::Pending => Ok(SourcePoll::Pending),
+            };
         }
     }
 
@@ -91,19 +136,24 @@ where
         time: Self::Time,
         interrupt_waker: std::task::Waker,
     ) -> TrySourcePoll<Self::Time, Self::Event, ()> {
-        match self.source.poll_events(time, interrupt_waker)? {
-            SourcePoll::Ready {
-                state,
-                next_event_at,
-            } => Ok(SourcePoll::Ready {
-                state,
-                next_event_at,
-            }),
-            SourcePoll::Interrupt { time, interrupt } => {
-                let interrupt = interrupt.map_event(|e| BoxedInput::new(time, self.input, e));
-                Ok(SourcePoll::Interrupt { time, interrupt })
-            }
-            SourcePoll::Pending => Ok(SourcePoll::Pending),
+        loop {
+            break match self.source.poll_events(time, interrupt_waker.clone())? {
+                SourcePoll::Ready {
+                    state,
+                    next_event_at,
+                } => Ok(SourcePoll::Ready {
+                    state,
+                    next_event_at,
+                }),
+                SourcePoll::Interrupt { time, interrupt } => {
+                    let interrupt = match self.resolve_interrupts(time, interrupt) {
+                        Some(i) => i,
+                        None => continue,
+                    };
+                    Ok(SourcePoll::Interrupt { time, interrupt })
+                }
+                SourcePoll::Pending => Ok(SourcePoll::Pending),
+            };
         }
     }
 

@@ -1,4 +1,7 @@
-use std::collections::{BTreeSet, HashSet};
+use std::{
+    collections::{BTreeSet, HashSet},
+    num::NonZeroUsize,
+};
 
 use hashbrown::HashMap;
 
@@ -24,17 +27,24 @@ pub struct TransposeBuilder<T: Transposer + 'static> {
     input_sources: HashSet<ErasedInputSource<T>>,
     start_time: T::Time,
     rng_seed: [u8; 32],
+    max_channels: NonZeroUsize,
 }
 
 impl<T: Transposer + Clone + 'static> TransposeBuilder<T> {
     /// Create a new builder
-    pub fn new(transposer: T, start_time: T::Time, rng_seed: [u8; 32]) -> Self {
+    pub fn new(
+        transposer: T,
+        start_time: T::Time,
+        rng_seed: [u8; 32],
+        max_channels: NonZeroUsize,
+    ) -> Self {
         Self {
             transposer,
             pre_init_step: PreInitStep::new(),
             input_sources: HashSet::new(),
             start_time,
             rng_seed,
+            max_channels,
         }
     }
 
@@ -51,9 +61,17 @@ impl<T: Transposer + Clone + 'static> TransposeBuilder<T> {
         if self.input_sources.contains(&*erased_input) {
             return Err((input, source));
         }
+
         self.pre_init_step.add_input(input);
-        self.input_sources
-            .insert(ErasedInputSource::new(input, source));
+        if source.max_channel() < self.max_channels {
+            todo!()
+            // this should multiplex the source up to the desired max_channels value.
+            // self.input_sources
+            //     .insert()
+        } else {
+            self.input_sources
+                .insert(ErasedInputSource::new(input, source));
+        }
 
         Ok(self)
     }
@@ -66,6 +84,7 @@ impl<T: Transposer + Clone + 'static> TransposeBuilder<T> {
             start_time,
             rng_seed,
             input_sources,
+            max_channels: _,
         } = self;
 
         let steps =

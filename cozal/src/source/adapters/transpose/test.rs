@@ -1,4 +1,4 @@
-use std::{task::Waker, time::Duration};
+use std::{num::NonZeroUsize, task::Waker, time::Duration};
 
 use crate::{
     source::{traits::SourceContext, Source, SourcePoll},
@@ -68,6 +68,7 @@ fn transpose_no_inputs_no_events() {
         },
         Duration::ZERO,
         [69; 32],
+        NonZeroUsize::new(1).unwrap(),
     )
     .build()
     .unwrap();
@@ -151,6 +152,7 @@ fn transpose_no_inputs_with_events() {
         },
         Duration::ZERO,
         [69; 32],
+        NonZeroUsize::new(1).unwrap(),
     )
     .build()
     .unwrap();
