@@ -27,7 +27,7 @@ mod test;
 
 pub use builder::TransposeBuilder;
 
-use crate::source::source_poll::{Interrupt, TrySourcePoll};
+use crate::source::source_poll::{Interrupt, SourcePollErr, TrySourcePoll};
 use crate::source::traits::SourceContext;
 use crate::source::{Source, SourcePoll};
 use crate::transposer::input_erasure::HasErasedInputExt;
@@ -35,6 +35,25 @@ use crate::transposer::step::{BoxedInput, Interpolation, StepPoll};
 use crate::transposer::Transposer;
 
 pub struct Transpose<T: Transposer + 'static> {
+    // most of the fields
+    main: TransposeMain<T>,
+
+    // input_channel_statuses: InputChannelStatuses<T>,
+    wakers: TransposeWakerObserver,
+}
+
+struct TransposeLocked<'a, T: Transposer + 'static> {
+    // most of the fields
+    main: &'a mut TransposeMain<T>,
+
+    // a reference to the already locked observer
+    outer_wakers: &'a TransposeWakerObserver,
+
+    // the inner state of the waker
+    wakers: InnerGuard,
+}
+
+struct TransposeMain<T: Transposer + 'static> {
     // The sources we are transposing.
     input_sources: ErasedInputSourceCollection<T, InputSourceMetaData<T>>,
 
@@ -46,69 +65,33 @@ pub struct Transpose<T: Transposer + 'static> {
 
     // uuid -> (forget, interpolation)
     interpolations: HashMap<u64, (bool, Pin<Box<Interpolation<T, ArcTK>>>)>,
+
+    // the next uuid to assign to an interpolation
     next_interpolation_uuid: u64,
 
-    wavefront_time: T::Time,
-    advance_time: T::Time,
-
+    // which input channel reservations are reserved (used for determining which new ones to reserve)
     channel_reservations: InputChannelReservations,
 
-    // input_channel_statuses: InputChannelStatuses<T>,
-    wakers: TransposeWakerObserver,
+    // the max of all time values ever passed to any of the poll variants.
+    wavefront_time: Option<T::Time>,
 
+    // the latest time we have had advance called to.
+    advance_time: Option<T::Time>,
+
+    // if advance_final has ever been called.
+    advance_final: bool,
+
+    // if we have ever returned the Complete interrupt (or if we just decided to emit it and needs_signal was just set)
     complete: bool,
-    last_finalize: T::Time,
+
+    // the latest value of finalize we have emitted via interrupts (or if we just decided to increase and emit it and needs_signal was just set)
+    last_finalize: Option<T::Time>,
+
+    // whether we still need to actually emit interrupts for complete or last_finalize
+    needs_signal: bool,
 }
 
-struct TransposeLocked<'a, T: Transposer + 'static> {
-    // The sources we are transposing.
-    input_sources: &'a mut ErasedInputSourceCollection<T, InputSourceMetaData<T>>,
-
-    // the working steps
-    steps: &'a mut StepList<T>,
-
-    // the inputs not yet consumed by the steps
-    input_buffer: &'a mut BTreeSet<BoxedInput<'static, T, ArcTK>>,
-
-    interpolations: &'a mut HashMap<u64, (bool, Pin<Box<Interpolation<T, ArcTK>>>)>,
-    next_interpolation_uuid: &'a mut u64,
-
-    wavefront_time: &'a mut T::Time,
-    advance_time: &'a mut T::Time,
-
-    channel_reservations: &'a mut InputChannelReservations,
-
-    // input_channel_statuses: InputChannelStatuses<T>,
-    wakers: InnerGuard,
-
-    // trying to lock this will always deadlock
-    outer_wakers: &'a TransposeWakerObserver,
-
-    complete: &'a mut bool,
-    last_finalize: &'a mut T::Time,
-}
-
-impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
-    fn from_transpose(transpose: &mut Transpose<T>) -> TransposeLocked<'_, T> {
-        let wakers = transpose.wakers.lock();
-        let outer_wakers = &transpose.wakers;
-
-        TransposeLocked {
-            input_sources: &mut transpose.input_sources,
-            steps: &mut transpose.steps,
-            input_buffer: &mut transpose.input_buffer,
-            interpolations: &mut transpose.interpolations,
-            next_interpolation_uuid: &mut transpose.next_interpolation_uuid,
-            wavefront_time: &mut transpose.wavefront_time,
-            advance_time: &mut transpose.advance_time,
-            channel_reservations: &mut transpose.channel_reservations,
-            wakers,
-            outer_wakers,
-            complete: &mut transpose.complete,
-            last_finalize: &mut transpose.last_finalize,
-        }
-    }
-
+impl<T: Transposer + Clone + 'static> TransposeMain<T> {
     #[cfg(debug_assertions)]
     fn assert_at_rest_structure(&self) {
         let last_step = self.steps.get_last_step();
@@ -127,14 +110,86 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
         }
     }
 
+    fn update_complete_and_finalize_time(&mut self) {
+        let earliest_possible_interrupt = self
+            .input_sources
+            .earliest_possible_incoming_interrupt_time();
+        let earliest_possible_output_event = self.steps.earliest_possible_event_time();
+
+        let finalize_time = match (earliest_possible_interrupt, earliest_possible_output_event) {
+            (None, None) => {
+                if !self.complete {
+                    self.complete = true;
+                    self.needs_signal = true;
+
+                    if let Some(t) = self.advance_time {
+                        self.input_sources.advance_all_inputs(t);
+                    } else {
+                        self.input_sources.advance_final_all_inputs();
+                    }
+                }
+                return;
+            }
+            (None, Some(t)) => Some(t),
+            (Some(Some(t)), None) => Some(t),
+            (Some(None), Some(t)) => Some(t),
+            (Some(None), None) => None,
+            (Some(Some(t1)), Some(t2)) => Some(t1.min(t2)),
+        };
+
+        if let Some(finalize_time) = finalize_time {
+            if self.last_finalize < Some(finalize_time) {
+                self.last_finalize = Some(finalize_time);
+                self.needs_signal = true;
+
+                if self.advance_final {
+                    self.input_sources.advance_final_all_inputs();
+                } else if let Some(advance_time) = self.advance_time {
+                    self.input_sources.advance_all_inputs(advance_time);
+                }
+            }
+        }
+    }
+
+    fn calculate_next_scheduled_time(&self) -> Option<T::Time> {
+        let last_step = self.steps.get_last_step();
+        let last_step_time = if last_step.step.is_saturated() {
+            None
+        } else {
+            Some(last_step.step.get_time())
+        };
+        self.input_sources
+            .iter()
+            .filter_map(|(_, m)| m.next_scheduled_time())
+            .chain(last_step_time)
+            .min()
+    }
+}
+
+impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
+    fn from_transpose(transpose: &mut Transpose<T>) -> TransposeLocked<'_, T> {
+        let wakers = transpose.wakers.lock();
+        let outer_wakers = &transpose.wakers;
+
+        TransposeLocked {
+            main: &mut transpose.main,
+            wakers,
+            outer_wakers,
+        }
+    }
+
     // ensure the last step structure is valid.
     // - last step is only saturated if there are no future input events or scheduled events
     // - the wakers step item points at the top step.
     fn rollback_step_cleanup(&mut self) {
-        let last_step = self.steps.get_last_step();
+        let last_step = self.main.steps.get_last_step();
         if last_step.step.is_saturated() {
-            if let Some(next_step) = last_step.step.next_unsaturated(self.input_buffer).unwrap() {
-                self.steps.push_step(next_step);
+            if let Some(next_step) = last_step
+                .step
+                .next_unsaturated(&mut self.main.input_buffer)
+                .unwrap()
+            {
+                self.main.steps.push_step(next_step);
                 self.wakers.step_item = None;
             } else {
                 self.wakers.step_item = None;
@@ -149,18 +204,7 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
         }
     }
 
-    // ensure the interpolation structure is valid.
-    // - no interpolations before the last saturated step.
-    // - no waker channel associations are dangling
-    // - input sources have their channels released
-    // - no channel reservations are dangling
-    fn rollback_interpolation_cleanup(&mut self, time: T::Time) {
-        let deleted_interpolations = self
-            .interpolations
-            .extract_if(|_, (_, i)| i.get_time() >= time)
-            .map(|(uuid, _)| uuid)
-            .collect::<HashSet<_>>();
-
+    fn clean_up_deleted_interpolations(&mut self, deleted_interpolations: HashSet<u64>) {
         let input_channels_to_release = self
             .wakers
             .channels
@@ -178,13 +222,55 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
             });
 
         for (input_hash, input_channel) in input_channels_to_release {
-            self.input_sources
+            self.main
+                .input_sources
                 .get_input_by_hash(input_hash)
                 .unwrap()
                 .release_channel(input_channel);
-            self.channel_reservations
+            self.main
+                .channel_reservations
                 .clear_channel(input_hash, input_channel);
         }
+    }
+
+    fn remove_interpolations_before_advanced(&mut self) {
+        let deleted_interpolations = if self.main.advance_final {
+            self.main
+                .interpolations
+                .drain()
+                .map(|(uuid, _)| uuid)
+                .collect()
+        } else if let Some(advanced_time) = self.main.advance_time {
+            self.main
+                .interpolations
+                .extract_if(|_, (_, i)| i.get_time() < advanced_time)
+                .map(|(uuid, _)| uuid)
+                .collect()
+        } else {
+            return;
+        };
+
+        self.clean_up_deleted_interpolations(deleted_interpolations);
+    }
+
+    // ensure the interpolation structure is valid.
+    // - no interpolations before the last saturated step.
+    // - no waker channel associations are dangling
+    // - input sources have their channels released
+    // - no channel reservations are dangling
+    fn rollback_interpolation_cleanup(&mut self, time: T::Time) {
+        let deleted_interpolations = self
+            .main
+            .interpolations
+            .extract_if(|_, (_, i)| i.get_time() >= time)
+            .map(|(uuid, _)| uuid)
+            .collect();
+
+        self.clean_up_deleted_interpolations(deleted_interpolations);
+    }
+
+    fn remove_old_unneeded_steps(&mut self) {
+        // todo!()
     }
 
     // this does not emit finalizes.
@@ -198,16 +284,17 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
     ) -> Option<(T::Time, Interrupt<T::OutputEvent>)> {
         let result = match interrupt {
             Interrupt::Event(e) | Interrupt::FinalizedEvent(e) => {
-                let step_len_before = self.steps.len();
+                let step_len_before = self.main.steps.len();
 
                 // if the event inserts into the step list, revert the step list so we can insert it.
                 let inputs = self
+                    .main
                     .steps
                     .delete_at_or_after(time)
                     .into_iter()
                     .chain(Some(e));
-                self.input_buffer.extend(inputs);
-                let steps_removed = self.steps.len() < step_len_before;
+                self.main.input_buffer.extend(inputs);
+                let steps_removed = self.main.steps.len() < step_len_before;
                 if steps_removed {
                     // clean up state
                     self.rollback_step_cleanup();
@@ -219,28 +306,32 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
             }
             Interrupt::Rollback => {
                 // delete input buffer items
-                self.input_buffer
+                self.main
+                    .input_buffer
                     .retain(|i| i.get_input_hash() != input_hash);
 
                 // delete steps, pushing the inputs back into the input buffer if they are not from
                 // the input source that caused the rollback.
                 let inputs = self
+                    .main
                     .steps
                     .delete_at_or_after(time)
                     .into_iter()
                     .filter(|i| i.get_input_hash() != input_hash);
-                self.input_buffer.extend(inputs);
+                self.main.input_buffer.extend(inputs);
 
                 // clean up state
                 self.rollback_step_cleanup();
                 self.rollback_interpolation_cleanup(time);
                 Some((time, Interrupt::Rollback))
             }
+            // the finalization doesn't need to be processed in this part because the input_sources records
+            // the finalize times, which we read after the match.
             _ => None,
         };
 
-        self.input_sources
-            .handle_advance_and_finalize(*self.advance_time);
+        self.main.update_complete_and_finalize_time();
+        self.remove_old_unneeded_steps();
 
         result
     }
@@ -257,10 +348,12 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
 
         // if the wavefront time has moved forward, mark all input_sources which
         // previously returned Ready(t) where t < new_wavefront as ready to be polled again.
-        *self.wavefront_time = poll_time.max(*self.wavefront_time);
-        for (source_hash, _, metadata) in self.input_sources.iter_with_hashes() {
+        self.main.wavefront_time = Some(poll_time).max(self.main.wavefront_time);
+
+        let wavefront_time = self.main.wavefront_time.unwrap();
+        for (source_hash, _, metadata) in self.main.input_sources.iter_with_hashes() {
             if let Some(t) = metadata.next_scheduled_time() {
-                if t < *self.wavefront_time {
+                if t < wavefront_time {
                     if let Some(pos) = self
                         .wakers
                         .state_interrupt_pending
@@ -297,6 +390,7 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
             self.wakers.channels.entry(cx.channel)
         {
             if let hashbrown::hash_map::Entry::Occupied(interpolation_entry) = self
+                .main
                 .interpolations
                 .entry(channel_entry.get().interpolation_uuid)
             {
@@ -312,7 +406,8 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
                             input_hash,
                             input_channel,
                         } => {
-                            self.channel_reservations
+                            self.main
+                                .channel_reservations
                                 .clear_channel(input_hash, input_channel);
                         }
                         _ => {}
@@ -324,41 +419,6 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
         }
     }
 
-    fn calculate_next_scheduled_time(&self) -> Option<T::Time> {
-        let last_step = self.steps.get_last_step();
-        let last_step_time = if last_step.step.is_saturated() {
-            None
-        } else {
-            Some(last_step.step.get_time())
-        };
-        self.input_sources
-            .iter()
-            .filter_map(|(_, m)| m.next_scheduled_time())
-            .chain(last_step_time)
-            .min()
-    }
-
-    /// None here means there will never be an event ever again.
-    /// Some(None) means we have yet to finalize anything. sort of the opposite.
-    #[allow(dead_code)]
-    fn calculate_finalize_time(&self) -> Option<Option<T::Time>> {
-        if *self.complete {
-            return None;
-        }
-        let source_finalize_times = self
-            .input_sources
-            .iter()
-            .filter(|(_, m)| !m.complete())
-            .map(|(_, m)| m.finalized_time());
-        let step_saturating_time = self.steps.get_first_possible_event_emit_time().map(Some);
-        let input_buffer_first_time = self.input_buffer.first().map(|i| i.get_time()).map(Some);
-
-        source_finalize_times
-            .chain(step_saturating_time)
-            .chain(input_buffer_first_time)
-            .min()
-    }
-
     fn poll_inner(
         &mut self,
         poll_time: T::Time,
@@ -366,17 +426,44 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
         events_only: bool,
         forget: bool,
     ) -> TrySourcePoll<T::Time, T::OutputEvent, Option<T::OutputState>> {
+        if self.main.advance_final || self.main.advance_time > Some(poll_time) {
+            return Err(SourcePollErr::PollAfterAdvance);
+        }
+
         self.handle_new_cx(poll_time, &cx, events_only, forget);
+
+        // handle_new_cx ensures that this is Some.
+        let wavefront_time = self.main.wavefront_time.unwrap();
+
         // check inputs for new interrupts
         loop {
+            if self.main.needs_signal {
+                self.main.needs_signal = false;
+                if self.main.complete {
+                    return Ok(SourcePoll::Interrupt {
+                        time: poll_time,
+                        interrupt: Interrupt::Complete,
+                    });
+                } else {
+                    return Ok(SourcePoll::Interrupt {
+                        time: self.main.last_finalize.unwrap(),
+                        interrupt: Interrupt::Finalize,
+                    });
+                }
+            }
+
             #[cfg(debug_assertions)]
-            self.assert_at_rest_structure();
+            self.main.assert_at_rest_structure();
 
             // first resolve all the state interrupt woken inputs
             if let Some(input_hash) = self.wakers.state_interrupt_woken.pop_front() {
                 let interrupt_waker = self.outer_wakers.get_source_interrupt_waker(input_hash);
-                let mut input_source = self.input_sources.get_input_by_hash(input_hash).unwrap();
-                match input_source.poll_events(*self.wavefront_time, interrupt_waker)? {
+                let mut input_source = self
+                    .main
+                    .input_sources
+                    .get_input_by_hash(input_hash)
+                    .unwrap();
+                match input_source.poll_events(wavefront_time, interrupt_waker)? {
                     SourcePoll::Ready { .. } => continue,
                     SourcePoll::Interrupt { time, interrupt } => {
                         match self.handle_interrupt(input_hash, time, interrupt) {
@@ -402,10 +489,8 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
 
             // start a step saturation if we need to.
             if self.wakers.step_item.is_none() {
-                if let Some((step_a, step_b)) = self.steps.get_last_two_steps() {
-                    if step_b.step.is_unsaturated()
-                        && step_b.step.get_time() <= *self.wavefront_time
-                    {
+                if let Some((step_a, step_b)) = self.main.steps.get_last_two_steps() {
+                    if step_b.step.is_unsaturated() && step_b.step.get_time() <= wavefront_time {
                         step_b.step.start_saturate_clone(&step_a.step).unwrap();
                         self.wakers.step_item = Some(StepItem {
                             step_uuid: step_b.uuid,
@@ -426,8 +511,13 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
                     let step_source_waker = self
                         .outer_wakers
                         .get_source_step_waker(input_hash, step_item.step_uuid);
-                    let mut source = self.input_sources.get_input_by_hash(input_hash).unwrap();
+                    let mut source = self
+                        .main
+                        .input_sources
+                        .get_input_by_hash(input_hash)
+                        .unwrap();
                     let step_wrapper = self
+                        .main
                         .steps
                         .get_step_wrapper_mut_by_uuid(step_item.step_uuid)
                         .unwrap();
@@ -468,6 +558,7 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
                 }
 
                 let step_wrapper = self
+                    .main
                     .steps
                     .get_step_wrapper_mut_by_uuid(step_item.step_uuid)
                     .unwrap();
@@ -476,19 +567,27 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
                     StepPoll::Ready => {
                         if let Some(next_step) = step_wrapper
                             .step
-                            .next_unsaturated(self.input_buffer)
+                            .next_unsaturated(&mut self.main.input_buffer)
                             .unwrap()
                         {
-                            self.steps.push_step(next_step);
+                            self.main.steps.push_step(next_step);
                         }
                         self.wakers.step_item = None;
                         continue;
                     }
                     StepPoll::Emitted(e) => {
-                        break Ok(SourcePoll::Interrupt {
-                            time: step_wrapper.step.get_time(),
-                            interrupt: Interrupt::Event(e),
-                        })
+                        let time = step_wrapper.step.get_time();
+                        if self.main.last_finalize >= Some(time) {
+                            break Ok(SourcePoll::Interrupt {
+                                time: step_wrapper.step.get_time(),
+                                interrupt: Interrupt::FinalizedEvent(e),
+                            });
+                        } else {
+                            break Ok(SourcePoll::Interrupt {
+                                time: step_wrapper.step.get_time(),
+                                interrupt: Interrupt::Event(e),
+                            });
+                        }
                     }
                     StepPoll::Pending => break Ok(SourcePoll::Pending),
                     StepPoll::StateRequested(input) => {
@@ -505,7 +604,7 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
             if events_only {
                 break Ok(SourcePoll::Ready {
                     state: None,
-                    next_event_at: self.calculate_next_scheduled_time(),
+                    next_event_at: self.main.calculate_next_scheduled_time(),
                 });
             }
 
@@ -514,11 +613,14 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
                     occupied_entry.into_mut()
                 }
                 std::collections::hash_map::Entry::Vacant(vacant_entry) => {
-                    let interpolation_uuid = *self.next_interpolation_uuid;
-                    *self.next_interpolation_uuid += 1;
-                    self.interpolations.insert(
+                    let interpolation_uuid = self.main.next_interpolation_uuid;
+                    self.main.next_interpolation_uuid += 1;
+                    self.main.interpolations.insert(
                         interpolation_uuid,
-                        (forget, Box::pin(self.steps.create_interpolation(poll_time))),
+                        (
+                            forget,
+                            Box::pin(self.main.steps.create_interpolation(poll_time)),
+                        ),
                     );
                     vacant_entry.insert(ChannelItem {
                         interpolation_uuid,
@@ -538,10 +640,15 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
                 let source_channel_waker = self
                     .outer_wakers
                     .get_source_channel_waker(input_hash, channel_item.interpolation_uuid);
-                let mut source = self.input_sources.get_input_by_hash(input_hash).unwrap();
+                let mut source = self
+                    .main
+                    .input_sources
+                    .get_input_by_hash(input_hash)
+                    .unwrap();
                 let source_interrupt_waker =
                     self.outer_wakers.get_source_interrupt_waker(input_hash);
                 let (_, interpolation) = self
+                    .main
                     .interpolations
                     .get_mut(&channel_item.interpolation_uuid)
                     .unwrap();
@@ -569,7 +676,8 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
                             Ok(()) => {}
                             Err(_) => panic!(),
                         }
-                        self.channel_reservations
+                        self.main
+                            .channel_reservations
                             .clear_channel(input_hash, input_channel);
                         channel_item.input_state_status = Status::None;
                         channel_item.interpolation_woken = true;
@@ -594,6 +702,7 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
             }
 
             let mut interpolation = self
+                .main
                 .interpolations
                 .get_mut(&channel_item.interpolation_uuid)
                 .unwrap()
@@ -607,11 +716,13 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
                 .poll(&mut Context::from_waker(&waker))
             {
                 Poll::Ready(state) => {
-                    self.interpolations.remove(&channel_item.interpolation_uuid);
+                    self.main
+                        .interpolations
+                        .remove(&channel_item.interpolation_uuid);
                     self.wakers.channels.remove(&cx.channel);
                     break Ok(SourcePoll::Ready {
                         state: Some(state),
-                        next_event_at: self.calculate_next_scheduled_time(),
+                        next_event_at: self.main.calculate_next_scheduled_time(),
                     });
                 }
                 Poll::Pending => {
@@ -619,6 +730,7 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
                         Some(input) => {
                             let input_hash = input.get_hash();
                             let entry = self
+                                .main
                                 .channel_reservations
                                 .get_first_available_channel(input_hash);
                             let input_channel = entry.get().input_channel;
@@ -685,6 +797,7 @@ impl<T: Transposer + Clone + 'static> Source for Transpose<T> {
         let mut locked = TransposeLocked::from_transpose(self);
         if let Some(channel_item) = locked.wakers.channels.remove(&channel) {
             locked
+                .main
                 .interpolations
                 .remove(&channel_item.interpolation_uuid);
             if let Status::Ready {
@@ -697,9 +810,11 @@ impl<T: Transposer + Clone + 'static> Source for Transpose<T> {
             } = channel_item.input_state_status
             {
                 locked
+                    .main
                     .channel_reservations
                     .clear_channel(input_hash, input_channel);
                 locked
+                    .main
                     .input_sources
                     .get_input_by_hash(input_hash)
                     .unwrap()
@@ -709,17 +824,24 @@ impl<T: Transposer + Clone + 'static> Source for Transpose<T> {
     }
 
     fn advance(&mut self, time: Self::Time) {
-        self.advance_time = self.advance_time.max(time);
-        self.input_sources
-            .handle_advance_and_finalize(self.advance_time);
+        let mut locked = TransposeLocked::from_transpose(self);
+        locked.main.advance_time = locked.main.advance_time.max(Some(time));
+        locked.main.update_complete_and_finalize_time();
+        locked.remove_interpolations_before_advanced();
+        locked.remove_old_unneeded_steps();
     }
 
     fn advance_final(&mut self) {
-        todo!();
+        let mut locked = TransposeLocked::from_transpose(self);
+        locked.main.advance_final = true;
+        locked.main.update_complete_and_finalize_time();
+        locked.remove_interpolations_before_advanced();
+        locked.remove_old_unneeded_steps();
     }
 
     fn max_channel(&self) -> std::num::NonZeroUsize {
-        self.input_sources
+        self.main
+            .input_sources
             .iter()
             .map(|(s, _)| s.max_channel())
             .min()

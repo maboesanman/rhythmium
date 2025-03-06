@@ -186,18 +186,29 @@ impl<T: Transposer + 'static> Source for ErasedInputSourceGuard<'_, T, InputSour
 }
 
 impl<T: Transposer + 'static> ErasedInputSourceCollection<T, InputSourceMetaData<T>> {
-    /// call advance on the input sources as needed based on the advance time and the finalize time of other steps.
-    pub fn handle_advance_and_finalize(&mut self, advance_time: T::Time) {
-        if let Some(Some(time_to_advance_to)) = self
-            .iter()
+    /// The earliest possible time, if it exists.
+    ///
+    /// None means there cannot ever be another incoming interrupt.
+    /// Some(None) means an interrupt may come from any value of T::Time.
+    /// Some(Some(t)) means there will never be an incoming interrupt before t.
+    pub fn earliest_possible_incoming_interrupt_time(&self) -> Option<Option<T::Time>> {
+        self.iter()
             .filter(|(_, m)| !m.complete)
             .map(|(_, m)| m.finalized_time)
-            .chain(Some(Some(advance_time)))
             .min()
-        {
-            for mut item in self.iter_mut() {
-                item.advance(time_to_advance_to);
-            }
+    }
+
+    /// Advance all input sources to the provided time
+    pub fn advance_all_inputs(&mut self, advance_time: T::Time) {
+        for mut item in self.iter_mut() {
+            item.advance(advance_time);
+        }
+    }
+
+    /// Advance final all input sources
+    pub fn advance_final_all_inputs(&mut self) {
+        for mut item in self.iter_mut() {
+            item.advance_final();
         }
     }
 }

@@ -164,7 +164,31 @@ fn transpose_no_inputs_with_events() {
     };
 
     for _ in 0..100 {
-        let poll = transpose.poll(Duration::from_secs_f32(70.0), context.clone());
+        let poll = transpose
+            .poll(Duration::from_secs_f32(70.0), context.clone())
+            .unwrap();
         println!("{:?}", poll);
     }
+
+    let poll = transpose
+        .poll(Duration::from_secs_f32(14.5), context.clone())
+        .unwrap();
+    println!("{:?}", poll);
+    let poll = transpose
+        .poll(Duration::from_secs_f32(14.5), context.clone())
+        .unwrap();
+    println!("{:?}", poll);
+
+    transpose.advance(Duration::from_secs_f32(30.0));
+    let poll = transpose
+        .poll(Duration::from_secs(35), context.clone())
+        .unwrap();
+    println!("{:?}", poll);
+
+    transpose.advance(Duration::from_secs_f32(30.0));
+    println!("{:?}", transpose.main.advance_time);
+    let poll = transpose
+        .poll(Duration::from_secs(25), context.clone())
+        .unwrap_err();
+    println!("{:?}", poll);
 }

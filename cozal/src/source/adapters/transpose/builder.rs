@@ -18,7 +18,7 @@ use super::{
     input_channel_reservations::InputChannelReservations,
     steps::StepList,
     transpose_interrupt_waker::TransposeWakerObserver,
-    Transpose,
+    Transpose, TransposeMain,
 };
 
 pub struct TransposeBuilder<T: Transposer + 'static> {
@@ -70,7 +70,7 @@ impl<T: Transposer + Clone + 'static> TransposeBuilder<T> {
             //     .insert()
         } else {
             self.input_sources
-                .insert(ErasedInputSource::new(input, source));
+                .insert(ErasedInputSource::new(input, source, self.start_time));
         }
 
         Ok(self)
@@ -91,17 +91,21 @@ impl<T: Transposer + Clone + 'static> TransposeBuilder<T> {
             StepList::new(transposer, pre_init_step, start_time, rng_seed).map_err(|_| ())?;
 
         Ok(Transpose {
-            input_sources: ErasedInputSourceCollection::new(input_sources)?,
-            steps,
-            input_buffer: BTreeSet::new(),
-            interpolations: HashMap::new(),
-            next_interpolation_uuid: 0,
-            wavefront_time: start_time,
-            advance_time: start_time,
-            channel_reservations: InputChannelReservations::new(),
+            main: TransposeMain {
+                input_sources: ErasedInputSourceCollection::new(input_sources)?,
+                steps,
+                input_buffer: BTreeSet::new(),
+                interpolations: HashMap::new(),
+                next_interpolation_uuid: 0,
+                wavefront_time: None,
+                advance_time: None,
+                channel_reservations: InputChannelReservations::new(),
+                advance_final: false,
+                complete: false,
+                last_finalize: None,
+                needs_signal: false,
+            },
             wakers: TransposeWakerObserver::new(),
-            complete: false,
-            last_finalize: start_time,
         })
     }
 }

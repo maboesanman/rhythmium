@@ -17,12 +17,13 @@ use crate::{
 use archery::ArcTK;
 use hashbrown::HashTable;
 
-struct ErasedInputSourceImpl<I, Src> {
+struct ErasedInputSourceImpl<I, Src: Source> {
     input: I,
     source: Src,
+    advanced: Option<Src::Time>,
 }
 
-impl<I: TransposerInput, Src> HasInput<I::Base> for ErasedInputSourceImpl<I, Src> {
+impl<I: TransposerInput, Src: Source> HasInput<I::Base> for ErasedInputSourceImpl<I, Src> {
     type Input = I;
 
     fn get_input(&self) -> &Self::Input {
@@ -162,11 +163,19 @@ where
     }
 
     fn advance(&mut self, time: Self::Time) {
-        self.source.advance(time)
+        if let Some(last_advance) = self.advanced {
+            if time > last_advance {
+                self.source.advance(time);
+                self.advanced = Some(time);
+            }
+        }
     }
 
     fn advance_final(&mut self) {
-        self.source.advance_final()
+        if self.advanced.is_some() {
+            self.source.advance_final();
+            self.advanced = None;
+        }
     }
 
     fn max_channel(&self) -> std::num::NonZeroUsize {
@@ -191,7 +200,7 @@ where
 pub struct ErasedInputSource<T: Transposer + 'static>(Box<dyn ErasedSourceTrait<T>>);
 
 impl<T: Transposer + 'static> ErasedInputSource<T> {
-    pub fn new<I, Src>(input: I, source: Src) -> Self
+    pub fn new<I, Src>(input: I, source: Src, initial_t: T::Time) -> Self
     where
         T: Clone,
         I: TransposerInput<Base = T>,
@@ -201,7 +210,11 @@ impl<T: Transposer + 'static> ErasedInputSource<T> {
                 State = I::InputState,
             > + 'static,
     {
-        let inner = ErasedInputSourceImpl { input, source };
+        let inner = ErasedInputSourceImpl {
+            input,
+            source,
+            advanced: Some(initial_t),
+        };
         let inner: Box<dyn ErasedSourceTrait<T>> = Box::new(inner);
         // let inner = UnsafeCell::new(inner);
         Self(inner)

@@ -73,25 +73,21 @@ impl<T: Transposer + Clone> StepList<T> {
         self.steps.get(i).unwrap().step.interpolate(time).unwrap()
     }
 
-    pub fn get_first_possible_event_emit_time(&self) -> Option<T::Time> {
-        let mut value = None;
-        for step_wrapper in self.steps.iter().rev() {
-            if step_wrapper.step.can_produce_events() {
-                break;
-            } else {
-                value = Some(step_wrapper.step.get_time())
-            }
-        }
-
-        value
-    }
-
     pub fn delete_at_or_after(
         &mut self,
         time: T::Time,
     ) -> impl '_ + IntoIterator<Item = BoxedInput<'static, T, ArcTK>> {
         let i = self.steps.partition_point(|s| s.step.get_time() < time);
         self.steps.drain(i..).flat_map(|s| s.step.drain_inputs())
+    }
+
+    pub fn earliest_possible_event_time(&self) -> Option<T::Time> {
+        let last_step = &self.get_last_step().step;
+        if last_step.can_produce_events() {
+            Some(last_step.get_time())
+        } else {
+            None
+        }
     }
 }
 
