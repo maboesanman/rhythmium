@@ -1,5 +1,4 @@
 use std::future::Future;
-use std::ops::Bound;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::Instant;
@@ -7,7 +6,6 @@ use std::time::Instant;
 use futures::Stream;
 
 use crate::source::source_poll::{LowerBound, UpperBound};
-use crate::source::SourcePoll;
 
 use super::super::source_poll::Interrupt;
 use super::super::Source;
@@ -28,12 +26,18 @@ impl<Src: Source<Time = Instant>, Fut: Future<Output = ()>> RealtimeInterruptStr
     }
 }
 
-impl<Src: Source<Time = Instant>, Fut: Future<Output = ()>> Stream for RealtimeInterruptStream<Src, Fut> {
+impl<Src: Source<Time = Instant>, Fut: Future<Output = ()>> Stream
+    for RealtimeInterruptStream<Src, Fut>
+{
     type Item = (Instant, Interrupt<Src::Event>);
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let now = Instant::now();
-        self.source.advance(LowerBound::exclusive(now), UpperBound::inclusive(now), cx.waker().clone());
+        self.source.advance(
+            LowerBound::exclusive(now),
+            UpperBound::inclusive(now),
+            cx.waker().clone(),
+        );
         todo!()
         // let this = self.get_mut();
         // let now = Instant::now();

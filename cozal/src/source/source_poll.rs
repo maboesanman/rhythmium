@@ -1,4 +1,4 @@
-use std::{ops::Bound, task::Poll};
+use std::task::Poll;
 
 #[derive(Debug)]
 pub enum SourcePoll<T, E, S> {
@@ -139,10 +139,14 @@ impl<T: PartialOrd> PartialOrd for LowerBound<T> {
             (SourceBound::Max, SourceBound::Max) => Some(Equal),
             (SourceBound::Min, _) | (_, SourceBound::Max) => Some(Less),
             (SourceBound::Max, _) | (_, SourceBound::Min) => Some(Greater),
-            (SourceBound::Inclusive(t1), SourceBound::Inclusive(t2)) |
-            (SourceBound::Exclusive(t1), SourceBound::Exclusive(t2)) => t1.partial_cmp(t2),
-            (SourceBound::Exclusive(t1), SourceBound::Inclusive(t2)) => Some(t1.partial_cmp(t2)?.then(Less)),
-            (SourceBound::Inclusive(t1), SourceBound::Exclusive(t2)) => Some(t1.partial_cmp(t2)?.then(Greater)),
+            (SourceBound::Inclusive(t1), SourceBound::Inclusive(t2))
+            | (SourceBound::Exclusive(t1), SourceBound::Exclusive(t2)) => t1.partial_cmp(t2),
+            (SourceBound::Exclusive(t1), SourceBound::Inclusive(t2)) => {
+                Some(t1.partial_cmp(t2)?.then(Less))
+            }
+            (SourceBound::Inclusive(t1), SourceBound::Exclusive(t2)) => {
+                Some(t1.partial_cmp(t2)?.then(Greater))
+            }
         }
     }
 }
@@ -156,8 +160,8 @@ impl<T: Ord> Ord for LowerBound<T> {
             (SourceBound::Max, SourceBound::Max) => Equal,
             (SourceBound::Min, _) | (_, SourceBound::Max) => Less,
             (SourceBound::Max, _) | (_, SourceBound::Min) => Greater,
-            (SourceBound::Inclusive(t1), SourceBound::Inclusive(t2)) |
-            (SourceBound::Exclusive(t1), SourceBound::Exclusive(t2)) => t1.cmp(t2),
+            (SourceBound::Inclusive(t1), SourceBound::Inclusive(t2))
+            | (SourceBound::Exclusive(t1), SourceBound::Exclusive(t2)) => t1.cmp(t2),
             (SourceBound::Exclusive(t1), SourceBound::Inclusive(t2)) => t1.cmp(t2).then(Less),
             (SourceBound::Inclusive(t1), SourceBound::Exclusive(t2)) => t1.cmp(t2).then(Greater),
         }
@@ -193,7 +197,6 @@ impl<T: Ord> LowerBound<T> {
     }
 }
 
-
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct UpperBound<T>(pub SourceBound<T>);
@@ -207,10 +210,14 @@ impl<T: PartialOrd> PartialOrd for UpperBound<T> {
             (SourceBound::Max, SourceBound::Max) => Some(Equal),
             (SourceBound::Min, _) | (_, SourceBound::Max) => Some(Less),
             (SourceBound::Max, _) | (_, SourceBound::Min) => Some(Greater),
-            (SourceBound::Inclusive(t1), SourceBound::Inclusive(t2)) |
-            (SourceBound::Exclusive(t1), SourceBound::Exclusive(t2)) => t1.partial_cmp(t2),
-            (SourceBound::Exclusive(t1), SourceBound::Inclusive(t2)) => Some(t1.partial_cmp(t2)?.then(Greater)),
-            (SourceBound::Inclusive(t1), SourceBound::Exclusive(t2)) => Some(t1.partial_cmp(t2)?.then(Less)),
+            (SourceBound::Inclusive(t1), SourceBound::Inclusive(t2))
+            | (SourceBound::Exclusive(t1), SourceBound::Exclusive(t2)) => t1.partial_cmp(t2),
+            (SourceBound::Exclusive(t1), SourceBound::Inclusive(t2)) => {
+                Some(t1.partial_cmp(t2)?.then(Greater))
+            }
+            (SourceBound::Inclusive(t1), SourceBound::Exclusive(t2)) => {
+                Some(t1.partial_cmp(t2)?.then(Less))
+            }
         }
     }
 }
@@ -224,14 +231,13 @@ impl<T: Ord> Ord for UpperBound<T> {
             (SourceBound::Max, SourceBound::Max) => Equal,
             (SourceBound::Min, _) | (_, SourceBound::Max) => Less,
             (SourceBound::Max, _) | (_, SourceBound::Min) => Greater,
-            (SourceBound::Inclusive(t1), SourceBound::Inclusive(t2)) |
-            (SourceBound::Exclusive(t1), SourceBound::Exclusive(t2)) => t1.cmp(t2),
+            (SourceBound::Inclusive(t1), SourceBound::Inclusive(t2))
+            | (SourceBound::Exclusive(t1), SourceBound::Exclusive(t2)) => t1.cmp(t2),
             (SourceBound::Exclusive(t1), SourceBound::Inclusive(t2)) => t1.cmp(t2).then(Greater),
             (SourceBound::Inclusive(t1), SourceBound::Exclusive(t2)) => t1.cmp(t2).then(Less),
         }
     }
 }
-
 
 impl<T> UpperBound<T> {
     pub fn min() -> Self {

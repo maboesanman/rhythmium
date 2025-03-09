@@ -1,12 +1,19 @@
-use std::{pin::Pin, task::{Poll, Waker}};
+use std::{
+    pin::Pin,
+    task::{Poll, Waker},
+};
 
 use archery::{ArcTK, SharedPointer, SharedPointerKind};
 
-use crate::transposer::{step::StepStatus, Transposer};
+use crate::transposer::Transposer;
 
-use super::{previous_step::PreviousStep, sub_step::{init_sub_step::InitSubStep, scheduled_sub_step::ScheduledSubStep}, wrapped_transposer::WrappedTransposer, FutureInputContainer, FutureInputContainerGuard, InterpolateErr, Interpolation, NextUnsaturatedErr, PollErr, PreInitStep, SaturateErr, Step};
-
-
+use super::{
+    previous_step::PreviousStep,
+    step::{InterpolateErr, NextUnsaturatedErr, PollErr, SaturateErr},
+    sub_step::{init_sub_step::InitSubStep, scheduled_sub_step::ScheduledSubStep},
+    wrapped_transposer::WrappedTransposer,
+    FutureInputContainer, FutureInputContainerGuard, Interpolation, PreInitStep, Step,
+};
 
 pub struct InitStep<T: Transposer + Clone, P: SharedPointerKind = ArcTK> {
     sub_step: Pin<Box<InitSubStep<T, P>>>,
@@ -17,24 +24,18 @@ pub struct InitStep<T: Transposer + Clone, P: SharedPointerKind = ArcTK> {
 
 #[allow(dead_code)]
 impl<T: Transposer + Clone, P: SharedPointerKind> InitStep<T, P> {
-
     /// Create new beginning step.
     ///
     /// This is the first step the transposer undergoes, whic his why it recieves the transposer as an argument, as
     /// opposed to the other steps which get it from the previous step.
-    pub fn new(
-        transposer: T,
-        pre_init_step: PreInitStep<T>,
-        rng_seed: [u8; 32],
-    ) -> Result<Self, T>
+    pub fn new(transposer: T, pre_init_step: PreInitStep<T>, rng_seed: [u8; 32]) -> Result<Self, T>
     where
         T: Clone,
     {
         let uuid_self = uuid::Uuid::new_v4();
 
         let transposer = pre_init_step.execute(transposer)?;
-        let init_sub_step =
-            InitSubStep::new(transposer, rng_seed);
+        let init_sub_step = InitSubStep::new(transposer, rng_seed);
 
         Ok(Self {
             sub_step: Box::pin(init_sub_step),
@@ -104,26 +105,20 @@ impl<T: Transposer + Clone, P: SharedPointerKind> InitStep<T, P> {
             _ => unreachable!(),
         };
 
-        Ok(Some(Step {
-            sequence_number: 1,
-            steps,
-            status: StepStatus::Unsaturated,
-            time,
-            shared_step_state: Step::<'a, T, P>::new_shared_step_state(),
-            event_count: 0,
-            can_produce_events: true,
-            #[cfg(debug_assertions)]
-            uuid_self: uuid::Uuid::new_v4(),
-            #[cfg(debug_assertions)]
-            uuid_prev: self.uuid_self,
-        }))
+        #[cfg(debug_assertions)]
+        return Ok(Some(Step::new(time, self.uuid_self, steps)));
+
+        #[cfg(not(debug_assertions))]
+        return Ok(Some(Step::new(time, steps)));
     }
 
     /// Create a new step that is ready to be saturated.
     ///
     /// This will only create a step from a scheduled event, and should be used if you know there
     /// isn't another input event in the future.
-    pub fn next_scheduled_unsaturated<'a>(&self) -> Result<Option<Step<'a, T, P>>, NextUnsaturatedErr>
+    pub fn next_scheduled_unsaturated<'a>(
+        &self,
+    ) -> Result<Option<Step<'a, T, P>>, NextUnsaturatedErr>
     where
         T: Clone,
     {
@@ -179,8 +174,9 @@ impl<T: Transposer + Clone, P: SharedPointerKind> InitStep<T, P> {
     }
 }
 
-impl<'a, T: Transposer + Clone + 'a, P: SharedPointerKind + 'a> PreviousStep<T, P> for InitStep<T, P> {
-
+impl<'a, T: Transposer + Clone + 'a, P: SharedPointerKind + 'a> PreviousStep<T, P>
+    for InitStep<T, P>
+{
     #[cfg(debug_assertions)]
     fn get_uuid(&self) -> uuid::Uuid {
         self.uuid_self

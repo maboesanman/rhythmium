@@ -42,12 +42,8 @@ impl<T: Transposer, P: SharedPointerKind> WrappedTransposer<T, P> {
     }
 
     /// create a wrapped transposer, and perform all T::default scheduled events.
-    pub async fn init(
-        &mut self,
-    ) {
-        let mut context = InitUpdateContext::new(
-            &mut self.metadata,
-        );
+    pub async fn init(&mut self) {
+        let mut context = InitUpdateContext::new(&mut self.metadata);
 
         self.transposer
             .init(InitContext::new_mut(&mut context))

@@ -1,19 +1,15 @@
 use std::{
     future::Future,
     pin::Pin,
-    ptr::NonNull,
     task::{Context, Poll, Waker},
 };
 
 use archery::{SharedPointer, SharedPointerKind};
 
 use crate::transposer::{
-    input_state_manager::InputStateManager,
-    step::{wrapped_transposer::WrappedTransposer, OutputEventManager, PollErr},
+    step::{step::PollErr, wrapped_transposer::WrappedTransposer},
     Transposer,
 };
-
-use super::{StartSaturateErr, SubStep};
 
 pub enum InitSubStep<T: Transposer + Clone, P: SharedPointerKind> {
     Saturating {
@@ -42,21 +38,18 @@ mod wrapped_handler {
 }
 
 impl<T: Transposer + Clone, P: SharedPointerKind> InitSubStep<T, P> {
-    pub fn new(
-        transposer: T,
-        rng_seed: [u8; 32],
-    ) -> Self {
+    pub fn new(transposer: T, rng_seed: [u8; 32]) -> Self {
         let wrapped_transposer = WrappedTransposer::new(transposer, rng_seed);
         InitSubStep::Saturating {
             future: wrapped_handler::handle(wrapped_transposer),
         }
     }
 
-    fn is_saturating(&self) -> bool {
+    pub fn is_saturating(&self) -> bool {
         matches!(self, InitSubStep::Saturating { .. })
     }
 
-    fn is_saturated(&self) -> bool {
+    pub fn is_saturated(&self) -> bool {
         matches!(self, InitSubStep::Saturated { .. })
     }
 
@@ -80,7 +73,7 @@ impl<T: Transposer + Clone, P: SharedPointerKind> InitSubStep<T, P> {
         Ok(Poll::Ready(()))
     }
 
-    fn get_finished_transposer(&self) -> Option<&SharedPointer<WrappedTransposer<T, P>, P>> {
+    pub fn get_finished_transposer(&self) -> Option<&SharedPointer<WrappedTransposer<T, P>, P>> {
         match self {
             InitSubStep::Saturated { wrapped_transposer } => Some(wrapped_transposer),
             _ => None,

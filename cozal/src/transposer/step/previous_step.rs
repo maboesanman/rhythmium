@@ -2,8 +2,7 @@ use archery::{SharedPointer, SharedPointerKind};
 
 use crate::transposer::Transposer;
 
-use super::{wrapped_transposer::WrappedTransposer, SaturateErr};
-
+use super::{step::SaturateErr, wrapped_transposer::WrappedTransposer};
 
 pub trait PreviousStep<T: Transposer, P: SharedPointerKind> {
     #[cfg(debug_assertions)]

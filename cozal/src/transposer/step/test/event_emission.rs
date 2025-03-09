@@ -1,13 +1,13 @@
 use core::pin::Pin;
 
-use super::super::{pre_init_step::PreInitStep, StepPoll};
+use super::super::pre_init_step::PreInitStep;
 use crate::transposer::step::init_step::InitStep;
+use crate::transposer::step::step::StepPoll;
 use crate::util::dummy_waker::DummyWaker;
 use archery::ArcTK;
 use rand::Rng;
 
 use crate::transposer::context::{HandleScheduleContext, InitContext, InterpolateContext};
-use crate::transposer::step::Step;
 use crate::transposer::Transposer;
 
 #[derive(Clone, Debug)]

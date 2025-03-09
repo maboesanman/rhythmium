@@ -14,7 +14,8 @@ use super::{BoxedSubStep, StartSaturateErr, SubStep, INPUT_SUB_STEP_SORT_PHASE};
 use crate::transposer::{
     input_erasure::{HasErasedInputExt, HasInput},
     input_state_manager::InputStateManager,
-    step::{wrapped_transposer::WrappedTransposer, OutputEventManager, PollErr},
+    output_event_manager::OutputEventManager,
+    step::{step::PollErr, wrapped_transposer::WrappedTransposer},
     Transposer, TransposerInput, TransposerInputEventHandler,
 };
 
@@ -53,6 +54,8 @@ where
 }
 
 mod wrapped_handler {
+    use crate::transposer::output_event_manager::OutputEventManager;
+
     use super::*;
 
     pub type WrappedHandlerFuture<T, P, I>

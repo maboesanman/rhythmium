@@ -12,7 +12,7 @@ use crate::transposer::{
     input_state_manager::InputStateManager, output_event_manager::OutputEventManager, Transposer,
 };
 
-use super::{wrapped_transposer::WrappedTransposer, PollErr};
+use super::{step::PollErr, wrapped_transposer::WrappedTransposer};
 
 pub mod boxed_input;
 pub mod init_sub_step;
