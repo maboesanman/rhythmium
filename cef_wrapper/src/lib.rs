@@ -12,7 +12,7 @@ pub mod cef_capi_sys {
 /// The manual bindings for the library loading functions for macos.
 #[cfg(target_os = "macos")]
 pub mod cef_wrapper_sys {
-    extern "C" {
+    unsafe extern "C" {
         pub fn cef_load_library(path: *const std::ffi::c_char) -> std::ffi::c_int;
         pub fn cef_unload_library() -> std::ffi::c_int;
     }

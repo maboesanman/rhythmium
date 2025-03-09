@@ -31,10 +31,14 @@ pub unsafe trait HasErasedInput<T: Transposer> {
     /// Get the raw pointer to the input.
     fn get_raw_input(&self) -> NonNull<()>;
 
+    /// Clone this Input, and type erase the clone.
     fn clone_input(&self) -> Box<ErasedInput<T>>;
 }
 
+/// An extension trait for types erased types with inputs.
 pub trait HasErasedInputExt<T: Transposer>: HasErasedInput<T> {
+
+    /// get the hash directly (with a default hasher).
     fn get_hash(&self) -> u64 {
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         self.get_input_type_value_hash(&mut hasher);

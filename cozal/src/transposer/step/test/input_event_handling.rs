@@ -5,7 +5,6 @@ use crate::transposer::step::init_step::InitStep;
 use crate::transposer::step::step::StepPoll;
 use crate::util::dummy_waker::DummyWaker;
 use archery::ArcTK;
-use rand::Rng;
 
 use crate::transposer::context::{
     HandleInputContext, HandleScheduleContext, InitContext, InterpolateContext,
@@ -84,12 +83,10 @@ impl TransposerInputEventHandler<TestTransposerInput> for TestTransposer {
 #[test]
 fn next_scheduled_unsaturated_desaturate() {
     let transposer = TestTransposer { counter: 17 };
-    let rng_seed = rand::thread_rng().gen();
-
-    let mut init = InitStep::<_, ArcTK>::new(transposer, PreInitStep::new(), rng_seed).unwrap();
+    let mut init = InitStep::<_, ArcTK>::new(transposer, PreInitStep::new(), [0; 32]).unwrap();
 
     let waker = DummyWaker::dummy();
-    Pin::new(&mut init).poll(&waker).unwrap();
+    let _ = Pin::new(&mut init).poll(&waker).unwrap();
 
     let mut step1 = init.next_scheduled_unsaturated().unwrap().unwrap();
     step1.start_saturate_clone(&init).unwrap();
