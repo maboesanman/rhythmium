@@ -27,10 +27,6 @@ pub struct SubStepUpdateContext<'update, T: Transposer, P: SharedPointerKind> {
     shared_step_state: NonNull<(OutputEventManager<T>, InputStateManager<T>)>,
 }
 
-impl<'update, T: Transposer, P: SharedPointerKind> InitContextInner<'update, T>
-    for SubStepUpdateContext<'update, T, P>
-{
-}
 impl<'update, T: Transposer, P: SharedPointerKind> HandleInputContextInner<'update, T>
     for SubStepUpdateContext<'update, T, P>
 {
@@ -137,7 +133,7 @@ impl<T: Transposer, P: SharedPointerKind> CurrentTimeContext<T> for SubStepUpdat
 impl<T: Transposer, P: SharedPointerKind> LastUpdatedTimeContext<T>
     for SubStepUpdateContext<'_, T, P>
 {
-    fn last_updated_time(&self) -> <T as Transposer>::Time {
-        self.metadata.last_updated.time
+    fn last_updated_time(&self) -> Option<<T as Transposer>::Time> {
+        self.metadata.last_updated.map(|x| x.time)
     }
 }

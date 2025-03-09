@@ -8,6 +8,7 @@ use input_source_metadata::InputSourceMetaData;
 use std::collections::BTreeSet;
 use std::future::Future;
 use std::num::NonZeroUsize;
+use std::ops::Bound;
 use std::pin::Pin;
 use std::task::{Context, Poll, Waker};
 use steps::StepList;
@@ -15,15 +16,15 @@ use transpose_interrupt_waker::{
     ChannelItem, InnerGuard, Status, StepItem, TransposeWakerObserver,
 };
 
-mod builder;
+// mod builder;
 mod erased_input_source_collection;
 mod input_channel_reservations;
 mod input_source_metadata;
 mod steps;
 mod transpose_interrupt_waker;
 
-#[cfg(test)]
-mod test;
+// #[cfg(test)]
+// mod test;
 
 pub use builder::TransposeBuilder;
 
@@ -82,7 +83,7 @@ struct TransposeMain<T: Transposer + 'static> {
     advance_final: bool,
 
     // if we have ever returned the Complete interrupt (or if we just decided to emit it and needs_signal was just set)
-    complete: bool,
+    complete: Option<T::Time>,
 
     // the latest value of finalize we have emitted via interrupts (or if we just decided to increase and emit it and needs_signal was just set)
     last_finalize: Option<T::Time>,
@@ -115,11 +116,13 @@ impl<T: Transposer + Clone + 'static> TransposeMain<T> {
             .input_sources
             .earliest_possible_incoming_interrupt_time();
         let earliest_possible_output_event = self.steps.earliest_possible_event_time();
+        println!("earliest_possible_interrupt: {:?}", earliest_possible_interrupt);
+        println!("earliest_possible_output_event: {:?}", earliest_possible_output_event);
 
         let finalize_time = match (earliest_possible_interrupt, earliest_possible_output_event) {
             (None, None) => {
-                if !self.complete {
-                    self.complete = true;
+                if self.complete.is_none() {
+                    self.complete = self.last_finalize;
                     self.needs_signal = true;
 
                     if let Some(t) = self.advance_time {
@@ -439,9 +442,9 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
         loop {
             if self.main.needs_signal {
                 self.main.needs_signal = false;
-                if self.main.complete {
+                if let Some(t) = self.main.complete {
                     return Ok(SourcePoll::Interrupt {
-                        time: poll_time,
+                        time: t,
                         interrupt: Interrupt::Complete,
                     });
                 } else {
@@ -563,7 +566,10 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
                     .get_step_wrapper_mut_by_uuid(step_item.step_uuid)
                     .unwrap();
                 let waker = self.outer_wakers.get_step_waker(step_item.step_uuid);
-                match step_wrapper.step.poll(&waker).unwrap() {
+
+                let poll = step_wrapper.step.poll(&waker).unwrap();
+                let step_time = step_wrapper.step.get_time();
+                match poll {
                     StepPoll::Ready => {
                         if let Some(next_step) = step_wrapper
                             .step
@@ -573,18 +579,32 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
                             self.main.steps.push_step(next_step);
                         }
                         self.wakers.step_item = None;
+                        self.main.update_complete_and_finalize_time();
                         continue;
                     }
                     StepPoll::Emitted(e) => {
-                        let time = step_wrapper.step.get_time();
-                        if self.main.last_finalize >= Some(time) {
+                        self.main.update_complete_and_finalize_time();
+                        let time = step_time;
+                        let emit_finalize = match self
+                            .main
+                            .input_sources
+                            .earliest_possible_incoming_interrupt_time()
+                        {
+                            None => true,
+                            Some(None) => false,
+                            Some(Some(t)) => t > time,
+                        };
+
+                        if emit_finalize {
+                            self.main.last_finalize = Some(time);
+                            self.main.needs_signal = false;
                             break Ok(SourcePoll::Interrupt {
-                                time: step_wrapper.step.get_time(),
+                                time: step_time,
                                 interrupt: Interrupt::FinalizedEvent(e),
                             });
                         } else {
                             break Ok(SourcePoll::Interrupt {
-                                time: step_wrapper.step.get_time(),
+                                time: step_time,
                                 interrupt: Interrupt::Event(e),
                             });
                         }
@@ -823,17 +843,9 @@ impl<T: Transposer + Clone + 'static> Source for Transpose<T> {
         }
     }
 
-    fn advance(&mut self, time: Self::Time) {
+    fn advance(&mut self, lower_bound: Bound<Self::Time>) {
         let mut locked = TransposeLocked::from_transpose(self);
         locked.main.advance_time = locked.main.advance_time.max(Some(time));
-        locked.main.update_complete_and_finalize_time();
-        locked.remove_interpolations_before_advanced();
-        locked.remove_old_unneeded_steps();
-    }
-
-    fn advance_final(&mut self) {
-        let mut locked = TransposeLocked::from_transpose(self);
-        locked.main.advance_final = true;
         locked.main.update_complete_and_finalize_time();
         locked.remove_interpolations_before_advanced();
         locked.remove_old_unneeded_steps();

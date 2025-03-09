@@ -1,4 +1,4 @@
-use std::hash::Hash;
+use std::{fmt::Debug, hash::Hash};
 
 mod context;
 // pub mod evaluate_to;
@@ -33,7 +33,7 @@ pub trait Transposer: Sized {
     /// The type used as the 'time' for events. This must be Ord and Copy because it is frequently used for comparisons,
     /// and it must be [`Default`] because the default value is used for the timestamp of events emitted.
     /// by the init function.
-    type Time: Copy + Ord + Unpin;
+    type Time: Copy + Ord + Unpin + Debug;
 
     /// The type of the output payloads.
     ///

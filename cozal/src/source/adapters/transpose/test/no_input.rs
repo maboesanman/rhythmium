@@ -1,11 +1,9 @@
 use std::{num::NonZeroUsize, task::Waker, time::Duration};
 
 use crate::{
-    source::{traits::SourceContext, Source, SourcePoll},
+    source::{adapters::transpose::TransposeBuilder, traits::SourceContext, Source, SourcePoll},
     transposer::Transposer,
 };
-
-use super::TransposeBuilder;
 
 #[derive(Clone, Debug)]
 struct CollatzTransposer {
@@ -192,3 +190,4 @@ fn transpose_no_inputs_with_events() {
         .unwrap_err();
     println!("{:?}", poll);
 }
+

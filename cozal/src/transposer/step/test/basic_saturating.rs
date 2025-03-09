@@ -1,12 +1,13 @@
 use core::pin::Pin;
+use std::task::Poll;
 
 use super::super::{pre_init_step::PreInitStep, StepPoll};
+use crate::transposer::step::init_step::InitStep;
 use crate::util::dummy_waker::DummyWaker;
 use archery::ArcTK;
 use rand::Rng;
 
 use crate::transposer::context::{HandleScheduleContext, InitContext, InterpolateContext};
-use crate::transposer::step::Step;
 use crate::transposer::Transposer;
 
 #[derive(Clone, Debug)]
@@ -29,7 +30,7 @@ impl Transposer for TestTransposer {
 
     async fn init(&mut self, cx: &mut InitContext<'_, Self>) {
         self.counter = 0;
-        cx.schedule_event(1, ()).unwrap();
+        cx.schedule_event(1, ());
     }
 
     async fn handle_scheduled_event(
@@ -53,12 +54,17 @@ fn next_scheduled_unsaturated_take() {
     let transposer = TestTransposer { counter: 17 };
     let rng_seed = rand::thread_rng().gen();
 
-    let mut step = Step::<_, ArcTK>::new_init(transposer, PreInitStep::new(), 0, rng_seed).unwrap();
-
     let waker = DummyWaker::dummy();
-    Pin::new(&mut step).poll(&waker).unwrap();
+    let mut init = InitStep::<_, ArcTK>::new(transposer, PreInitStep::new(), rng_seed).unwrap();
+    assert!(matches!(init.poll(&waker), Ok(Poll::Ready(_))));
+    let mut step = init.next_scheduled_unsaturated().unwrap().unwrap();
+    step.start_saturate_take(&mut init).unwrap();
 
-    for i in 1..100 {
+    let poll = step.poll(&waker);
+    assert!(matches!(poll, Ok(StepPoll::Emitted(()))));
+    assert!(matches!(step.poll(&waker), Ok(StepPoll::Ready)));
+
+    for i in 2..100 {
         let mut next = step.next_scheduled_unsaturated().unwrap().unwrap();
         next.start_saturate_take(&mut step).unwrap();
 
@@ -77,12 +83,17 @@ fn next_scheduled_unsaturated_clone() {
     let transposer = TestTransposer { counter: 17 };
     let rng_seed = rand::thread_rng().gen();
 
-    let mut step = Step::<_, ArcTK>::new_init(transposer, PreInitStep::new(), 0, rng_seed).unwrap();
-
     let waker = DummyWaker::dummy();
-    Pin::new(&mut step).poll(&waker).unwrap();
+    let mut init = InitStep::<_, ArcTK>::new(transposer, PreInitStep::new(), rng_seed).unwrap();
+    assert!(matches!(init.poll(&waker), Ok(Poll::Ready(_))));
+    let mut step = init.next_scheduled_unsaturated().unwrap().unwrap();
+    step.start_saturate_take(&mut init).unwrap();
 
-    for i in 1..100 {
+    let poll = step.poll(&waker);
+    assert!(matches!(poll, Ok(StepPoll::Emitted(()))));
+    assert!(matches!(step.poll(&waker), Ok(StepPoll::Ready)));
+
+    for i in 2..100 {
         let mut next = step.next_scheduled_unsaturated().unwrap().unwrap();
         next.start_saturate_clone(&step).unwrap();
 
@@ -101,10 +112,10 @@ fn next_scheduled_unsaturated_desaturate() {
     let transposer = TestTransposer { counter: 17 };
     let rng_seed = rand::thread_rng().gen();
 
-    let mut init = Step::<_, ArcTK>::new_init(transposer, PreInitStep::new(), 0, rng_seed).unwrap();
+    let mut init = InitStep::<_, ArcTK>::new(transposer, PreInitStep::new(), rng_seed).unwrap();
 
     let waker = DummyWaker::dummy();
-    Pin::new(&mut init).poll(&waker).unwrap();
+    let _ = Pin::new(&mut init).poll(&waker).unwrap();
 
     let mut step1 = init.next_scheduled_unsaturated().unwrap().unwrap();
     step1.start_saturate_clone(&init).unwrap();

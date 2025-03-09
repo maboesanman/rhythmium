@@ -4,7 +4,7 @@ use std::collections::HashSet;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::num::NonZeroUsize;
 
-use crate::source::source_poll::Interrupt;
+use crate::source::source_poll::{Interrupt, LowerBound, UpperBound};
 use crate::transposer::TransposerInputEventHandler;
 use crate::{
     source::{source_poll::TrySourcePoll, traits::SourceContext, Source, SourcePoll},
@@ -20,7 +20,6 @@ use hashbrown::HashTable;
 struct ErasedInputSourceImpl<I, Src: Source> {
     input: I,
     source: Src,
-    advanced: Option<Src::Time>,
 }
 
 impl<I: TransposerInput, Src: Source> HasInput<I::Base> for ErasedInputSourceImpl<I, Src> {
@@ -28,39 +27,6 @@ impl<I: TransposerInput, Src: Source> HasInput<I::Base> for ErasedInputSourceImp
 
     fn get_input(&self) -> &Self::Input {
         &self.input
-    }
-}
-
-impl<I, Src> ErasedInputSourceImpl<I, Src>
-where
-    I: TransposerInput,
-    Src: Source<Time = <I::Base as Transposer>::Time, Event = I::InputEvent, State = I::InputState>,
-    I::Base: Clone,
-{
-    fn resolve_interrupts(
-        &self,
-        time: <I::Base as Transposer>::Time,
-        interrupt: Interrupt<I::InputEvent>,
-    ) -> Option<Interrupt<BoxedInput<'static, I::Base, ArcTK>>> {
-        match interrupt {
-            Interrupt::Event(event) => {
-                if !<I::Base as TransposerInputEventHandler<I>>::can_handle(time, &event) {
-                    None
-                } else {
-                    Some(Interrupt::Event(BoxedInput::new(time, self.input, event)))
-                }
-            }
-            Interrupt::FinalizedEvent(event) => {
-                if !<I::Base as TransposerInputEventHandler<I>>::can_handle(time, &event) {
-                    Some(Interrupt::Finalize)
-                } else {
-                    Some(Interrupt::Event(BoxedInput::new(time, self.input, event)))
-                }
-            }
-            Interrupt::Rollback => Some(Interrupt::Rollback),
-            Interrupt::Finalize => Some(Interrupt::Finalize),
-            Interrupt::Complete => Some(Interrupt::Complete),
-        }
     }
 }
 
@@ -80,26 +46,21 @@ where
         cx: SourceContext,
     ) -> TrySourcePoll<Self::Time, Self::Event, Self::State> {
         loop {
-            break match self.source.poll(time, cx.clone())? {
-                SourcePoll::Ready {
-                    state,
-                    next_event_at,
-                } => {
-                    let state = ErasedInputState::new(self.input, state);
-                    Ok(SourcePoll::Ready {
-                        state,
-                        next_event_at,
-                    })
+            let poll = self.source.poll(time, cx.clone())?;
+            if let SourcePoll::Interrupt {
+                time,
+                interrupt: Interrupt::Event(event),
+                ..
+            } = &poll
+            {
+                if !<I::Base as TransposerInputEventHandler<I>>::can_handle(*time, event) {
+                    continue;
                 }
-                SourcePoll::Interrupt { time, interrupt } => {
-                    let interrupt = match self.resolve_interrupts(time, interrupt) {
-                        Some(i) => i,
-                        None => continue,
-                    };
-                    Ok(SourcePoll::Interrupt { time, interrupt })
-                }
-                SourcePoll::Pending => Ok(SourcePoll::Pending),
-            };
+            }
+
+            break Ok(poll
+                .map_state(|s| ErasedInputState::new(self.input, s))
+                .map_event(|t, e| BoxedInput::new(*t, self.input, e)));
         }
     }
 
@@ -109,52 +70,42 @@ where
         cx: SourceContext,
     ) -> TrySourcePoll<Self::Time, Self::Event, Self::State> {
         loop {
-            break match self.source.poll_forget(time, cx.clone())? {
-                SourcePoll::Ready {
-                    state,
-                    next_event_at,
-                } => {
-                    let state = ErasedInputState::new(self.input, state);
-                    Ok(SourcePoll::Ready {
-                        state,
-                        next_event_at,
-                    })
+            let poll = self.source.poll_forget(time, cx.clone())?;
+            if let SourcePoll::Interrupt {
+                time,
+                interrupt: Interrupt::Event(event),
+                ..
+            } = &poll
+            {
+                if !<I::Base as TransposerInputEventHandler<I>>::can_handle(*time, event) {
+                    continue;
                 }
-                SourcePoll::Interrupt { time, interrupt } => {
-                    let interrupt = match self.resolve_interrupts(time, interrupt) {
-                        Some(i) => i,
-                        None => continue,
-                    };
-                    Ok(SourcePoll::Interrupt { time, interrupt })
-                }
-                SourcePoll::Pending => Ok(SourcePoll::Pending),
-            };
+            }
+
+            break Ok(poll
+                .map_state(|s| ErasedInputState::new(self.input, s))
+                .map_event(|t, e| BoxedInput::new(*t, self.input, e)));
         }
     }
 
-    fn poll_events(
+    fn poll_interrupts(
         &mut self,
-        time: Self::Time,
         interrupt_waker: std::task::Waker,
     ) -> TrySourcePoll<Self::Time, Self::Event, ()> {
         loop {
-            break match self.source.poll_events(time, interrupt_waker.clone())? {
-                SourcePoll::Ready {
-                    state,
-                    next_event_at,
-                } => Ok(SourcePoll::Ready {
-                    state,
-                    next_event_at,
-                }),
-                SourcePoll::Interrupt { time, interrupt } => {
-                    let interrupt = match self.resolve_interrupts(time, interrupt) {
-                        Some(i) => i,
-                        None => continue,
-                    };
-                    Ok(SourcePoll::Interrupt { time, interrupt })
+            let poll = self.source.poll_interrupts(interrupt_waker.clone())?;
+            if let SourcePoll::Interrupt {
+                time,
+                interrupt: Interrupt::Event(event),
+                ..
+            } = &poll
+            {
+                if !<I::Base as TransposerInputEventHandler<I>>::can_handle(*time, event) {
+                    continue;
                 }
-                SourcePoll::Pending => Ok(SourcePoll::Pending),
-            };
+            }
+
+            break Ok(poll.map_event(|t, e| BoxedInput::new(*t, self.input, e)));
         }
     }
 
@@ -162,24 +113,16 @@ where
         self.source.release_channel(channel)
     }
 
-    fn advance(&mut self, time: Self::Time) {
-        if let Some(last_advance) = self.advanced {
-            if time > last_advance {
-                self.source.advance(time);
-                self.advanced = Some(time);
-            }
-        }
-    }
-
-    fn advance_final(&mut self) {
-        if self.advanced.is_some() {
-            self.source.advance_final();
-            self.advanced = None;
-        }
-    }
-
     fn max_channel(&self) -> std::num::NonZeroUsize {
         self.source.max_channel()
+    }
+
+    fn advance(
+        &mut self,
+        lower_bound: LowerBound<Self::Time>,
+        upper_bound: UpperBound<Self::Time>,
+    ) {
+        self.source.advance(lower_bound, upper_bound);
     }
 }
 
@@ -200,7 +143,7 @@ where
 pub struct ErasedInputSource<T: Transposer + 'static>(Box<dyn ErasedSourceTrait<T>>);
 
 impl<T: Transposer + 'static> ErasedInputSource<T> {
-    pub fn new<I, Src>(input: I, source: Src, initial_t: T::Time) -> Self
+    pub fn new<I, Src>(input: I, source: Src) -> Self
     where
         T: Clone,
         I: TransposerInput<Base = T>,
@@ -210,13 +153,8 @@ impl<T: Transposer + 'static> ErasedInputSource<T> {
                 State = I::InputState,
             > + 'static,
     {
-        let inner = ErasedInputSourceImpl {
-            input,
-            source,
-            advanced: Some(initial_t),
-        };
+        let inner = ErasedInputSourceImpl { input, source };
         let inner: Box<dyn ErasedSourceTrait<T>> = Box::new(inner);
-        // let inner = UnsafeCell::new(inner);
         Self(inner)
     }
 

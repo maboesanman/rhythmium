@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     ops::{Deref, DerefMut},
     sync::Arc,
     task::Waker,
@@ -51,10 +51,10 @@ impl Drop for InnerGuard {
 }
 
 impl TransposeWakerObserver {
-    pub fn new() -> Self {
+    pub fn new(input_hashes: impl Iterator<Item = u64>) -> Self {
         Self {
             inner: Arc::new(Mutex::new(TransposeInterruptWakerContainer::Rest(
-                TransposeInterruptWakerInner::new(),
+                TransposeInterruptWakerInner::new(input_hashes),
             ))),
         }
     }
@@ -162,9 +162,9 @@ pub struct TransposeInterruptWakerInner {
 }
 
 impl TransposeInterruptWakerInner {
-    fn new() -> Self {
+    fn new(input_hashes: impl Iterator<Item = u64>) -> Self {
         Self {
-            state_interrupt_woken: VecDeque::new(),
+            state_interrupt_woken: input_hashes.collect(),
             state_interrupt_pending: VecDeque::new(),
             // need to mark interpolation as ready to poll so we bootstrap somewhere
             step_item: Some(StepItem {

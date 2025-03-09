@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, num::NonZeroUsize};
+use std::{marker::PhantomData, num::NonZeroUsize, ops::Bound};
 
 use crate::source::{
     source_poll::{Interrupt, TrySourcePoll},
@@ -6,6 +6,7 @@ use crate::source::{
     Source, SourcePoll,
 };
 
+#[derive(Debug)]
 pub struct StateFunctionSource<T, S, F> {
     first_call: bool,
     function: F,
@@ -19,7 +20,7 @@ where
 {
     pub fn new(function: F) -> Self {
         Self {
-            first_call: false,
+            first_call: true,
             function,
             phantom: PhantomData,
         }
@@ -45,7 +46,7 @@ where
             self.first_call = false;
             Ok(SourcePoll::Interrupt {
                 time,
-                interrupt: Interrupt::Complete,
+                interrupt: Interrupt::Finalize(Bound::Unbounded),
             })
         } else {
             Ok(SourcePoll::Ready {
@@ -64,7 +65,7 @@ where
             self.first_call = false;
             Ok(SourcePoll::Interrupt {
                 time,
-                interrupt: Interrupt::Complete,
+                interrupt: Interrupt::Finalize(Bound::Unbounded),
             })
         } else {
             Ok(SourcePoll::Ready {
@@ -77,8 +78,8 @@ where
     fn release_channel(&mut self, _channel: usize) {
         // noop
     }
-
-    fn advance(&mut self, _time: Self::Time) {
+    
+    fn advance(&mut self, lower_bound: Bound<Self::Time>) {
         // noop
     }
 

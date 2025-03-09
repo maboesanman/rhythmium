@@ -14,6 +14,16 @@ pub struct ScheduledTime<T: Ord + Copy> {
     pub emission_index: usize,
 }
 
+impl<T: Ord + Copy> ScheduledTime<T> {
+    pub fn init_spawn_scheduled(time: T, emission_index: usize) -> Self {
+        Self {
+            time,
+            parent_index: 0,
+            emission_index,
+        }
+    }
+}
+
 impl<T: Ord + Copy> SubStepTime<T> {
     pub fn index(&self) -> usize {
         self.index

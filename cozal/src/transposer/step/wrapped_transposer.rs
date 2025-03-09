@@ -2,6 +2,7 @@ use std::ptr::NonNull;
 
 use archery::{SharedPointer, SharedPointerKind};
 
+use super::init_context::InitUpdateContext;
 use super::sub_step_update_context::SubStepUpdateContext;
 use super::time::SubStepTime;
 use super::transposer_metadata::TransposerMetaData;
@@ -29,8 +30,8 @@ where
 }
 
 impl<T: Transposer, P: SharedPointerKind> WrappedTransposer<T, P> {
-    pub fn new(transposer: T, rng_seed: [u8; 32], start_time: T::Time) -> SharedPointer<Self, P> {
-        let metadata = TransposerMetaData::new(rng_seed, start_time);
+    pub fn new(transposer: T, rng_seed: [u8; 32]) -> SharedPointer<Self, P> {
+        let metadata = TransposerMetaData::new(rng_seed);
 
         let new = Self {
             transposer,
@@ -43,13 +44,9 @@ impl<T: Transposer, P: SharedPointerKind> WrappedTransposer<T, P> {
     /// create a wrapped transposer, and perform all T::default scheduled events.
     pub async fn init(
         &mut self,
-        // mutable references must not be held over await points.
-        shared_step_state: NonNull<(OutputEventManager<T>, InputStateManager<T>)>,
     ) {
-        let mut context = SubStepUpdateContext::new(
-            self.metadata.last_updated,
+        let mut context = InitUpdateContext::new(
             &mut self.metadata,
-            shared_step_state,
         );
 
         self.transposer
@@ -70,7 +67,7 @@ impl<T: Transposer, P: SharedPointerKind> WrappedTransposer<T, P> {
         T: TransposerInputEventHandler<I>,
     {
         let time = SubStepTime {
-            index: self.metadata.last_updated.index + 1,
+            index: self.metadata.last_updated.map(|x| x.index).unwrap_or(0) + 1,
             time,
         };
 
@@ -83,7 +80,7 @@ impl<T: Transposer, P: SharedPointerKind> WrappedTransposer<T, P> {
             )
             .await;
 
-        self.metadata.last_updated = time;
+        self.metadata.last_updated = Some(time);
     }
 
     /// handle all scheduled events occuring at `time` (if any)
@@ -95,7 +92,7 @@ impl<T: Transposer, P: SharedPointerKind> WrappedTransposer<T, P> {
         shared_step_state: NonNull<(OutputEventManager<T>, InputStateManager<T>)>,
     ) {
         let mut time = SubStepTime {
-            index: self.metadata.last_updated.index + 1,
+            index: self.metadata.last_updated.map(|x| x.index).unwrap_or(0) + 1,
             time,
         };
 
@@ -106,7 +103,7 @@ impl<T: Transposer, P: SharedPointerKind> WrappedTransposer<T, P> {
             self.transposer
                 .handle_scheduled_event(e, HandleScheduleContext::new_mut(&mut context))
                 .await;
-            context.metadata.last_updated = time;
+            context.metadata.last_updated = Some(time);
             time.index += 1;
         }
     }

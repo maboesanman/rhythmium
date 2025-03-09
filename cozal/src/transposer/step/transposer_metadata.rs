@@ -14,7 +14,7 @@ use crate::transposer::Transposer;
 /// access to, apart from inputs.
 pub struct TransposerMetaData<T: Transposer, P: SharedPointerKind> {
     /// this has index 0 while processing inputs, which is technically wrong, but should never be accessible.
-    pub last_updated: SubStepTime<T::Time>,
+    pub last_updated: Option<SubStepTime<T::Time>>,
 
     /// A collection of (time, payload) for each scheduled event, indexed by time.
     pub schedule: rpds::RedBlackTreeMap<ScheduledTime<T::Time>, T::Scheduled, P>,
@@ -46,7 +46,7 @@ impl<T: Transposer, P: SharedPointerKind> Clone for TransposerMetaData<T, P> {
 }
 
 impl<T: Transposer, P: SharedPointerKind> TransposerMetaData<T, P> {
-    pub fn new(rng_seed: [u8; 32], start_time: T::Time) -> Self {
+    pub fn new(rng_seed: [u8; 32]) -> Self {
         let schedule = rpds::RedBlackTreeMap::new_with_ptr_kind();
         let expire_handles_forward = rpds::HashTrieMap::new_with_hasher_and_ptr_kind(
             std::collections::hash_map::RandomState::default(),
@@ -54,10 +54,7 @@ impl<T: Transposer, P: SharedPointerKind> TransposerMetaData<T, P> {
         let expire_handles_backward = rpds::RedBlackTreeMap::new_with_ptr_kind();
 
         Self {
-            last_updated: SubStepTime {
-                index: 0,
-                time: start_time,
-            },
+            last_updated: None,
             schedule,
             expire_handles_forward,
             expire_handles_backward,

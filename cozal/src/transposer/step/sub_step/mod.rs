@@ -18,9 +18,8 @@ pub mod boxed_input;
 pub mod init_sub_step;
 pub mod input_sub_step;
 pub mod scheduled_sub_step;
-pub const INIT_SUB_STEP_SORT_PHASE: usize = 1;
-pub const INPUT_SUB_STEP_SORT_PHASE: usize = 2;
-pub const SCHEDULED_SUB_STEP_SORT_PHASE: usize = 3;
+pub const INPUT_SUB_STEP_SORT_PHASE: usize = 1;
+pub const SCHEDULED_SUB_STEP_SORT_PHASE: usize = 2;
 
 #[repr(transparent)]
 pub struct BoxedSubStep<'t, T: Transposer + 't, P: SharedPointerKind + 't>(
@@ -34,8 +33,6 @@ where
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let _type = if self.as_ref().is_input() {
             "input"
-        } else if self.as_ref().is_init() {
-            "init"
         } else {
             "scheduled"
         };
@@ -97,9 +94,6 @@ pub unsafe trait SubStep<T: Transposer, P: SharedPointerKind> {
     }
     fn input_sort(&self) -> Option<(u64, TypeId)> {
         None
-    }
-    fn is_init(&self) -> bool {
-        false
     }
     fn is_scheduled(&self) -> bool {
         false

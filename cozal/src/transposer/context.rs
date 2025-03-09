@@ -20,7 +20,7 @@ pub trait LastUpdatedTimeContext<T: Transposer> {
     /// get the time of the last processed event (init, input, or scheduled)
     /// does not consider events that were filtered out due to `can_handle` returning false.
     #[must_use]
-    fn last_updated_time(&self) -> T::Time;
+    fn last_updated_time(&self) -> Option<T::Time>;
 }
 /// A trait for accessing the InputStateManager. Not called directly by the user.
 pub trait InputStateManagerContext<'a, T: Transposer> {
@@ -45,6 +45,13 @@ pub trait ScheduleEventContext<T: Transposer> {
         time: T::Time,
         payload: T::Scheduled,
     ) -> Result<ExpireHandle, ScheduleEventError>;
+}
+
+/// A trait for scheduling events. for future processing
+pub trait ScheduleEventContextInfallible<T: Transposer> {
+    fn schedule_event(&mut self, time: T::Time, payload: T::Scheduled);
+
+    fn schedule_event_expireable(&mut self, time: T::Time, payload: T::Scheduled) -> ExpireHandle;
 }
 
 #[non_exhaustive]
@@ -86,7 +93,7 @@ macro_rules! impl_single {
     (LastUpdatedTimeContext) => {
         /// get the time of the last processed event (init, input, or scheduled)
         /// does not consider events that were filtered out due to `can_handle` returning false.
-        pub fn last_updated_time(&self) -> T::Time {
+        pub fn last_updated_time(&self) -> Option<T::Time> {
             self.0.last_updated_time()
         }
     };
@@ -143,6 +150,31 @@ macro_rules! impl_single {
             self.0.schedule_event_expireable(time, payload)
         }
     };
+    (ScheduleEventContextInfallible) => {
+        /// schedule the an event at `time` with payload `payload`.
+        ///
+        /// `ScheduleEventError::NewEventBeforeCurrent` will be emitted if the supplied time is
+        /// before the current time.
+        ///
+        /// when using this method, there is no way to expire the event.
+        pub fn schedule_event(&mut self, time: T::Time, payload: T::Scheduled) {
+            self.0.schedule_event(time, payload)
+        }
+
+        /// schedule the an event at `time` with payload `payload`.
+        /// an `ExpireHandle` is returned, which may be stored and later passed to
+        /// `ExpireEventContext::expire_event` to remove the event from the schedule.
+        ///
+        /// `ScheduleEventError::NewEventBeforeCurrent` will be emitted if the supplied time is
+        /// before the current time.
+        pub fn schedule_event_expireable(
+            &mut self,
+            time: T::Time,
+            payload: T::Scheduled,
+        ) -> ExpireHandle {
+            self.0.schedule_event_expireable(time, payload)
+        }
+    };
     (ExpireEventContext) => {
         /// expire the event corresponding to the supplied `ExpireHandle`
         ///
@@ -174,11 +206,7 @@ macro_rules! impl_single {
 pub struct InitContext<'a, T: Transposer>(dyn InitContextInner<'a, T>);
 
 pub trait InitContextInner<'a, T: Transposer>:
-    CurrentTimeContext<T>
-    + RngContext
-    + ScheduleEventContext<T>
-    + InputStateManagerContext<'a, T>
-    + OutputEventManagerContext<T>
+    RngContext + ScheduleEventContextInfallible<T>
 {
 }
 
@@ -187,11 +215,8 @@ impl<'a, T: Transposer> InitContext<'a, T> {
         unsafe { core::mem::transmute(inner) }
     }
 
-    impl_single!(CurrentTimeContext);
     impl_single!(RngContext);
-    impl_single!(ScheduleEventContext);
-    impl_single!(InputStateManagerContext);
-    impl_single!(OutputEventManagerContext);
+    impl_single!(ScheduleEventContextInfallible);
 }
 
 /// A struct for accessing the functions available to the `Transposer::handle_scheduled_event` function

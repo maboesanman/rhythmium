@@ -93,7 +93,7 @@ where
             ScheduledSubStep::Saturating { time, .. } => *time,
             ScheduledSubStep::Saturated {
                 wrapped_transposer, ..
-            } => wrapped_transposer.metadata.last_updated.time,
+            } => wrapped_transposer.metadata.last_updated.unwrap().time,
         }
     }
 
@@ -116,8 +116,10 @@ where
             _ => return Err(StartSaturateErr::NotUnsaturated),
         };
 
-        if transposer.metadata.last_updated.time > time {
-            return Err(StartSaturateErr::SubStepTimeIsPast);
+        if let Some(t) = transposer.metadata.last_updated {
+            if t.time > time {
+                return Err(StartSaturateErr::SubStepTimeIsPast);
+            }
         }
 
         let future = wrapped_handler::handle::<T, P>(transposer, time, shared_step_state);

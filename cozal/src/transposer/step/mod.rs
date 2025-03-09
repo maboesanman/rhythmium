@@ -8,6 +8,9 @@ mod sub_step_update_context;
 mod time;
 mod transposer_metadata;
 mod wrapped_transposer;
+mod init_step;
+mod init_context;
+mod previous_step;
 
 #[cfg(test)]
 mod test;
@@ -17,7 +20,7 @@ use std::ptr::NonNull;
 use std::task::Poll;
 
 use archery::{ArcTK, SharedPointer, SharedPointerKind};
-use sub_step::init_sub_step::InitSubStep;
+use previous_step::PreviousStep;
 use sub_step::scheduled_sub_step::ScheduledSubStep;
 use sub_step::{BoxedSubStep, StartSaturateErr};
 use wrapped_transposer::WrappedTransposer;
@@ -106,7 +109,7 @@ pub struct Step<'t, T: Transposer + 't, P: SharedPointerKind + 't = ArcTK> {
     #[cfg(debug_assertions)]
     uuid_self: uuid::Uuid,
     #[cfg(debug_assertions)]
-    uuid_prev: Option<uuid::Uuid>,
+    uuid_prev: uuid::Uuid,
 }
 
 impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Drop for Step<'a, T, P> {
@@ -163,42 +166,6 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
         let mut input_state: NonNull<(OutputEventManager<T>, InputStateManager<T>)> =
             self.shared_step_state;
         &mut unsafe { input_state.as_mut() }.0
-    }
-
-    /// Create new beginning step.
-    ///
-    /// This is the first step the transposer undergoes, whic his why it recieves the transposer as an argument, as
-    /// opposed to the other steps which get it from the previous step.
-    pub fn new_init(
-        transposer: T,
-        pre_init_step: PreInitStep<T>,
-        start_time: T::Time,
-        rng_seed: [u8; 32],
-    ) -> Result<Self, T>
-    where
-        T: Clone,
-    {
-        let shared_step_state = Self::new_shared_step_state();
-        let uuid_self = uuid::Uuid::new_v4();
-        let uuid_prev = None;
-
-        let transposer = pre_init_step.execute(transposer)?;
-        let init_sub_step =
-            InitSubStep::new_boxed(transposer, rng_seed, start_time, shared_step_state);
-
-        Ok(Self {
-            sequence_number: 0,
-            steps: vec![init_sub_step],
-            status: StepStatus::Saturating(0),
-            time: start_time,
-            shared_step_state,
-            event_count: 0,
-            can_produce_events: true,
-            #[cfg(debug_assertions)]
-            uuid_self,
-            #[cfg(debug_assertions)]
-            uuid_prev,
-        })
     }
 
     /// Create a new step that is ready to be saturated.
@@ -279,7 +246,7 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
             #[cfg(debug_assertions)]
             uuid_self: uuid::Uuid::new_v4(),
             #[cfg(debug_assertions)]
-            uuid_prev: Some(self.uuid_self),
+            uuid_prev: self.uuid_self,
         }))
     }
 
@@ -303,12 +270,12 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
     /// - If the previous step is not Saturated.
     /// - If the current step is not Unsaturated.
     /// - If the previous step's UUID does not match the current step's UUID. (only when debug assertions are enabled)
-    pub fn start_saturate_take(&mut self, prev: &mut Self) -> Result<(), SaturateErr>
+    pub fn start_saturate_take(&mut self, prev: &mut impl PreviousStep<T, P>) -> Result<(), SaturateErr>
     where
         T: Clone,
     {
         #[cfg(debug_assertions)]
-        if self.uuid_prev != Some(prev.uuid_self) {
+        if self.uuid_prev != prev.get_uuid() {
             return Err(SaturateErr::IncorrectPrevious);
         }
 
@@ -324,32 +291,16 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
     /// - If the previous step is not Saturated.
     /// - If the current step is not Unsaturated.
     /// - If the previous step's UUID does not match the current step's UUID. (only when debug assertions are enabled)
-    pub fn start_saturate_clone(&mut self, prev: &Self) -> Result<(), SaturateErr>
+    pub fn start_saturate_clone(&mut self, prev: & impl PreviousStep<T, P>) -> Result<(), SaturateErr>
     where
         T: Clone,
     {
         #[cfg(debug_assertions)]
-        if self.uuid_prev != Some(prev.uuid_self) {
+        if self.uuid_prev != prev.get_uuid() {
             return Err(SaturateErr::IncorrectPrevious);
         }
 
         self.start_saturate(prev.clone()?)
-    }
-
-    fn take(&mut self) -> Result<SharedPointer<WrappedTransposer<T, P>, P>, SaturateErr> {
-        match self.get_step_status_mut() {
-            ActiveStepStatusMut::Saturated(step) => {
-                Ok(step.as_mut().take_finished_transposer().unwrap())
-            }
-            _ => Err(SaturateErr::PreviousNotSaturated),
-        }
-    }
-
-    fn clone(&self) -> Result<SharedPointer<WrappedTransposer<T, P>, P>, SaturateErr> {
-        match self.get_step_status_ref() {
-            ActiveStepStatusRef::Saturated(t) => Ok(SharedPointer::clone(t)),
-            _ => Err(SaturateErr::PreviousNotSaturated),
-        }
     }
 
     fn start_saturate(
@@ -510,8 +461,10 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
         };
 
         #[cfg(debug_assertions)]
-        if time < wrapped_transposer.metadata.last_updated.time {
-            return Err(InterpolateErr::TimePast);
+        if let Some(t) = wrapped_transposer.metadata.last_updated {
+            if t.time > time {
+                return Err(InterpolateErr::TimePast);
+            }
         }
 
         Ok(Interpolation::new(time, wrapped_transposer))
@@ -557,6 +510,30 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
     /// generally this will only be false if the step has ever been fully saturated.
     pub fn can_produce_events(&self) -> bool {
         self.can_produce_events
+    }
+}
+
+impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> PreviousStep<T, P> for Step<'a, T, P> {
+
+    #[cfg(debug_assertions)]
+    fn get_uuid(&self) -> uuid::Uuid {
+        self.uuid_self
+    }
+
+    fn take(&mut self) -> Result<SharedPointer<WrappedTransposer<T, P>, P>, SaturateErr> {
+        match self.get_step_status_mut() {
+            ActiveStepStatusMut::Saturated(step) => {
+                Ok(step.as_mut().take_finished_transposer().unwrap())
+            }
+            _ => Err(SaturateErr::PreviousNotSaturated),
+        }
+    }
+
+    fn clone(&self) -> Result<SharedPointer<WrappedTransposer<T, P>, P>, SaturateErr> {
+        match self.get_step_status_ref() {
+            ActiveStepStatusRef::Saturated(t) => Ok(SharedPointer::clone(t)),
+            _ => Err(SaturateErr::PreviousNotSaturated),
+        }
     }
 }
 

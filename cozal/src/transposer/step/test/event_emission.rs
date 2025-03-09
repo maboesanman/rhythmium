@@ -1,6 +1,7 @@
 use core::pin::Pin;
 
 use super::super::{pre_init_step::PreInitStep, StepPoll};
+use crate::transposer::step::init_step::InitStep;
 use crate::util::dummy_waker::DummyWaker;
 use archery::ArcTK;
 use rand::Rng;
@@ -29,7 +30,7 @@ impl Transposer for TestTransposer {
 
     async fn init(&mut self, cx: &mut InitContext<'_, Self>) {
         self.counter = 0;
-        cx.schedule_event(1, ()).unwrap();
+        cx.schedule_event(1, ());
     }
 
     async fn handle_scheduled_event(
@@ -55,7 +56,7 @@ fn next_scheduled_unsaturated_desaturate() {
     let transposer = TestTransposer { counter: 17 };
     let rng_seed = rand::thread_rng().gen();
 
-    let mut init = Step::<_, ArcTK>::new_init(transposer, PreInitStep::new(), 0, rng_seed).unwrap();
+    let mut init = InitStep::<_, ArcTK>::new(transposer, PreInitStep::new(), rng_seed).unwrap();
 
     let waker = DummyWaker::dummy();
     Pin::new(&mut init).poll(&waker).unwrap();

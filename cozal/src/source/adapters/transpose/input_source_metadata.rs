@@ -4,7 +4,7 @@ use archery::ArcTK;
 
 use crate::{
     source::{
-        source_poll::{Interrupt, TrySourcePoll},
+        source_poll::{Interrupt, LowerBound, SourceBound, TrySourcePoll, UpperBound},
         traits::SourceContext,
         Source, SourcePoll,
     },
@@ -16,18 +16,20 @@ use super::erased_input_source_collection::{ErasedInputSourceCollection, ErasedI
 #[derive(Debug, Clone)]
 pub struct InputSourceMetaData<T: Transposer + 'static> {
     next_scheduled_time: Option<T::Time>,
-    finalized_time: Option<T::Time>,
-    complete: bool,
     observed_times: BTreeSet<T::Time>,
+    finalized_lower_bound: LowerBound<T::Time>,
+    advanced_lower_bound: LowerBound<T::Time>,
+    advanced_upper_bound: UpperBound<T::Time>,
 }
 
 impl<T: Transposer + 'static> Default for InputSourceMetaData<T> {
     fn default() -> Self {
         Self {
             next_scheduled_time: None,
-            finalized_time: None,
-            complete: false,
             observed_times: BTreeSet::new(),
+            finalized_lower_bound: LowerBound::min(),
+            advanced_lower_bound: LowerBound::min(),
+            advanced_upper_bound: UpperBound::min(),
         }
     }
 }
@@ -37,88 +39,93 @@ impl<T: Transposer + 'static> InputSourceMetaData<T> {
         self.next_scheduled_time
     }
 
-    // pub fn might_interrupt(&self, time: T::Time) -> bool {
-    //     match self.next_scheduled_time {
-    //         Some(next) => next <= time,
-    //         None => false,
-    //     }
-    // }
+    fn record_finalize_bound(&mut self, bound: LowerBound<T::Time>) {
+        debug_assert!(self.finalized_lower_bound < bound);
 
-    pub fn finalized_time(&self) -> Option<T::Time> {
-        self.finalized_time
+        self.finalized_lower_bound = bound;
+        match self.finalized_lower_bound.0 {
+            SourceBound::Min => {}
+            SourceBound::Inclusive(t) => {
+                self.observed_times = self.observed_times.split_off(&t);
+            }
+            SourceBound::Exclusive(t) => {
+                self.observed_times = self.observed_times.split_off(&t);
+                self.observed_times.remove(&t);
+            }
+            SourceBound::Max => {
+                self.observed_times.clear();
+            }
+        }
     }
 
-    pub fn complete(&self) -> bool {
-        self.complete
+    fn resolve_new_poll_time(&mut self, poll_time: T::Time) {
+        debug_assert!(self.advanced_lower_bound.test(&poll_time));
+        self.advanced_upper_bound = self
+            .advanced_upper_bound
+            .min(UpperBound::inclusive(poll_time));
     }
-}
 
-impl<T: Transposer + 'static> ErasedInputSourceGuard<'_, T, InputSourceMetaData<T>> {
-    // only returns none when an unobserved interrupt occurs.
-    fn poll_inner<'b, S>(
+    // returns true if poll should be returned, or false if it should be skipped (only for rollbacks that were never observed)
+    fn resolve_poll<E, S, F>(
         &mut self,
-        poll: SourcePoll<T::Time, BoxedInput<'b, T>, S>,
-        poll_time: T::Time,
-        forget: bool,
-    ) -> Option<SourcePoll<T::Time, BoxedInput<'b, T>, S>> {
-        let metadata = self.get_metadata_mut();
-
-        match &poll {
-            SourcePoll::Ready { next_event_at, .. } => {
-                if !forget {
-                    metadata.observed_times.insert(poll_time);
+        poll: &mut SourcePoll<T::Time, E, S>,
+        state_ready_fn: F,
+    ) -> bool
+    where
+        F: FnOnce(&mut Self),
+    {
+        match poll {
+            SourcePoll::StateProgress {
+                state,
+                next_event_at,
+                ..
+            } => {
+                if let Some(t) = next_event_at {
+                    debug_assert!(!self.advanced_upper_bound.test(t))
                 }
-                metadata.next_scheduled_time = *next_event_at;
+
+                self.next_scheduled_time = *next_event_at;
+
+                if state.is_ready() {
+                    state_ready_fn(self);
+                }
             }
             SourcePoll::Interrupt {
                 time,
                 interrupt: Interrupt::Event(_),
+                ..
             } => {
-                metadata.observed_times.insert(*time);
-            }
-            SourcePoll::Interrupt {
-                time,
-                interrupt: Interrupt::Finalize,
-            } => {
-                // finalize should remove all observed times before the finalized time.
-                metadata.finalized_time = Some(*time);
-                metadata.observed_times = metadata.observed_times.split_off(time);
-            }
-            SourcePoll::Interrupt {
-                time,
-                interrupt: Interrupt::FinalizedEvent(_),
-            } => {
-                metadata.observed_times.insert(*time);
-                // finalize should remove all observed times before the finalized time.
-
-                metadata.finalized_time = Some(*time);
-                metadata.observed_times = metadata.observed_times.split_off(time);
+                debug_assert!(self.finalized_lower_bound.test(time));
+                self.observed_times.insert(*time);
             }
             SourcePoll::Interrupt {
                 time,
                 interrupt: Interrupt::Rollback,
+                finalize_bound,
             } => {
-                // throw out all observed times at or after the rollback time, and return a rollback
-                // with the first observed time after the rollback time.
-                return metadata.observed_times.split_off(time).first().map(|t| {
-                    SourcePoll::Interrupt {
-                        time: *t,
-                        interrupt: Interrupt::Rollback,
+                debug_assert!(self.finalized_lower_bound.test(time));
+                self.next_scheduled_time = None;
+
+                match self.observed_times.split_off(time).first().copied() {
+                    Some(new_time) => {
+                        *poll = SourcePoll::Interrupt {
+                            time: new_time,
+                            interrupt: Interrupt::Rollback,
+                            finalize_bound: *finalize_bound,
+                        }
                     }
-                });
+                    None => return false,
+                }
             }
-            SourcePoll::Interrupt {
-                time,
-                interrupt: Interrupt::Complete,
-            } => {
-                metadata.complete = true;
-                metadata.finalized_time = Some(*time);
-                metadata.observed_times.clear();
-            }
-            SourcePoll::Pending => {}
+            SourcePoll::Finalize { .. } => {}
+            SourcePoll::InterruptPending => {}
         }
 
-        Some(poll)
+        if let Some(finalize_bound) = poll.get_finalize_bound() {
+            self.record_finalize_bound(finalize_bound);
+        }
+
+        true
     }
 }
 
@@ -131,40 +138,50 @@ impl<T: Transposer + 'static> Source for ErasedInputSourceGuard<'_, T, InputSour
 
     fn poll(
         &mut self,
-        time: Self::Time,
+        poll_time: Self::Time,
         cx: SourceContext,
     ) -> TrySourcePoll<Self::Time, Self::Event, Self::State> {
         loop {
-            let poll = self.get_source_mut().poll(time, cx.clone())?;
-            if let Some(p) = self.poll_inner(poll, time, false) {
-                break Ok(p);
-            };
+            let mut poll = self.get_source_mut().poll(poll_time, cx.clone())?;
+
+            let metadata = self.get_metadata_mut();
+            metadata.resolve_new_poll_time(poll_time);
+            if metadata.resolve_poll(&mut poll, |m| {
+                m.observed_times.insert(poll_time);
+            }) {
+                break Ok(poll);
+            }
         }
     }
 
     fn poll_forget(
         &mut self,
-        time: Self::Time,
+        poll_time: Self::Time,
         cx: SourceContext,
     ) -> TrySourcePoll<Self::Time, Self::Event, Self::State> {
         loop {
-            let poll = self.get_source_mut().poll_forget(time, cx.clone())?;
-            if let Some(p) = self.poll_inner(poll, time, true) {
-                break Ok(p);
-            };
+            let mut poll = self.get_source_mut().poll_forget(poll_time, cx.clone())?;
+
+            let metadata = self.get_metadata_mut();
+            metadata.resolve_new_poll_time(poll_time);
+            if metadata.resolve_poll(&mut poll, |_| {}) {
+                break Ok(poll);
+            }
         }
     }
 
-    fn poll_events(
+    fn poll_interrupts(
         &mut self,
-        time: Self::Time,
-        waker: Waker,
+        interrupt_waker: Waker,
     ) -> TrySourcePoll<Self::Time, Self::Event, ()> {
         loop {
-            let poll = self.get_source_mut().poll_events(time, waker.clone())?;
-            if let Some(p) = self.poll_inner(poll, time, true) {
-                break Ok(p);
-            };
+            let mut poll = self
+                .get_source_mut()
+                .poll_interrupts(interrupt_waker.clone())?;
+
+            if self.get_metadata_mut().resolve_poll(&mut poll, |_| {}) {
+                break Ok(poll);
+            }
         }
     }
 
@@ -172,16 +189,24 @@ impl<T: Transposer + 'static> Source for ErasedInputSourceGuard<'_, T, InputSour
         self.get_source_mut().release_channel(channel)
     }
 
-    fn advance(&mut self, time: Self::Time) {
-        self.get_source_mut().advance(time)
-    }
-
-    fn advance_final(&mut self) {
-        self.get_source_mut().advance_final();
-    }
-
     fn max_channel(&self) -> std::num::NonZeroUsize {
         self.get_source().max_channel()
+    }
+
+    fn advance(
+        &mut self,
+        lower_bound: LowerBound<Self::Time>,
+        upper_bound: UpperBound<Self::Time>,
+    ) {
+        let metadata = self.get_metadata_mut();
+
+        debug_assert!(metadata.advanced_lower_bound < lower_bound);
+        metadata.advanced_lower_bound = lower_bound;
+
+        debug_assert!(metadata.advanced_upper_bound < upper_bound);
+        metadata.advanced_upper_bound = upper_bound;
+
+        self.get_source_mut().advance(lower_bound, upper_bound);
     }
 }
 
@@ -191,24 +216,23 @@ impl<T: Transposer + 'static> ErasedInputSourceCollection<T, InputSourceMetaData
     /// None means there cannot ever be another incoming interrupt.
     /// Some(None) means an interrupt may come from any value of T::Time.
     /// Some(Some(t)) means there will never be an incoming interrupt before t.
-    pub fn earliest_possible_incoming_interrupt_time(&self) -> Option<Option<T::Time>> {
+    pub fn interupt_lower_bound(&self) -> LowerBound<T::Time> {
         self.iter()
-            .filter(|(_, m)| !m.complete)
-            .map(|(_, m)| m.finalized_time)
+            .map(|x| x.1.finalized_lower_bound)
             .min()
+            .unwrap_or(LowerBound::max())
     }
 
-    /// Advance all input sources to the provided time
-    pub fn advance_all_inputs(&mut self, advance_time: T::Time) {
-        for mut item in self.iter_mut() {
-            item.advance(advance_time);
-        }
+    pub fn first_next_event(&self) -> Option<T::Time> {
+        self.iter().filter_map(|x| x.1.next_scheduled_time).min()
     }
 
-    /// Advance final all input sources
-    pub fn advance_final_all_inputs(&mut self) {
-        for mut item in self.iter_mut() {
-            item.advance_final();
-        }
+    pub fn advance_all(
+        &mut self,
+        lower_bound: LowerBound<T::Time>,
+        upper_bound: UpperBound<T::Time>,
+    ) {
+        self.iter_mut()
+            .for_each(|mut x| x.advance(lower_bound, upper_bound));
     }
 }

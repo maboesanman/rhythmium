@@ -1,7 +1,7 @@
 use core::num::NonZeroUsize;
 use core::task::Waker;
 
-use crate::source::source_poll::TrySourcePoll;
+use crate::source::source_poll::{LowerBound, TrySourcePoll, UpperBound};
 
 #[derive(Clone)]
 pub struct SourceContext {
@@ -75,28 +75,33 @@ pub trait Source {
         self.poll(time, cx)
     }
 
-    /// Attempt to determine information about the set of events before `time` without generating a state. this function behaves the same as [`poll_forget`](Source::poll_forget) but returns `()` instead of [`State`](Source::State). This function should be used in all situations when the state is not actually needed, as the implementer of the trait may be able to do less work.
-    ///
-    /// If you do not need to use the state, this should be preferred over poll. For example, if you are simply verifying the source does not have new events before a time t, poll_ignore_state could be faster than poll (with a custom implementation).
-    fn poll_events(
+    /// Attempt to determine information about the set of events in the range (..upper_bound) - (..last_finalize_upper_bound).
+    fn poll_interrupts(
         &mut self,
-        time: Self::Time,
         interrupt_waker: Waker,
     ) -> TrySourcePoll<Self::Time, Self::Event, ()>;
 
+    /// Inform the source of the specific range in which poll and poll_forget may be called, and additionally
+    /// what time we need to be notified of all events before.
+    ///
+    /// the range is (..upper_bound) - (..lower_bound) where the subtraction is set subtraction.
+    /// note that this is NOT THE SAME as lower_bound..upper_bound. If we had represented it this way, we would not be able to express the completed state properly.
+    /// lower bound must be less than or equal to upper bound, and if both are Unbounded, then no event will ever be emitted
+    /// ever again.
+    ///
+    /// subsequent calls must not call lower or upper with values less than the previous call (including implied upper_bounds from poll/poll_forget calls)
+    ///
+    /// the implication here is after calling this all interrupts will be at times in the range (..upper_bound) - (..last_finalize_upper_bound)
+    /// and all state polls will be at times in the range (..upper_bound) - (..lower_bound)
+    fn advance(
+        &mut self,
+        lower_bound: LowerBound<Self::Time>,
+        upper_bound: UpperBound<Self::Time>,
+        interrupt_waker: Waker,
+    );
+
     /// Inform the source it is no longer obligated to retain progress made on `channel`
     fn release_channel(&mut self, channel: usize);
-
-    /// Inform the source that you will never poll before `time` again on any channel.
-    ///
-    /// Calling poll before this time should result in `SourcePollError::PollAfterAdvance`
-    fn advance(&mut self, time: Self::Time);
-
-    /// Inform the source that you will never call poll or poll_forget ever again. You may still call poll_events.
-    ///
-    /// This is useful for callers which do not care about the state of the source, and only care about events.
-    /// Some combinators may be able to drop some input sources if callers don't care about events.
-    fn advance_final(&mut self);
 
     /// The maximum value which can be used as the channel for a poll call.
     ///

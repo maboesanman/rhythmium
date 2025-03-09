@@ -89,10 +89,13 @@ impl<T: Transposer + Clone + 'static> TransposeBuilder<T> {
 
         let steps =
             StepList::new(transposer, pre_init_step, start_time, rng_seed).map_err(|_| ())?;
+            
+        let input_sources = ErasedInputSourceCollection::new(input_sources)?;
+        let wakers = TransposeWakerObserver::new(input_sources.iter_with_hashes().map(|(h, ..)| h));
 
         Ok(Transpose {
             main: TransposeMain {
-                input_sources: ErasedInputSourceCollection::new(input_sources)?,
+                input_sources,
                 steps,
                 input_buffer: BTreeSet::new(),
                 interpolations: HashMap::new(),
@@ -101,11 +104,11 @@ impl<T: Transposer + Clone + 'static> TransposeBuilder<T> {
                 advance_time: None,
                 channel_reservations: InputChannelReservations::new(),
                 advance_final: false,
-                complete: false,
+                complete: None,
                 last_finalize: None,
                 needs_signal: false,
             },
-            wakers: TransposeWakerObserver::new(),
+            wakers,
         })
     }
 }

@@ -56,7 +56,7 @@ impl<T: Transposer, P: SharedPointerKind> CurrentTimeContext<T>
 impl<T: Transposer, P: SharedPointerKind> LastUpdatedTimeContext<T>
     for StepInterpolateContext<'_, T, P>
 {
-    fn last_updated_time(&self) -> <T as Transposer>::Time {
-        self.metadata.last_updated.time
+    fn last_updated_time(&self) -> Option<<T as Transposer>::Time> {
+        self.metadata.last_updated.map(|x| x.time)
     }
 }

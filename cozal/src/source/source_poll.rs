@@ -1,13 +1,18 @@
-/// A modified version of [`futures::task::Poll`], which has two new variants:
-///
+use std::{ops::Bound, task::Poll};
+
 #[derive(Debug)]
 pub enum SourcePoll<T, E, S> {
     /// Indicates the poll is complete
-    Ready {
-        /// The requested state
-        state: S,
-        /// The time of the next known event, if known.
+    StateProgress {
+        /// The requested state, if ready
+        /// the channel waker must be called to wake if pending.
+        state: Poll<S>,
+
+        /// The time of the next event after the current advance upper bound.
         next_event_at: Option<T>,
+
+        /// The current finalize bound (after this state is processed)
+        finalize_bound: LowerBound<T>,
     },
 
     /// Indicates information must be handled before state is emitted
@@ -17,11 +22,19 @@ pub enum SourcePoll<T, E, S> {
 
         /// The type of interrupt
         interrupt: Interrupt<E>,
+
+        /// The current finalize bound (after this interrupt is processed)
+        finalize_bound: LowerBound<T>,
     },
 
-    /// pending operation. caller will be woken up when progress can be made
-    /// the channel this poll used must be retained.
-    Pending,
+    /// Indicates that the finalized bound has changed.
+    Finalize {
+        /// The current finalize bound
+        finalize_bound: LowerBound<T>,
+    },
+
+    /// pending operation. interrupt waker will be called when progress may be made toward interrupts being resolved.
+    InterruptPending,
 }
 
 impl<T, E, S> SourcePoll<T, E, S> {
@@ -30,15 +43,221 @@ impl<T, E, S> SourcePoll<T, E, S> {
         F: FnOnce(S) -> U,
     {
         match self {
-            SourcePoll::Ready {
+            SourcePoll::StateProgress {
                 state,
                 next_event_at,
-            } => SourcePoll::Ready {
-                state: f(state),
+                finalize_bound,
+            } => SourcePoll::StateProgress {
+                state: state.map(f),
                 next_event_at,
+                finalize_bound,
             },
-            SourcePoll::Interrupt { time, interrupt } => SourcePoll::Interrupt { time, interrupt },
-            SourcePoll::Pending => SourcePoll::Pending,
+            SourcePoll::Interrupt {
+                time,
+                interrupt,
+                finalize_bound,
+            } => SourcePoll::Interrupt {
+                time,
+                interrupt,
+                finalize_bound,
+            },
+            SourcePoll::Finalize { finalize_bound } => SourcePoll::Finalize { finalize_bound },
+            SourcePoll::InterruptPending => SourcePoll::InterruptPending,
+        }
+    }
+
+    pub fn map_event<F, U>(self, f: F) -> SourcePoll<T, U, S>
+    where
+        F: FnOnce(&T, E) -> U,
+    {
+        match self {
+            SourcePoll::StateProgress {
+                state,
+                next_event_at,
+                finalize_bound,
+            } => SourcePoll::StateProgress {
+                state,
+                next_event_at,
+                finalize_bound,
+            },
+            SourcePoll::Interrupt {
+                time,
+                interrupt,
+                finalize_bound,
+            } => SourcePoll::Interrupt {
+                interrupt: interrupt.map_event(|e| f(&time, e)),
+                time,
+                finalize_bound,
+            },
+            SourcePoll::Finalize { finalize_bound } => SourcePoll::Finalize { finalize_bound },
+            SourcePoll::InterruptPending => SourcePoll::InterruptPending,
+        }
+    }
+}
+
+impl<T: Copy, E, S> SourcePoll<T, E, S> {
+    pub fn get_finalize_bound(&self) -> Option<LowerBound<T>> {
+        match self {
+            SourcePoll::StateProgress { finalize_bound, .. } => Some(*finalize_bound),
+            SourcePoll::Interrupt { finalize_bound, .. } => Some(*finalize_bound),
+            SourcePoll::Finalize { finalize_bound } => Some(*finalize_bound),
+            SourcePoll::InterruptPending => None,
+        }
+    }
+}
+
+/// A bound for describing ranges
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SourceBound<T> {
+    /// a set bounded below by this includes all t.
+    /// a set bounded above by this includes no t.
+    Min,
+
+    /// a set bounded below by this includes all t >= T.
+    /// a set bounded above by this includes all t <= T.
+    Inclusive(T),
+
+    /// a set bounded below by this includes all t > T.
+    /// a set bounded above by this includes all t < T.
+    Exclusive(T),
+
+    /// a set bounded below by this includes no t.
+    /// a set bounded above by this includes all t.
+    Max,
+}
+
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LowerBound<T>(pub SourceBound<T>);
+
+impl<T: PartialOrd> PartialOrd for LowerBound<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        use std::cmp::Ordering::*;
+
+        match (&self.0, &other.0) {
+            (SourceBound::Min, SourceBound::Min) => Some(Equal),
+            (SourceBound::Max, SourceBound::Max) => Some(Equal),
+            (SourceBound::Min, _) | (_, SourceBound::Max) => Some(Less),
+            (SourceBound::Max, _) | (_, SourceBound::Min) => Some(Greater),
+            (SourceBound::Inclusive(t1), SourceBound::Inclusive(t2)) |
+            (SourceBound::Exclusive(t1), SourceBound::Exclusive(t2)) => t1.partial_cmp(t2),
+            (SourceBound::Exclusive(t1), SourceBound::Inclusive(t2)) => Some(t1.partial_cmp(t2)?.then(Less)),
+            (SourceBound::Inclusive(t1), SourceBound::Exclusive(t2)) => Some(t1.partial_cmp(t2)?.then(Greater)),
+        }
+    }
+}
+
+impl<T: Ord> Ord for LowerBound<T> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        use std::cmp::Ordering::*;
+
+        match (&self.0, &other.0) {
+            (SourceBound::Min, SourceBound::Min) => Equal,
+            (SourceBound::Max, SourceBound::Max) => Equal,
+            (SourceBound::Min, _) | (_, SourceBound::Max) => Less,
+            (SourceBound::Max, _) | (_, SourceBound::Min) => Greater,
+            (SourceBound::Inclusive(t1), SourceBound::Inclusive(t2)) |
+            (SourceBound::Exclusive(t1), SourceBound::Exclusive(t2)) => t1.cmp(t2),
+            (SourceBound::Exclusive(t1), SourceBound::Inclusive(t2)) => t1.cmp(t2).then(Less),
+            (SourceBound::Inclusive(t1), SourceBound::Exclusive(t2)) => t1.cmp(t2).then(Greater),
+        }
+    }
+}
+
+impl<T> LowerBound<T> {
+    pub fn min() -> Self {
+        Self(SourceBound::Min)
+    }
+
+    pub fn max() -> Self {
+        Self(SourceBound::Max)
+    }
+
+    pub fn inclusive(t: T) -> Self {
+        Self(SourceBound::Inclusive(t))
+    }
+
+    pub fn exclusive(t: T) -> Self {
+        Self(SourceBound::Exclusive(t))
+    }
+}
+
+impl<T: Ord> LowerBound<T> {
+    pub fn test(&self, value: &T) -> bool {
+        match &self.0 {
+            SourceBound::Min => true,
+            SourceBound::Inclusive(t) => t <= value,
+            SourceBound::Exclusive(t) => t < value,
+            SourceBound::Max => false,
+        }
+    }
+}
+
+
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UpperBound<T>(pub SourceBound<T>);
+
+impl<T: PartialOrd> PartialOrd for UpperBound<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        use std::cmp::Ordering::*;
+
+        match (&self.0, &other.0) {
+            (SourceBound::Min, SourceBound::Min) => Some(Equal),
+            (SourceBound::Max, SourceBound::Max) => Some(Equal),
+            (SourceBound::Min, _) | (_, SourceBound::Max) => Some(Less),
+            (SourceBound::Max, _) | (_, SourceBound::Min) => Some(Greater),
+            (SourceBound::Inclusive(t1), SourceBound::Inclusive(t2)) |
+            (SourceBound::Exclusive(t1), SourceBound::Exclusive(t2)) => t1.partial_cmp(t2),
+            (SourceBound::Exclusive(t1), SourceBound::Inclusive(t2)) => Some(t1.partial_cmp(t2)?.then(Greater)),
+            (SourceBound::Inclusive(t1), SourceBound::Exclusive(t2)) => Some(t1.partial_cmp(t2)?.then(Less)),
+        }
+    }
+}
+
+impl<T: Ord> Ord for UpperBound<T> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        use std::cmp::Ordering::*;
+
+        match (&self.0, &other.0) {
+            (SourceBound::Min, SourceBound::Min) => Equal,
+            (SourceBound::Max, SourceBound::Max) => Equal,
+            (SourceBound::Min, _) | (_, SourceBound::Max) => Less,
+            (SourceBound::Max, _) | (_, SourceBound::Min) => Greater,
+            (SourceBound::Inclusive(t1), SourceBound::Inclusive(t2)) |
+            (SourceBound::Exclusive(t1), SourceBound::Exclusive(t2)) => t1.cmp(t2),
+            (SourceBound::Exclusive(t1), SourceBound::Inclusive(t2)) => t1.cmp(t2).then(Greater),
+            (SourceBound::Inclusive(t1), SourceBound::Exclusive(t2)) => t1.cmp(t2).then(Less),
+        }
+    }
+}
+
+
+impl<T> UpperBound<T> {
+    pub fn min() -> Self {
+        Self(SourceBound::Min)
+    }
+
+    pub fn max() -> Self {
+        Self(SourceBound::Max)
+    }
+
+    pub fn inclusive(t: T) -> Self {
+        Self(SourceBound::Inclusive(t))
+    }
+
+    pub fn exclusive(t: T) -> Self {
+        Self(SourceBound::Exclusive(t))
+    }
+}
+
+impl<T: Ord> UpperBound<T> {
+    pub fn test(&self, value: &T) -> bool {
+        match &self.0 {
+            SourceBound::Min => false,
+            SourceBound::Inclusive(t) => t >= value,
+            SourceBound::Exclusive(t) => t > value,
+            SourceBound::Max => true,
         }
     }
 }
@@ -49,20 +268,8 @@ pub enum Interrupt<E> {
     /// A new event is available.
     Event(E),
 
-    /// An event followed by a finalize, for convenience.
-    /// This should be identical to returning an event then a finalize for the same time.
-    /// Useful for sources which never emit Rollbacks, so they can simply emit this interrupt
-    /// for every event and nothing else.
-    FinalizedEvent(E),
-
     /// All events before at or after time T must be discarded.
     Rollback,
-    /// No event will ever be emitted before time T again.
-    Finalize,
-
-    /// No interrupt will ever be emitted ever again.
-    /// The associated time is the time of the last emitted event.
-    Complete,
 }
 
 impl<E> Interrupt<E> {
@@ -72,10 +279,7 @@ impl<E> Interrupt<E> {
     {
         match self {
             Interrupt::Event(e) => Interrupt::Event(f(e)),
-            Interrupt::FinalizedEvent(e) => Interrupt::FinalizedEvent(f(e)),
             Interrupt::Rollback => Interrupt::Rollback,
-            Interrupt::Finalize => Interrupt::Finalize,
-            Interrupt::Complete => Interrupt::Complete,
         }
     }
 }
