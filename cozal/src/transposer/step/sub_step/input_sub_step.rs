@@ -10,13 +10,13 @@ use std::{
 
 use archery::{SharedPointer, SharedPointerKind};
 
-use super::{BoxedSubStep, StartSaturateErr, SubStep, INPUT_SUB_STEP_SORT_PHASE};
+use super::{BoxedSubStep, INPUT_SUB_STEP_SORT_PHASE, StartSaturateErr, SubStep};
 use crate::transposer::{
+    Transposer, TransposerInput, TransposerInputEventHandler,
     input_erasure::{HasErasedInputExt, HasInput},
     input_state_manager::InputStateManager,
     output_event_manager::OutputEventManager,
     step::{step::PollErr, wrapped_transposer::WrappedTransposer},
-    Transposer, TransposerInput, TransposerInputEventHandler,
 };
 
 pub struct InputSubStep<T: Transposer, P: SharedPointerKind, I: TransposerInput<Base = T>>

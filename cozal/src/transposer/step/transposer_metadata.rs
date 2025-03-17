@@ -1,13 +1,13 @@
 use archery::SharedPointerKind;
 use rand::SeedableRng;
-use rand_chacha::rand_core::block::BlockRng;
 use rand_chacha::ChaCha12Core;
+use rand_chacha::rand_core::block::BlockRng;
 
 use super::expire_handle_factory::ExpireHandleFactory;
 use super::time::{ScheduledTime, SubStepTime};
+use crate::transposer::Transposer;
 use crate::transposer::context::ExpireEventError;
 use crate::transposer::expire_handle::ExpireHandle;
-use crate::transposer::Transposer;
 
 /// TransposerMetaData is a struct that holds all the data that is needed to run a transposer, besides
 /// the actual transposer struct. Essentially this is all the stuff that the various Contexts provide

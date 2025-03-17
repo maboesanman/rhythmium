@@ -3,15 +3,16 @@ use std::collections::HashSet;
 
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::num::NonZeroUsize;
+use std::task::{Poll, Waker};
 
 use crate::source::source_poll::{Interrupt, LowerBound, UpperBound};
 use crate::transposer::TransposerInputEventHandler;
 use crate::{
-    source::{source_poll::TrySourcePoll, traits::SourceContext, Source, SourcePoll},
+    source::{Source, SourcePoll, source_poll::TrySourcePoll, traits::SourceContext},
     transposer::{
+        Transposer, TransposerInput,
         input_erasure::{ErasedInput, ErasedInputState, HasErasedInput, HasInput},
         step::BoxedInput,
-        Transposer, TransposerInput,
     },
 };
 use archery::ArcTK;
@@ -44,7 +45,7 @@ where
         &mut self,
         time: Self::Time,
         cx: SourceContext,
-    ) -> TrySourcePoll<Self::Time, Self::Event, Self::State> {
+    ) -> TrySourcePoll<Self::Time, Self::Event, Poll<Self::State>> {
         loop {
             let poll = self.source.poll(time, cx.clone())?;
             if let SourcePoll::Interrupt {
@@ -68,7 +69,7 @@ where
         &mut self,
         time: Self::Time,
         cx: SourceContext,
-    ) -> TrySourcePoll<Self::Time, Self::Event, Self::State> {
+    ) -> TrySourcePoll<Self::Time, Self::Event, Poll<Self::State>> {
         loop {
             let poll = self.source.poll_forget(time, cx.clone())?;
             if let SourcePoll::Interrupt {
@@ -121,8 +122,10 @@ where
         &mut self,
         lower_bound: LowerBound<Self::Time>,
         upper_bound: UpperBound<Self::Time>,
+        interrupt_waker: Waker,
     ) {
-        self.source.advance(lower_bound, upper_bound);
+        self.source
+            .advance(lower_bound, upper_bound, interrupt_waker);
     }
 }
 

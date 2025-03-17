@@ -5,11 +5,11 @@ use rand_chacha::rand_core::CryptoRngCore;
 
 use super::time::SubStepTime;
 use super::transposer_metadata::TransposerMetaData;
+use crate::transposer::Transposer;
 use crate::transposer::context::*;
 use crate::transposer::expire_handle::ExpireHandle;
 use crate::transposer::input_state_manager::InputStateManager;
 use crate::transposer::output_event_manager::OutputEventManager;
-use crate::transposer::Transposer;
 
 /// This is the interface through which you can do a variety of functions in your transposer.
 ///

@@ -1,10 +1,9 @@
 // mod duplicate;
 // mod offload;
 // mod multiplex;
-// pub mod transpose;
+pub mod transpose;
 // mod concurrent;
 // pub mod interrupt_iterator;
-pub mod interrupt_stream;
 
 // pub use self::duplicate::Duplicate;
 // pub use self::concurrent::MutexSource;
@@ -12,3 +11,4 @@ pub mod interrupt_stream;
 // pub use self::offload::{offload, OffloadFuture, OffloadSource};
 // pub use self::transpose::Transpose;
 // pub mod state_function_source;
+pub mod event_stream;

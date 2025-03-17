@@ -1,6 +1,6 @@
 use std::collections::{
-    btree_set::{Entry, VacantEntry},
     BTreeSet,
+    btree_set::{Entry, VacantEntry},
 };
 
 pub struct InputChannelReservations {

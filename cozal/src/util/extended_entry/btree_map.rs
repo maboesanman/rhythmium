@@ -170,12 +170,10 @@ impl<'a, K: Ord, V> VacantExtEntry<'a, K, V> {
 pub fn get_first_vacant<V>(map: &mut BTreeMap<usize, V>) -> VacantExtEntry<'_, usize, V> {
     let i = get_first_vacant_index(map);
 
-    let vacant = match get_occupied(map, i) {
+    match get_occupied(map, i) {
         Ok(_) => unreachable!(),
         Err(v) => v,
-    };
-
-    vacant
+    }
 }
 
 pub fn get_first_vacant_index<V>(map: &mut BTreeMap<usize, V>) -> usize {

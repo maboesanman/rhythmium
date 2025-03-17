@@ -3,10 +3,10 @@ use std::ptr::NonNull;
 
 use rand_chacha::rand_core::CryptoRngCore;
 
+use super::Transposer;
 use super::expire_handle::ExpireHandle;
 use super::input_state_manager::{GetInputStateFuture, InputStateManager};
 use super::output_event_manager::{EmitOutputFuture, OutputEventManager};
-use super::Transposer;
 use crate::transposer::TransposerInput;
 
 /// A trait for accessing the current time (not the system time, but the time this transposer uses)

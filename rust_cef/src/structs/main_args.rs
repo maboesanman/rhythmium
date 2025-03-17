@@ -1,4 +1,4 @@
-use std::ffi::{c_char, c_int, CString};
+use std::ffi::{CString, c_char, c_int};
 
 use cef_wrapper::cef_capi_sys::cef_main_args_t;
 

@@ -1,7 +1,7 @@
 use std::{borrow::Cow, sync::Arc};
 
 use image::GenericImageView;
-use wgpu::{util::DeviceExt, CommandEncoder, PipelineCompilationOptions, TextureView};
+use wgpu::{CommandEncoder, PipelineCompilationOptions, TextureView, util::DeviceExt};
 use winit::dpi::PhysicalSize;
 
 use super::{

@@ -3,7 +3,7 @@ use cef_wrapper::cef_capi_sys::{
     cef_log_items_t_LOG_ITEMS_FLAG_THREAD_ID, cef_log_items_t_LOG_ITEMS_FLAG_TICK_COUNT,
     cef_log_items_t_LOG_ITEMS_FLAG_TIME_STAMP, cef_log_items_t_LOG_ITEMS_NONE,
 };
-use flagset::{flags, FlagSet};
+use flagset::{FlagSet, flags};
 
 flags! {
     pub enum LogItem: cef_log_items_t {

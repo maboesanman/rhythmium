@@ -1,5 +1,6 @@
 use core::num::NonZeroUsize;
 use core::task::Waker;
+use std::task::Poll;
 
 use crate::source::source_poll::{LowerBound, TrySourcePoll, UpperBound};
 
@@ -62,7 +63,7 @@ pub trait Source {
         &mut self,
         time: Self::Time,
         cx: SourceContext,
-    ) -> TrySourcePoll<Self::Time, Self::Event, Self::State>;
+    ) -> TrySourcePoll<Self::Time, Self::Event, Poll<Self::State>>;
 
     /// Attempt to retrieve the state of the source at `time`, registering the current task for wakeup in certain situations. Also inform the source that the state emitted from this call is exempt from the requirement to be informed of future invalidations (that the source can "forget" about this call to poll when determining how far to roll back).
     ///
@@ -71,7 +72,7 @@ pub trait Source {
         &mut self,
         time: Self::Time,
         cx: SourceContext,
-    ) -> TrySourcePoll<Self::Time, Self::Event, Self::State> {
+    ) -> TrySourcePoll<Self::Time, Self::Event, Poll<Self::State>> {
         self.poll(time, cx)
     }
 

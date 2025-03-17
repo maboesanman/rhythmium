@@ -3,9 +3,9 @@ use rand_chacha::rand_core::CryptoRngCore;
 
 use super::time::ScheduledTime;
 use super::transposer_metadata::TransposerMetaData;
+use crate::transposer::Transposer;
 use crate::transposer::context::*;
 use crate::transposer::expire_handle::ExpireHandle;
-use crate::transposer::Transposer;
 
 /// This is the interface through which you can do a variety of functions in your transposer.
 ///

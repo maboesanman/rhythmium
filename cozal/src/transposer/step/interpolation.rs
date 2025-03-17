@@ -9,7 +9,7 @@ use std::{
 
 use archery::{SharedPointer, SharedPointerKind};
 
-use crate::transposer::{input_state_manager::InputStateManager, Transposer};
+use crate::transposer::{Transposer, input_state_manager::InputStateManager};
 
 use super::{interpolate_context::StepInterpolateContext, wrapped_transposer::WrappedTransposer};
 

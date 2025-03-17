@@ -60,7 +60,7 @@ pub struct VacantExtEntry<'a, T> {
 
 impl<'a, T> VacantExtEntry<'a, T> {
     pub fn occupy(self, value: T) -> OccupiedExtEntry<'a, T> {
-        let old = core::mem::replace(self.option, Some(value));
+        let old = self.option.replace(value);
         match old {
             None => {}
             Some(_) => unsafe { unreachable_unchecked() },

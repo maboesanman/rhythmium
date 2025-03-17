@@ -5,7 +5,7 @@ use cef_wrapper::cef_capi_sys::{
 };
 
 use crate::util::{
-    cef_arc::{uninit_arc_vtable, CefArc, CefArcFromRust},
+    cef_arc::{CefArc, CefArcFromRust, uninit_arc_vtable},
     starts_with::StartsWith,
 };
 
@@ -59,10 +59,12 @@ pub(crate) trait BrowserProcessHandlerConfigExt: BrowserProcessHandlerConfig {
         ptr: *mut _cef_browser_process_handler_t,
         delay_ms: i64,
     ) {
-        let this = CefArcFromRust::<BrowserProcessHandler, BrowserProcessHandlerWrapper<Self>>::get_rust_impl_from_ptr(ptr.cast());
-        let shared = &(*this).shared;
+        unsafe {
+            let this = CefArcFromRust::<BrowserProcessHandler, BrowserProcessHandlerWrapper<Self>>::get_rust_impl_from_ptr(ptr.cast());
+            let shared = &(*this).shared;
 
-        shared.on_schedule_message_pump_work(delay_ms as u64);
+            shared.on_schedule_message_pump_work(delay_ms as u64);
+        }
     }
 }
 

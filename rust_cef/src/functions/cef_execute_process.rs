@@ -12,9 +12,5 @@ pub fn execute_process(args: MainArgs) -> Result<(), i32> {
         )
     };
 
-    if result >= 0 {
-        Ok(())
-    } else {
-        Err(result)
-    }
+    if result >= 0 { Ok(()) } else { Err(result) }
 }

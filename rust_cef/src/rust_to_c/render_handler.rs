@@ -8,7 +8,7 @@ use crate::{
     enums::paint_element_type::PaintElementType,
     structs::{geometry::Rect, screen_info::ScreenInfo},
     util::{
-        cef_arc::{uninit_arc_vtable, CefArc, CefArcFromRust},
+        cef_arc::{CefArc, CefArcFromRust, uninit_arc_vtable},
         starts_with::StartsWith,
     },
 };
@@ -81,15 +81,17 @@ pub(crate) trait RenderHandlerConfigExt: RenderHandlerConfig {
         browser: *mut cef_browser_t,
         rect: *mut cef_rect_t,
     ) {
-        let rust_impl_ptr =
-            CefArcFromRust::<RenderHandler, Self>::get_rust_impl_from_ptr(ptr.cast());
-        let rust_impl = &mut *rust_impl_ptr;
+        unsafe {
+            let rust_impl_ptr =
+                CefArcFromRust::<RenderHandler, Self>::get_rust_impl_from_ptr(ptr.cast());
+            let rust_impl = &mut *rust_impl_ptr;
 
-        let browser = browser.cast::<Browser>();
-        let browser = CefArc::from_raw(browser);
+            let browser = browser.cast::<Browser>();
+            let browser = CefArc::from_raw(browser);
 
-        if let Some(view_rect) = rust_impl.get_view_rect(browser) {
-            *rect = view_rect.into();
+            if let Some(view_rect) = rust_impl.get_view_rect(browser) {
+                *rect = view_rect.into();
+            }
         }
     }
 
@@ -103,30 +105,33 @@ pub(crate) trait RenderHandlerConfigExt: RenderHandlerConfig {
         width: ::std::os::raw::c_int,
         height: ::std::os::raw::c_int,
     ) {
-        let rust_impl_ptr =
-            CefArcFromRust::<RenderHandler, Self>::get_rust_impl_from_ptr(ptr.cast());
-        let rust_impl = &mut *rust_impl_ptr;
+        unsafe {
+            let rust_impl_ptr =
+                CefArcFromRust::<RenderHandler, Self>::get_rust_impl_from_ptr(ptr.cast());
+            let rust_impl = &mut *rust_impl_ptr;
 
-        let browser = browser.cast::<Browser>();
-        let browser = CefArc::from_raw(browser);
+            let browser = browser.cast::<Browser>();
+            let browser = CefArc::from_raw(browser);
 
-        let dirty_rects = std::slice::from_raw_parts(dirty_rects_start, dirty_rects_count);
-        let dirty_rects = dirty_rects
-            .iter()
-            .copied()
-            .map(|rect| rect.into())
-            .collect::<Vec<_>>();
+            let dirty_rects = std::slice::from_raw_parts(dirty_rects_start, dirty_rects_count);
+            let dirty_rects = dirty_rects
+                .iter()
+                .copied()
+                .map(|rect| rect.into())
+                .collect::<Vec<_>>();
 
-        let buffer = std::slice::from_raw_parts(buffer.cast::<u8>(), (width * height * 4) as usize);
+            let buffer =
+                std::slice::from_raw_parts(buffer.cast::<u8>(), (width * height * 4) as usize);
 
-        rust_impl.on_paint(
-            browser,
-            paint_element_type.into(),
-            &dirty_rects,
-            buffer,
-            width as usize,
-            height as usize,
-        );
+            rust_impl.on_paint(
+                browser,
+                paint_element_type.into(),
+                &dirty_rects,
+                buffer,
+                width as usize,
+                height as usize,
+            );
+        }
     }
 
     unsafe extern "C" fn get_screen_info_raw(
@@ -134,18 +139,20 @@ pub(crate) trait RenderHandlerConfigExt: RenderHandlerConfig {
         browser: *mut cef_browser_t,
         screen_info: *mut cef_screen_info_t,
     ) -> ::std::os::raw::c_int {
-        let rust_impl_ptr =
-            CefArcFromRust::<RenderHandler, Self>::get_rust_impl_from_ptr(ptr.cast());
-        let rust_impl = &mut *rust_impl_ptr;
+        unsafe {
+            let rust_impl_ptr =
+                CefArcFromRust::<RenderHandler, Self>::get_rust_impl_from_ptr(ptr.cast());
+            let rust_impl = &mut *rust_impl_ptr;
 
-        let browser = browser.cast::<Browser>();
-        let browser = CefArc::from_raw(browser);
+            let browser = browser.cast::<Browser>();
+            let browser = CefArc::from_raw(browser);
 
-        if let Some(new_screen_info) = rust_impl.get_screen_info(browser) {
-            *screen_info = new_screen_info.into();
-            1
-        } else {
-            0
+            if let Some(new_screen_info) = rust_impl.get_screen_info(browser) {
+                *screen_info = new_screen_info.into();
+                1
+            } else {
+                0
+            }
         }
     }
 
@@ -157,21 +164,23 @@ pub(crate) trait RenderHandlerConfigExt: RenderHandlerConfig {
         screen_x: *mut ::std::os::raw::c_int,
         screen_y: *mut ::std::os::raw::c_int,
     ) -> ::std::os::raw::c_int {
-        let rust_impl_ptr =
-            CefArcFromRust::<RenderHandler, Self>::get_rust_impl_from_ptr(ptr.cast());
-        let rust_impl = &mut *rust_impl_ptr;
+        unsafe {
+            let rust_impl_ptr =
+                CefArcFromRust::<RenderHandler, Self>::get_rust_impl_from_ptr(ptr.cast());
+            let rust_impl = &mut *rust_impl_ptr;
 
-        let browser = browser.cast::<Browser>();
-        let browser = CefArc::from_raw(browser);
+            let browser = browser.cast::<Browser>();
+            let browser = CefArc::from_raw(browser);
 
-        if let Some((new_screen_x, new_screen_y)) =
-            rust_impl.get_screen_point(browser, view_x, view_y)
-        {
-            *screen_x = new_screen_x;
-            *screen_y = new_screen_y;
-            1
-        } else {
-            0
+            if let Some((new_screen_x, new_screen_y)) =
+                rust_impl.get_screen_point(browser, view_x, view_y)
+            {
+                *screen_x = new_screen_x;
+                *screen_y = new_screen_y;
+                1
+            } else {
+                0
+            }
         }
     }
 }

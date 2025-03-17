@@ -7,11 +7,11 @@ use std::{
 use archery::{SharedPointer, SharedPointerKind};
 
 use crate::transposer::{
-    step::{step::PollErr, wrapped_transposer::WrappedTransposer},
     Transposer,
+    step::{step::PollErr, wrapped_transposer::WrappedTransposer},
 };
 
-pub enum InitSubStep<T: Transposer + Clone, P: SharedPointerKind> {
+pub enum InitSubStep<T: Transposer, P: SharedPointerKind> {
     Saturating {
         future: wrapped_handler::WrappedHandlerFuture<T, P>,
     },
@@ -23,21 +23,20 @@ pub enum InitSubStep<T: Transposer + Clone, P: SharedPointerKind> {
 mod wrapped_handler {
     use super::*;
 
-    pub type WrappedHandlerFuture<T: Transposer + Clone, P: SharedPointerKind> =
+    pub type WrappedHandlerFuture<T: Transposer, P: SharedPointerKind> =
         impl Future<Output = SharedPointer<WrappedTransposer<T, P>, P>>;
 
-    pub fn handle<T: Transposer + Clone, P: SharedPointerKind>(
-        mut wrapped_transposer: SharedPointer<WrappedTransposer<T, P>, P>,
+    pub fn handle<T: Transposer, P: SharedPointerKind>(
+        mut wrapped_transposer: WrappedTransposer<T, P>,
     ) -> WrappedHandlerFuture<T, P> {
         async move {
-            let transposer_mut = SharedPointer::make_mut(&mut wrapped_transposer);
-            transposer_mut.init().await;
-            wrapped_transposer
+            wrapped_transposer.init().await;
+            SharedPointer::new(wrapped_transposer)
         }
     }
 }
 
-impl<T: Transposer + Clone, P: SharedPointerKind> InitSubStep<T, P> {
+impl<T: Transposer, P: SharedPointerKind> InitSubStep<T, P> {
     pub fn new(transposer: T, rng_seed: [u8; 32]) -> Self {
         let wrapped_transposer = WrappedTransposer::new(transposer, rng_seed);
         InitSubStep::Saturating {

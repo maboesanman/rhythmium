@@ -1,11 +1,11 @@
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashMap, VecDeque},
     ops::{Deref, DerefMut},
     sync::Arc,
     task::Waker,
 };
 
-use futures::task::{waker, ArcWake};
+use futures::task::{ArcWake, waker};
 use parking_lot::Mutex;
 
 pub struct TransposeWakerObserver {
@@ -195,7 +195,7 @@ pub struct ChannelItem {
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Status {
-    Ready {
+    Woken {
         input_hash: u64,
         input_channel: usize,
     },
@@ -269,7 +269,7 @@ impl WakerData for SourceChannelWakerData {
         let channel_item = inner.channels.values_mut().find(|channel_item| {
             channel_item.interpolation_uuid == self.interpolation_uuid
                 && match channel_item.input_state_status {
-                    Status::Ready { .. } => false,
+                    Status::Woken { .. } => false,
                     Status::Pending { input_hash, .. } => input_hash == self.source_hash,
                     Status::None => false,
                 }
@@ -285,7 +285,7 @@ impl WakerData for SourceChannelWakerData {
                 input_hash,
                 input_channel,
             } => {
-                channel_item.input_state_status = Status::Ready {
+                channel_item.input_state_status = Status::Woken {
                     input_hash,
                     input_channel,
                 };
@@ -355,7 +355,7 @@ impl WakerData for SourceStepWakerData {
                 return;
             }
 
-            step_item.input_state_status = Status::Ready {
+            step_item.input_state_status = Status::Woken {
                 input_hash,
                 input_channel,
             };

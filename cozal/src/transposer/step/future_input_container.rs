@@ -57,11 +57,7 @@ impl<'t, T: Transposer + 't, P: SharedPointerKind + 't> FutureInputContainer<'t,
     for BTreeSet<BoxedInput<'t, T, P>>
 {
     fn next(&mut self) -> Option<impl FutureInputContainerGuard<'t, T, P> + '_> {
-        if self.is_empty() {
-            None
-        } else {
-            Some(self)
-        }
+        if self.is_empty() { None } else { Some(self) }
     }
 }
 

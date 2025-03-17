@@ -10,7 +10,7 @@ use rust_cef::{
     structs::{geometry::Rect, screen_info::ScreenInfo},
     util::cef_arc::CefArc,
 };
-use wgpu::{util::DeviceExt, CommandEncoder, PipelineCompilationOptions, TextureView};
+use wgpu::{CommandEncoder, PipelineCompilationOptions, TextureView, util::DeviceExt};
 use winit::dpi::{LogicalPosition, LogicalSize, PhysicalSize};
 
 use super::{

@@ -65,7 +65,9 @@ impl<V: StartsWith<cef_base_scoped_t>, R> CefBoxFromRust<V, R> {
 // this is only used for types created in rust.
 // the drop impl for CefBox calls this via the vtable.
 unsafe extern "C" fn del_ptr<T: StartsWith<cef_base_scoped_t>>(ptr: *mut cef_base_scoped_t) {
-    _ = Box::from_raw(ptr.cast::<T>());
+    unsafe {
+        _ = Box::from_raw(ptr.cast::<T>());
+    }
 }
 
 // we can deref to the rust impl if we have a cef type.
@@ -108,8 +110,10 @@ impl<T: StartsWith<cef_base_scoped_t>> CefBox<T> {
     }
 
     pub(crate) unsafe fn from_raw(ptr: *mut T) -> Self {
-        Self {
-            ptr: NonNull::new_unchecked(ptr),
+        unsafe {
+            Self {
+                ptr: NonNull::new_unchecked(ptr),
+            }
         }
     }
 }

@@ -6,43 +6,39 @@ use std::{
 use hashbrown::HashMap;
 
 use crate::{
-    source::Source,
+    source::{
+        Source,
+        source_poll::{LowerBound, UpperBound},
+    },
     transposer::{
-        input_erasure::ErasedInput, step::PreInitStep, Transposer, TransposerInput,
-        TransposerInputEventHandler,
+        Transposer, TransposerInput, TransposerInputEventHandler, input_erasure::ErasedInput,
+        step::PreInitStep,
     },
 };
 
 use super::{
+    Transpose, TransposeMain,
     erased_input_source_collection::{ErasedInputSource, ErasedInputSourceCollection},
     input_channel_reservations::InputChannelReservations,
     steps::StepList,
     transpose_interrupt_waker::TransposeWakerObserver,
-    Transpose, TransposeMain,
 };
 
 pub struct TransposeBuilder<T: Transposer + 'static> {
     transposer: T,
     pre_init_step: PreInitStep<T>,
     input_sources: HashSet<ErasedInputSource<T>>,
-    start_time: T::Time,
     rng_seed: [u8; 32],
     max_channels: NonZeroUsize,
 }
 
 impl<T: Transposer + Clone + 'static> TransposeBuilder<T> {
     /// Create a new builder
-    pub fn new(
-        transposer: T,
-        start_time: T::Time,
-        rng_seed: [u8; 32],
-        max_channels: NonZeroUsize,
-    ) -> Self {
+    pub fn new(transposer: T, rng_seed: [u8; 32], max_channels: NonZeroUsize) -> Self {
         Self {
             transposer,
             pre_init_step: PreInitStep::new(),
             input_sources: HashSet::new(),
-            start_time,
             rng_seed,
             max_channels,
         }
@@ -70,7 +66,7 @@ impl<T: Transposer + Clone + 'static> TransposeBuilder<T> {
             //     .insert()
         } else {
             self.input_sources
-                .insert(ErasedInputSource::new(input, source, self.start_time));
+                .insert(ErasedInputSource::new(input, source));
         }
 
         Ok(self)
@@ -81,15 +77,13 @@ impl<T: Transposer + Clone + 'static> TransposeBuilder<T> {
         let Self {
             transposer,
             pre_init_step,
-            start_time,
             rng_seed,
             input_sources,
             max_channels: _,
         } = self;
 
-        let steps =
-            StepList::new(transposer, pre_init_step, start_time, rng_seed).map_err(|_| ())?;
-            
+        let steps = StepList::new(transposer, pre_init_step, rng_seed).map_err(|_| ())?;
+
         let input_sources = ErasedInputSourceCollection::new(input_sources)?;
         let wakers = TransposeWakerObserver::new(input_sources.iter_with_hashes().map(|(h, ..)| h));
 
@@ -100,13 +94,11 @@ impl<T: Transposer + Clone + 'static> TransposeBuilder<T> {
                 input_buffer: BTreeSet::new(),
                 interpolations: HashMap::new(),
                 next_interpolation_uuid: 0,
-                wavefront_time: None,
-                advance_time: None,
                 channel_reservations: InputChannelReservations::new(),
-                advance_final: false,
-                complete: None,
-                last_finalize: None,
-                needs_signal: false,
+                advance_upper_bound: UpperBound::min(),
+                advance_lower_bound: LowerBound::min(),
+                last_emitted_finalize: LowerBound::min(),
+                returned_state_times: BTreeSet::new(),
             },
             wakers,
         })

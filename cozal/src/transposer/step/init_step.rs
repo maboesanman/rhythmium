@@ -8,14 +8,14 @@ use archery::{ArcTK, SharedPointer, SharedPointerKind};
 use crate::transposer::Transposer;
 
 use super::{
+    FutureInputContainer, FutureInputContainerGuard, Interpolation, PreInitStep, Step,
     previous_step::PreviousStep,
     step::{InterpolateErr, NextUnsaturatedErr, PollErr, SaturateErr},
     sub_step::{init_sub_step::InitSubStep, scheduled_sub_step::ScheduledSubStep},
     wrapped_transposer::WrappedTransposer,
-    FutureInputContainer, FutureInputContainerGuard, Interpolation, PreInitStep, Step,
 };
 
-pub struct InitStep<T: Transposer + Clone, P: SharedPointerKind = ArcTK> {
+pub struct InitStep<T: Transposer, P: SharedPointerKind = ArcTK> {
     sub_step: Pin<Box<InitSubStep<T, P>>>,
 
     #[cfg(debug_assertions)]

@@ -6,7 +6,7 @@ use std::{
     task::{Context, Poll, Waker},
 };
 
-use smallvec::{smallvec, SmallVec};
+use smallvec::{SmallVec, smallvec};
 
 use crate::transposer::Transposer;
 

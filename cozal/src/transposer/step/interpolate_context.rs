@@ -4,11 +4,11 @@ use archery::SharedPointerKind;
 
 // use super::lazy_state::LazyState;
 use super::transposer_metadata::TransposerMetaData;
+use crate::transposer::Transposer;
 use crate::transposer::context::{
     CurrentTimeContext, InputStateManagerContext, InterpolateContextInner, LastUpdatedTimeContext,
 };
 use crate::transposer::input_state_manager::InputStateManager;
-use crate::transposer::Transposer;
 
 pub struct StepInterpolateContext<'update, T: Transposer, P: SharedPointerKind> {
     interpolation_time: T::Time,

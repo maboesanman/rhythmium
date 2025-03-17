@@ -96,42 +96,50 @@ mod c_callbacks {
     use super::CefArcFromRust;
 
     pub unsafe extern "C" fn add_ref_ptr<V, R>(ptr: *mut cef_base_ref_counted_t) {
-        let rust_type = ptr.cast::<CefArcFromRust<V, R>>();
-        Arc::increment_strong_count(rust_type);
+        unsafe {
+            let rust_type = ptr.cast::<CefArcFromRust<V, R>>();
+            Arc::increment_strong_count(rust_type);
+        }
     }
 
     pub unsafe extern "C" fn release_ptr<V, R>(ptr: *mut cef_base_ref_counted_t) -> i32 {
-        let rust_type = ptr.cast::<CefArcFromRust<V, R>>();
-        let a = Arc::from_raw(rust_type);
-        let strong_count = Arc::strong_count(&a);
-        drop(a);
+        unsafe {
+            let rust_type = ptr.cast::<CefArcFromRust<V, R>>();
+            let a = Arc::from_raw(rust_type);
+            let strong_count = Arc::strong_count(&a);
+            drop(a);
 
-        debug_assert!(
-            strong_count > 0,
-            "release_ptr called on a CefArc with no references"
-        );
+            debug_assert!(
+                strong_count > 0,
+                "release_ptr called on a CefArc with no references"
+            );
 
-        wrap_boolean(strong_count == 1)
+            wrap_boolean(strong_count == 1)
+        }
     }
 
     pub unsafe extern "C" fn has_one_ref_ptr<V, R>(ptr: *mut cef_base_ref_counted_t) -> i32 {
-        let rust_type = ptr.cast::<CefArcFromRust<V, R>>();
-        let a = Arc::from_raw(rust_type);
-        let strong_count = Arc::strong_count(&a);
-        core::mem::forget(a);
+        unsafe {
+            let rust_type = ptr.cast::<CefArcFromRust<V, R>>();
+            let a = Arc::from_raw(rust_type);
+            let strong_count = Arc::strong_count(&a);
+            core::mem::forget(a);
 
-        wrap_boolean(strong_count == 1)
+            wrap_boolean(strong_count == 1)
+        }
     }
 
     pub unsafe extern "C" fn has_at_least_one_ref_ptr<V, R>(
         ptr: *mut cef_base_ref_counted_t,
     ) -> i32 {
-        let rust_type = ptr.cast::<CefArcFromRust<V, R>>();
-        let a = Arc::from_raw(rust_type);
-        let strong_count = Arc::strong_count(&a);
-        core::mem::forget(a);
+        unsafe {
+            let rust_type = ptr.cast::<CefArcFromRust<V, R>>();
+            let a = Arc::from_raw(rust_type);
+            let strong_count = Arc::strong_count(&a);
+            core::mem::forget(a);
 
-        wrap_boolean(strong_count >= 1)
+            wrap_boolean(strong_count >= 1)
+        }
     }
 }
 
@@ -173,8 +181,10 @@ impl<T: StartsWith<cef_base_ref_counted_t>> CefArc<T> {
     }
 
     pub(crate) unsafe fn from_raw(ptr: *mut T) -> Self {
-        Self {
-            ptr: NonNull::new_unchecked(ptr),
+        unsafe {
+            Self {
+                ptr: NonNull::new_unchecked(ptr),
+            }
         }
     }
 

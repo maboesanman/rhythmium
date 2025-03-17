@@ -3,7 +3,7 @@ use cef_wrapper::cef_capi_sys::{cef_base_ref_counted_t, cef_browser_t, cef_life_
 use crate::{
     c_to_rust::browser::Browser,
     util::{
-        cef_arc::{uninit_arc_vtable, CefArc, CefArcFromRust},
+        cef_arc::{CefArc, CefArcFromRust, uninit_arc_vtable},
         starts_with::StartsWith,
     },
 };
@@ -38,14 +38,16 @@ pub(crate) trait LifeSpanHandlerConfigExt: LifeSpanHandlerConfig {
         ptr: *mut cef_life_span_handler_t,
         browser: *mut cef_browser_t,
     ) {
-        let rust_impl_ptr =
-            CefArcFromRust::<LifeSpanHandler, Self>::get_rust_impl_from_ptr(ptr.cast());
-        let rust_impl = &mut *rust_impl_ptr;
+        unsafe {
+            let rust_impl_ptr =
+                CefArcFromRust::<LifeSpanHandler, Self>::get_rust_impl_from_ptr(ptr.cast());
+            let rust_impl = &mut *rust_impl_ptr;
 
-        let browser = browser.cast::<Browser>();
-        let browser = CefArc::from_raw(browser);
+            let browser = browser.cast::<Browser>();
+            let browser = CefArc::from_raw(browser);
 
-        rust_impl.on_after_created(browser);
+            rust_impl.on_after_created(browser);
+        }
     }
 }
 

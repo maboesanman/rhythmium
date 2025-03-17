@@ -8,7 +8,6 @@ use input_source_metadata::InputSourceMetaData;
 use std::collections::BTreeSet;
 use std::future::Future;
 use std::num::NonZeroUsize;
-use std::ops::Bound;
 use std::pin::Pin;
 use std::task::{Context, Poll, Waker};
 use steps::StepList;
@@ -16,24 +15,24 @@ use transpose_interrupt_waker::{
     ChannelItem, InnerGuard, Status, StepItem, TransposeWakerObserver,
 };
 
-// mod builder;
+mod builder;
 mod erased_input_source_collection;
 mod input_channel_reservations;
 mod input_source_metadata;
 mod steps;
 mod transpose_interrupt_waker;
 
-// #[cfg(test)]
-// mod test;
+#[cfg(test)]
+mod test;
 
 pub use builder::TransposeBuilder;
 
-use crate::source::source_poll::{Interrupt, SourcePollErr, TrySourcePoll};
+use crate::source::source_poll::{Interrupt, LowerBound, SourcePollErr, TrySourcePoll, UpperBound};
 use crate::source::traits::SourceContext;
 use crate::source::{Source, SourcePoll};
+use crate::transposer::Transposer;
 use crate::transposer::input_erasure::HasErasedInputExt;
 use crate::transposer::step::{BoxedInput, Interpolation, StepPoll};
-use crate::transposer::Transposer;
 
 pub struct Transpose<T: Transposer + 'static> {
     // most of the fields
@@ -74,22 +73,14 @@ struct TransposeMain<T: Transposer + 'static> {
     channel_reservations: InputChannelReservations,
 
     // the max of all time values ever passed to any of the poll variants.
-    wavefront_time: Option<T::Time>,
+    advance_upper_bound: UpperBound<T::Time>,
 
     // the latest time we have had advance called to.
-    advance_time: Option<T::Time>,
+    advance_lower_bound: LowerBound<T::Time>,
 
-    // if advance_final has ever been called.
-    advance_final: bool,
+    last_emitted_finalize: LowerBound<T::Time>,
 
-    // if we have ever returned the Complete interrupt (or if we just decided to emit it and needs_signal was just set)
-    complete: Option<T::Time>,
-
-    // the latest value of finalize we have emitted via interrupts (or if we just decided to increase and emit it and needs_signal was just set)
-    last_finalize: Option<T::Time>,
-
-    // whether we still need to actually emit interrupts for complete or last_finalize
-    needs_signal: bool,
+    returned_state_times: BTreeSet<T::Time>,
 }
 
 impl<T: Transposer + Clone + 'static> TransposeMain<T> {
@@ -102,59 +93,37 @@ impl<T: Transposer + Clone + 'static> TransposeMain<T> {
         }
 
         if last_step.step.is_saturated() {
-            assert!(last_step
-                .step
-                .next_scheduled_unsaturated()
-                .unwrap()
-                .is_none());
+            assert!(
+                last_step
+                    .step
+                    .next_scheduled_unsaturated()
+                    .unwrap()
+                    .is_none()
+            );
             assert!(self.input_buffer.is_empty());
         }
     }
 
-    fn update_complete_and_finalize_time(&mut self) {
-        let earliest_possible_interrupt = self
-            .input_sources
-            .earliest_possible_incoming_interrupt_time();
-        let earliest_possible_output_event = self.steps.earliest_possible_event_time();
-        println!("earliest_possible_interrupt: {:?}", earliest_possible_interrupt);
-        println!("earliest_possible_output_event: {:?}", earliest_possible_output_event);
+    // get the lower bound on when the next interrupt can be emitted.
+    fn get_finalize_lower_bound(&mut self) -> LowerBound<T::Time> {
+        // the next interrupt could come from one of the input sources
+        let incoming_interrupt_lower_bound = self.input_sources.interupt_lower_bound();
 
-        let finalize_time = match (earliest_possible_interrupt, earliest_possible_output_event) {
-            (None, None) => {
-                if self.complete.is_none() {
-                    self.complete = self.last_finalize;
-                    self.needs_signal = true;
-
-                    if let Some(t) = self.advance_time {
-                        self.input_sources.advance_all_inputs(t);
-                    } else {
-                        self.input_sources.advance_final_all_inputs();
-                    }
-                }
-                return;
-            }
-            (None, Some(t)) => Some(t),
-            (Some(Some(t)), None) => Some(t),
-            (Some(None), Some(t)) => Some(t),
-            (Some(None), None) => None,
-            (Some(Some(t1)), Some(t2)) => Some(t1.min(t2)),
+        // the next interrupt could come from the step processed by the first input event
+        let input_buffer_lower_bound = match self.input_buffer.first() {
+            Some(i) => LowerBound::exclusive(i.get_time()),
+            None => LowerBound::max(),
         };
 
-        if let Some(finalize_time) = finalize_time {
-            if self.last_finalize < Some(finalize_time) {
-                self.last_finalize = Some(finalize_time);
-                self.needs_signal = true;
+        // the next interrupt could come from the first non-saturated step
+        let step_interrupt_lower_bound = self.steps.get_finalize_bound();
 
-                if self.advance_final {
-                    self.input_sources.advance_final_all_inputs();
-                } else if let Some(advance_time) = self.advance_time {
-                    self.input_sources.advance_all_inputs(advance_time);
-                }
-            }
-        }
+        incoming_interrupt_lower_bound
+            .min(input_buffer_lower_bound)
+            .min(step_interrupt_lower_bound)
     }
 
-    fn calculate_next_scheduled_time(&self) -> Option<T::Time> {
+    fn get_next_scheduled_time(&self) -> Option<T::Time> {
         let last_step = self.steps.get_last_step();
         let last_step_time = if last_step.step.is_saturated() {
             None
@@ -163,7 +132,12 @@ impl<T: Transposer + Clone + 'static> TransposeMain<T> {
         };
         self.input_sources
             .iter()
-            .filter_map(|(_, m)| m.next_scheduled_time())
+            .filter_map(|(_, m)| match m.next_scheduled_time().0 {
+                crate::source::source_poll::SourceBound::Inclusive(t) => Some(t),
+                crate::source::source_poll::SourceBound::Max => None,
+                crate::source::source_poll::SourceBound::Min
+                | crate::source::source_poll::SourceBound::Exclusive(_) => panic!(),
+            })
             .chain(last_step_time)
             .min()
     }
@@ -213,7 +187,7 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
             .channels
             .extract_if(|_, c| deleted_interpolations.contains(&c.interpolation_uuid))
             .filter_map(|(_, c)| match c.input_state_status {
-                Status::Ready {
+                Status::Woken {
                     input_hash,
                     input_channel,
                 }
@@ -237,21 +211,12 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
     }
 
     fn remove_interpolations_before_advanced(&mut self) {
-        let deleted_interpolations = if self.main.advance_final {
-            self.main
-                .interpolations
-                .drain()
-                .map(|(uuid, _)| uuid)
-                .collect()
-        } else if let Some(advanced_time) = self.main.advance_time {
-            self.main
-                .interpolations
-                .extract_if(|_, (_, i)| i.get_time() < advanced_time)
-                .map(|(uuid, _)| uuid)
-                .collect()
-        } else {
-            return;
-        };
+        let deleted_interpolations = self
+            .main
+            .interpolations
+            .extract_if(|_, (_, i)| !self.main.advance_lower_bound.test(&i.get_time()))
+            .map(|(uuid, _)| uuid)
+            .collect();
 
         self.clean_up_deleted_interpolations(deleted_interpolations);
     }
@@ -276,116 +241,71 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
         // todo!()
     }
 
-    // this does not emit finalizes.
-    // the interrupt this is given should be generated by polling the wrapper form the input_sources which tracks
-    // the metadata about finalizes/advances/completions.
+    // process the given interrupt, produced by the specified input hash.
+    // returns None if no rollback is needed, or Some(t) if a rollback is needed at time t.
     fn handle_interrupt(
         &mut self,
         input_hash: u64,
         time: T::Time,
         interrupt: Interrupt<BoxedInput<'static, T, ArcTK>>,
-    ) -> Option<(T::Time, Interrupt<T::OutputEvent>)> {
-        let result = match interrupt {
-            Interrupt::Event(e) | Interrupt::FinalizedEvent(e) => {
-                let step_len_before = self.main.steps.len();
+    ) -> Option<T::Time> {
+        // if the event inserts into the step list, revert the step list so we can insert it.
+        let deleted_steps = self
+            .main
+            .steps
+            .delete_outside_lower_bound(LowerBound::inclusive(time));
 
-                // if the event inserts into the step list, revert the step list so we can insert it.
-                let inputs = self
-                    .main
-                    .steps
-                    .delete_at_or_after(time)
-                    .into_iter()
-                    .chain(Some(e));
-                self.main.input_buffer.extend(inputs);
-                let steps_removed = self.main.steps.len() < step_len_before;
-                if steps_removed {
-                    // clean up state
-                    self.rollback_step_cleanup();
-                    self.rollback_interpolation_cleanup(time);
-                    Some((time, Interrupt::Rollback))
-                } else {
-                    None
-                }
+        let invalidated_state_times = self.main.returned_state_times.split_off(&time);
+
+        match interrupt {
+            Interrupt::Event(event) => {
+                let invalidated_event_times = deleted_steps.into_iter().filter_map(|step| {
+                    let event_emitted_time = step.has_produced_events().then(|| step.get_time());
+                    self.main.input_buffer.extend(step.drain_inputs());
+                    event_emitted_time
+                });
+
+                let rollback_time = invalidated_event_times.chain(invalidated_state_times).min();
+                self.main.input_buffer.insert(event);
+                rollback_time
             }
             Interrupt::Rollback => {
-                // delete input buffer items
-                self.main
-                    .input_buffer
-                    .retain(|i| i.get_input_hash() != input_hash);
+                let invalidated_event_times = deleted_steps.into_iter().filter_map(|step| {
+                    let event_emitted_time = step.has_produced_events().then(|| step.get_time());
+                    self.main.input_buffer.extend(
+                        step.drain_inputs()
+                            .into_iter()
+                            .filter(|i| i.get_input_hash() != input_hash),
+                    );
+                    event_emitted_time
+                });
 
-                // delete steps, pushing the inputs back into the input buffer if they are not from
-                // the input source that caused the rollback.
-                let inputs = self
-                    .main
-                    .steps
-                    .delete_at_or_after(time)
-                    .into_iter()
-                    .filter(|i| i.get_input_hash() != input_hash);
-                self.main.input_buffer.extend(inputs);
-
-                // clean up state
-                self.rollback_step_cleanup();
-                self.rollback_interpolation_cleanup(time);
-                Some((time, Interrupt::Rollback))
+                let rollback_time = invalidated_event_times.chain(invalidated_state_times).min();
+                // delete all input buffer items
+                self.main.input_buffer.retain(|i| {
+                    let from_this_input_hash = i.get_input_hash() == input_hash;
+                    let after_rollback = i.get_time() >= time;
+                    !(from_this_input_hash && after_rollback)
+                });
+                rollback_time
             }
-            // the finalization doesn't need to be processed in this part because the input_sources records
-            // the finalize times, which we read after the match.
-            _ => None,
-        };
-
-        self.main.update_complete_and_finalize_time();
-        self.remove_old_unneeded_steps();
-
-        result
+        }
     }
 
-    fn handle_new_cx(
-        &mut self,
-        poll_time: T::Time,
-        cx: &SourceContext,
-        events_only: bool,
-        forget: bool,
-    ) {
+    fn handle_new_cx_interrupts(&mut self, interrupt_waker: &Waker) {
+        self.wakers.interrupt_waker = interrupt_waker.clone()
+    }
+
+    fn handle_new_cx(&mut self, poll_time: T::Time, cx: &SourceContext, forget: bool) {
         // keep the interrupt waker up to date
-        self.wakers.interrupt_waker = cx.interrupt_waker.clone();
+        self.handle_new_cx_interrupts(&cx.interrupt_waker);
 
         // if the wavefront time has moved forward, mark all input_sources which
         // previously returned Ready(t) where t < new_wavefront as ready to be polled again.
-        self.main.wavefront_time = Some(poll_time).max(self.main.wavefront_time);
-
-        let wavefront_time = self.main.wavefront_time.unwrap();
-        for (source_hash, _, metadata) in self.main.input_sources.iter_with_hashes() {
-            if let Some(t) = metadata.next_scheduled_time() {
-                if t < wavefront_time {
-                    if let Some(pos) = self
-                        .wakers
-                        .state_interrupt_pending
-                        .iter()
-                        .position(|&x| x == source_hash)
-                    {
-                        self.wakers.state_interrupt_pending.remove(pos);
-                    } else if self.wakers.state_interrupt_woken.contains(&source_hash) {
-                        continue;
-                    }
-
-                    self.wakers.state_interrupt_woken.push_back(source_hash);
-
-                    // assert the items are unique.
-                    debug_assert!({
-                        let mut seen = HashSet::new();
-                        self.wakers
-                            .state_interrupt_woken
-                            .iter()
-                            .chain(self.wakers.state_interrupt_pending.iter())
-                            .all(|item| seen.insert(item))
-                    })
-                }
-            }
-        }
-
-        if events_only {
-            return;
-        }
+        self.main.advance_upper_bound = self
+            .main
+            .advance_upper_bound
+            .max(UpperBound::inclusive(poll_time));
 
         // delete interpolation if the previous call to this channel was something else.
         // update channel waker otherwise
@@ -401,7 +321,7 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
                 if *prev_forget != forget || interpolation.get_time() != poll_time {
                     interpolation_entry.remove();
                     match channel_entry.remove().input_state_status {
-                        Status::Ready {
+                        Status::Woken {
                             input_hash,
                             input_channel,
                         }
@@ -422,43 +342,14 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
         }
     }
 
-    fn poll_inner(
+    fn poll_interrupts_inner(
         &mut self,
-        poll_time: T::Time,
-        cx: SourceContext,
-        events_only: bool,
-        forget: bool,
-    ) -> TrySourcePoll<T::Time, T::OutputEvent, Option<T::OutputState>> {
-        if self.main.advance_final || self.main.advance_time > Some(poll_time) {
-            return Err(SourcePollErr::PollAfterAdvance);
-        }
-
-        self.handle_new_cx(poll_time, &cx, events_only, forget);
-
-        // handle_new_cx ensures that this is Some.
-        let wavefront_time = self.main.wavefront_time.unwrap();
-
-        // check inputs for new interrupts
+        interrupt_waker: &Waker,
+    ) -> TrySourcePoll<T::Time, T::OutputEvent, ()> {
+        self.wakers.interrupt_waker = interrupt_waker.clone();
         loop {
-            if self.main.needs_signal {
-                self.main.needs_signal = false;
-                if let Some(t) = self.main.complete {
-                    return Ok(SourcePoll::Interrupt {
-                        time: t,
-                        interrupt: Interrupt::Complete,
-                    });
-                } else {
-                    return Ok(SourcePoll::Interrupt {
-                        time: self.main.last_finalize.unwrap(),
-                        interrupt: Interrupt::Finalize,
-                    });
-                }
-            }
-
-            #[cfg(debug_assertions)]
-            self.main.assert_at_rest_structure();
-
-            // first resolve all the state interrupt woken inputs
+            // handle the first woken interrupt. this will return to the top of the loop
+            // repeatedly unless it returns an interrupt or there are no more items in state_interrupt_woken.
             if let Some(input_hash) = self.wakers.state_interrupt_woken.pop_front() {
                 let interrupt_waker = self.outer_wakers.get_source_interrupt_waker(input_hash);
                 let mut input_source = self
@@ -466,98 +357,164 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
                     .input_sources
                     .get_input_by_hash(input_hash)
                     .unwrap();
-                match input_source.poll_events(wavefront_time, interrupt_waker)? {
-                    SourcePoll::Ready { .. } => continue,
-                    SourcePoll::Interrupt { time, interrupt } => {
+                match input_source.poll_interrupts(interrupt_waker)? {
+                    SourcePoll::StateProgress { .. } => continue,
+                    SourcePoll::Interrupt {
+                        time, interrupt, ..
+                    } => {
+                        self.wakers.state_interrupt_woken.push_back(input_hash);
                         match self.handle_interrupt(input_hash, time, interrupt) {
-                            Some((mapped_time, interrupt)) => {
+                            Some(mapped_time) => {
                                 break Ok(SourcePoll::Interrupt {
                                     time: mapped_time,
-                                    interrupt,
-                                })
+                                    interrupt: Interrupt::Rollback,
+                                    finalize_bound: self.main.get_finalize_lower_bound(),
+                                });
                             }
                             None => continue,
                         };
                     }
-                    SourcePoll::Pending => {
+                    SourcePoll::Finalize { .. } => {
+                        self.wakers.state_interrupt_woken.push_back(input_hash);
+                    }
+                    SourcePoll::InterruptPending => {
                         self.wakers.state_interrupt_pending.push_back(input_hash);
-                        continue;
                     }
                 }
+                continue;
             }
 
+            // now we have no items in state_interrupt_woken.
+
             if !self.wakers.state_interrupt_pending.is_empty() {
-                break Ok(SourcePoll::Pending);
+                break Ok(SourcePoll::InterruptPending);
             }
+
+            // println!("advance_upper_bound: {:?}", self.main.advance_upper_bound);
 
             // start a step saturation if we need to.
             if self.wakers.step_item.is_none() {
                 if let Some((step_a, step_b)) = self.main.steps.get_last_two_steps() {
-                    if step_b.step.is_unsaturated() && step_b.step.get_time() <= wavefront_time {
-                        step_b.step.start_saturate_clone(&step_a.step).unwrap();
+                    if step_b.step.is_unsaturated()
+                        && self.main.advance_upper_bound.test(&step_b.step.get_time())
+                    {
+                        step_b.step.start_saturate_clone(step_a).unwrap();
                         self.wakers.step_item = Some(StepItem {
                             step_uuid: step_b.uuid,
                             step_woken: true,
                             input_state_status: Status::None,
                         });
+                    } else {
+                        break Ok(SourcePoll::StateProgress {
+                            state: (),
+                            next_event_at: self.main.get_next_scheduled_time(),
+                            finalize_bound: self.main.get_finalize_lower_bound(),
+                        });
                     }
+                } else {
+                    break Ok(SourcePoll::StateProgress {
+                        state: (),
+                        next_event_at: self.main.get_next_scheduled_time(),
+                        finalize_bound: self.main.get_finalize_lower_bound(),
+                    });
                 }
             }
 
             // step polling (+ input states initiated by step polls)
             if let Some(step_item) = &mut self.wakers.step_item {
-                if let Status::Ready {
-                    input_hash,
-                    input_channel,
-                } = step_item.input_state_status
-                {
-                    let step_source_waker = self
-                        .outer_wakers
-                        .get_source_step_waker(input_hash, step_item.step_uuid);
-                    let mut source = self
-                        .main
-                        .input_sources
-                        .get_input_by_hash(input_hash)
-                        .unwrap();
-                    let step_wrapper = self
-                        .main
-                        .steps
-                        .get_step_wrapper_mut_by_uuid(step_item.step_uuid)
-                        .unwrap();
-                    let time = step_wrapper.step.get_time();
+                match step_item.input_state_status {
+                    Status::Woken {
+                        input_hash,
+                        input_channel,
+                    } => {
+                        let step_source_waker = self
+                            .outer_wakers
+                            .get_source_step_waker(input_hash, step_item.step_uuid);
+                        let mut source = self
+                            .main
+                            .input_sources
+                            .get_input_by_hash(input_hash)
+                            .unwrap();
+                        let step_wrapper = self
+                            .main
+                            .steps
+                            .get_step_wrapper_mut_by_uuid(step_item.step_uuid)
+                            .unwrap();
+                        let time = step_wrapper.step.get_time();
 
-                    let context = SourceContext {
-                        channel: input_channel,
-                        channel_waker: step_source_waker.clone(),
-                        interrupt_waker: step_source_waker,
-                    };
+                        let context = SourceContext {
+                            channel: input_channel,
+                            channel_waker: step_source_waker.clone(),
+                            interrupt_waker: step_source_waker,
+                        };
 
-                    match source.poll(time, context).unwrap() {
-                        SourcePoll::Ready { state, .. } => {
-                            match step_wrapper.step.provide_input_state(state) {
-                                Ok(()) => {}
-                                Err(_) => panic!(),
-                            }
-                            step_item.input_state_status = Status::None;
-                            step_item.step_woken = true;
-                        }
-                        SourcePoll::Interrupt { time, interrupt } => {
-                            match self.handle_interrupt(input_hash, time, interrupt) {
-                                Some((mapped_time, interrupt)) => {
-                                    break Ok(SourcePoll::Interrupt {
-                                        time: mapped_time,
-                                        interrupt,
-                                    })
+                        match source.poll(time, context).unwrap() {
+                            SourcePoll::StateProgress {
+                                state: Poll::Ready(state),
+                                ..
+                            } => {
+                                match step_wrapper.step.provide_input_state(state) {
+                                    Ok(()) => {}
+                                    Err(_) => panic!(),
                                 }
-                                None => continue,
-                            };
+                                step_item.input_state_status = Status::None;
+                                step_item.step_woken = true;
+                            }
+                            SourcePoll::StateProgress {
+                                state: Poll::Pending,
+                                ..
+                            } => {
+                                break Ok(SourcePoll::InterruptPending);
+                            }
+                            SourcePoll::Finalize { .. } => continue,
+                            SourcePoll::Interrupt {
+                                time, interrupt, ..
+                            } => {
+                                match self.handle_interrupt(input_hash, time, interrupt) {
+                                    Some(mapped_time) => {
+                                        break Ok(SourcePoll::Interrupt {
+                                            time: mapped_time,
+                                            interrupt: Interrupt::Rollback,
+                                            finalize_bound: self.main.get_finalize_lower_bound(),
+                                        });
+                                    }
+                                    None => continue,
+                                };
+                            }
+                            SourcePoll::InterruptPending => break Ok(SourcePoll::InterruptPending),
                         }
-                        SourcePoll::Pending => break Ok(SourcePoll::Pending),
                     }
+                    Status::Pending { .. } => {
+                        break Ok(SourcePoll::InterruptPending);
+                    }
+                    Status::None => {}
                 }
 
                 if !step_item.step_woken {
-                    break Ok(SourcePoll::Pending);
+                    break Ok(SourcePoll::InterruptPending);
+                }
+
+                let waker = self.outer_wakers.get_step_waker(step_item.step_uuid);
+
+                // init step is handled slightly differently.
+                if step_item.step_uuid == 0 {
+                    let init_step = self.main.steps.get_init_step_mut();
+                    let poll = init_step.poll(&waker).unwrap();
+                    match poll {
+                        Poll::Ready(()) => {
+                            if let Some(next_step) = init_step
+                                .next_unsaturated(&mut self.main.input_buffer)
+                                .unwrap()
+                            {
+                                self.main.steps.push_step(next_step);
+                            }
+                            self.wakers.step_item = None;
+                            continue;
+                        }
+                        Poll::Pending => {
+                            break Ok(SourcePoll::InterruptPending);
+                        }
+                    }
                 }
 
                 let step_wrapper = self
@@ -565,7 +522,6 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
                     .steps
                     .get_step_wrapper_mut_by_uuid(step_item.step_uuid)
                     .unwrap();
-                let waker = self.outer_wakers.get_step_waker(step_item.step_uuid);
 
                 let poll = step_wrapper.step.poll(&waker).unwrap();
                 let step_time = step_wrapper.step.get_time();
@@ -579,40 +535,21 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
                             self.main.steps.push_step(next_step);
                         }
                         self.wakers.step_item = None;
-                        self.main.update_complete_and_finalize_time();
                         continue;
                     }
                     StepPoll::Emitted(e) => {
-                        self.main.update_complete_and_finalize_time();
-                        let time = step_time;
-                        let emit_finalize = match self
-                            .main
-                            .input_sources
-                            .earliest_possible_incoming_interrupt_time()
-                        {
-                            None => true,
-                            Some(None) => false,
-                            Some(Some(t)) => t > time,
-                        };
-
-                        if emit_finalize {
-                            self.main.last_finalize = Some(time);
-                            self.main.needs_signal = false;
-                            break Ok(SourcePoll::Interrupt {
-                                time: step_time,
-                                interrupt: Interrupt::FinalizedEvent(e),
-                            });
-                        } else {
-                            break Ok(SourcePoll::Interrupt {
-                                time: step_time,
-                                interrupt: Interrupt::Event(e),
-                            });
-                        }
+                        break Ok(SourcePoll::Interrupt {
+                            time: step_time,
+                            interrupt: Interrupt::Event(e),
+                            finalize_bound: self.main.get_finalize_lower_bound(),
+                        });
                     }
-                    StepPoll::Pending => break Ok(SourcePoll::Pending),
+                    StepPoll::Pending => {
+                        break Ok(SourcePoll::InterruptPending);
+                    }
                     StepPoll::StateRequested(input) => {
                         let input_hash = input.get_hash();
-                        step_item.input_state_status = Status::Ready {
+                        step_item.input_state_status = Status::Woken {
                             input_hash,
                             input_channel: 0,
                         };
@@ -620,13 +557,39 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
                     }
                 }
             }
+        }
+    }
 
-            if events_only {
-                break Ok(SourcePoll::Ready {
-                    state: None,
-                    next_event_at: self.main.calculate_next_scheduled_time(),
-                });
-            }
+    fn poll_inner(
+        &mut self,
+        // None for poll_interrupts
+        poll_time: T::Time,
+        cx: SourceContext,
+        forget: bool,
+    ) -> TrySourcePoll<T::Time, T::OutputEvent, Poll<T::OutputState>> {
+        if !self.main.advance_lower_bound.test(&poll_time) {
+            return Err(SourcePollErr::PollAfterAdvance);
+        }
+
+        loop {
+            match self.poll_interrupts_inner(&cx.interrupt_waker)? {
+                SourcePoll::StateProgress { .. } => {}
+                SourcePoll::Interrupt {
+                    time,
+                    interrupt,
+                    finalize_bound,
+                } => {
+                    return Ok(SourcePoll::Interrupt {
+                        time,
+                        interrupt,
+                        finalize_bound,
+                    });
+                }
+                SourcePoll::Finalize { finalize_bound } => {
+                    return Ok(SourcePoll::Finalize { finalize_bound });
+                }
+                SourcePoll::InterruptPending => return Ok(SourcePoll::InterruptPending),
+            };
 
             let channel_item = match self.wakers.channels.entry(cx.channel) {
                 std::collections::hash_map::Entry::Occupied(occupied_entry) => {
@@ -652,7 +615,7 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
             };
 
             // step polling (+ input states initiated by step polls)
-            if let Status::Ready {
+            if let Status::Woken {
                 input_hash,
                 input_channel,
             } = channel_item.input_state_status
@@ -672,7 +635,8 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
                     .interpolations
                     .get_mut(&channel_item.interpolation_uuid)
                     .unwrap();
-                let time = interpolation.get_time();
+
+                debug_assert_eq!(poll_time, interpolation.get_time());
 
                 let context = SourceContext {
                     channel: input_channel,
@@ -681,13 +645,16 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
                 };
 
                 let poll = if forget {
-                    source.poll_forget(time, context)
+                    source.poll_forget(poll_time, context)
                 } else {
-                    source.poll(time, context)
+                    source.poll(poll_time, context)
                 };
 
                 match poll.unwrap() {
-                    SourcePoll::Ready { state, .. } => {
+                    SourcePoll::StateProgress {
+                        state: Poll::Ready(state),
+                        ..
+                    } => {
                         match interpolation
                             .as_mut()
                             .get_input_state_manager()
@@ -702,23 +669,41 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
                         channel_item.input_state_status = Status::None;
                         channel_item.interpolation_woken = true;
                     }
-                    SourcePoll::Interrupt { time, interrupt } => {
+                    SourcePoll::StateProgress {
+                        state: Poll::Pending,
+                        ..
+                    } => {
+                        break Ok(SourcePoll::StateProgress {
+                            state: Poll::Pending,
+                            next_event_at: self.main.get_next_scheduled_time(),
+                            finalize_bound: self.main.get_finalize_lower_bound(),
+                        });
+                    }
+                    SourcePoll::Interrupt {
+                        time, interrupt, ..
+                    } => {
                         match self.handle_interrupt(input_hash, time, interrupt) {
-                            Some((mapped_time, interrupt)) => {
+                            Some(interrupt_time) => {
                                 break Ok(SourcePoll::Interrupt {
-                                    time: mapped_time,
-                                    interrupt,
-                                })
+                                    time: interrupt_time,
+                                    interrupt: Interrupt::Rollback,
+                                    finalize_bound: self.main.get_finalize_lower_bound(),
+                                });
                             }
                             None => continue,
                         };
                     }
-                    SourcePoll::Pending => break Ok(SourcePoll::Pending),
+                    SourcePoll::Finalize { .. } => continue,
+                    SourcePoll::InterruptPending => break Ok(SourcePoll::InterruptPending),
                 }
             }
 
             if !channel_item.interpolation_woken {
-                break Ok(SourcePoll::Pending);
+                break Ok(SourcePoll::StateProgress {
+                    state: Poll::Pending,
+                    next_event_at: self.main.get_next_scheduled_time(),
+                    finalize_bound: self.main.get_finalize_lower_bound(),
+                });
             }
 
             let mut interpolation = self
@@ -740,9 +725,11 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
                         .interpolations
                         .remove(&channel_item.interpolation_uuid);
                     self.wakers.channels.remove(&cx.channel);
-                    break Ok(SourcePoll::Ready {
-                        state: Some(state),
-                        next_event_at: self.main.calculate_next_scheduled_time(),
+                    self.main.returned_state_times.insert(poll_time);
+                    break Ok(SourcePoll::StateProgress {
+                        state: Poll::Ready(state),
+                        next_event_at: self.main.get_next_scheduled_time(),
+                        finalize_bound: self.main.get_finalize_lower_bound(),
                     });
                 }
                 Poll::Pending => {
@@ -755,12 +742,18 @@ impl<T: Transposer + Clone + 'static> TransposeLocked<'_, T> {
                                 .get_first_available_channel(input_hash);
                             let input_channel = entry.get().input_channel;
                             entry.insert();
-                            channel_item.input_state_status = Status::Ready {
+                            channel_item.input_state_status = Status::Woken {
                                 input_hash,
                                 input_channel,
                             };
                         }
-                        None => break Ok(SourcePoll::Pending),
+                        None => {
+                            break Ok(SourcePoll::StateProgress {
+                                state: Poll::Pending,
+                                next_event_at: self.main.get_next_scheduled_time(),
+                                finalize_bound: self.main.get_finalize_lower_bound(),
+                            });
+                        }
                     }
                 }
             }
@@ -779,38 +772,29 @@ impl<T: Transposer + Clone + 'static> Source for Transpose<T> {
         &mut self,
         time: Self::Time,
         cx: SourceContext,
-    ) -> TrySourcePoll<Self::Time, Self::Event, Self::State> {
+    ) -> TrySourcePoll<Self::Time, Self::Event, Poll<Self::State>> {
         let mut locked = TransposeLocked::from_transpose(self);
-        Ok(locked
-            .poll_inner(time, cx, false, false)?
-            .map_state(|state| state.unwrap()))
+        locked.handle_new_cx(time, &cx, false);
+        locked.poll_inner(time, cx, false)
     }
 
     fn poll_forget(
         &mut self,
         time: Self::Time,
         cx: SourceContext,
-    ) -> TrySourcePoll<Self::Time, Self::Event, Self::State> {
+    ) -> TrySourcePoll<Self::Time, Self::Event, Poll<Self::State>> {
         let mut locked = TransposeLocked::from_transpose(self);
-        Ok(locked
-            .poll_inner(time, cx, false, true)?
-            .map_state(|state| state.unwrap()))
+        locked.handle_new_cx(time, &cx, true);
+        locked.poll_inner(time, cx, true)
     }
 
-    fn poll_events(
+    fn poll_interrupts(
         &mut self,
-        time: Self::Time,
         interrupt_waker: std::task::Waker,
     ) -> TrySourcePoll<Self::Time, Self::Event, ()> {
         let mut locked = TransposeLocked::from_transpose(self);
-        let cx = SourceContext {
-            channel: 0,
-            channel_waker: Waker::noop().clone(),
-            interrupt_waker,
-        };
-        Ok(locked
-            .poll_inner(time, cx, true, true)?
-            .map_state(|state| debug_assert!(state.is_none())))
+        locked.handle_new_cx_interrupts(&interrupt_waker);
+        locked.poll_interrupts_inner(&interrupt_waker)
     }
 
     fn release_channel(&mut self, channel: usize) {
@@ -820,7 +804,7 @@ impl<T: Transposer + Clone + 'static> Source for Transpose<T> {
                 .main
                 .interpolations
                 .remove(&channel_item.interpolation_uuid);
-            if let Status::Ready {
+            if let Status::Woken {
                 input_hash,
                 input_channel,
             }
@@ -843,12 +827,16 @@ impl<T: Transposer + Clone + 'static> Source for Transpose<T> {
         }
     }
 
-    fn advance(&mut self, lower_bound: Bound<Self::Time>) {
+    fn advance(
+        &mut self,
+        lower_bound: LowerBound<Self::Time>,
+        upper_bound: UpperBound<Self::Time>,
+        interrupt_waker: Waker,
+    ) {
         let mut locked = TransposeLocked::from_transpose(self);
-        locked.main.advance_time = locked.main.advance_time.max(Some(time));
-        locked.main.update_complete_and_finalize_time();
-        locked.remove_interpolations_before_advanced();
-        locked.remove_old_unneeded_steps();
+        locked.handle_new_cx_interrupts(&interrupt_waker);
+        locked.main.advance_upper_bound = locked.main.advance_upper_bound.max(upper_bound);
+        locked.main.advance_lower_bound = locked.main.advance_lower_bound.max(lower_bound);
     }
 
     fn max_channel(&self) -> std::num::NonZeroUsize {

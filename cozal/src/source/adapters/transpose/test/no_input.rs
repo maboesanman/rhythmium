@@ -1,7 +1,20 @@
-use std::{num::NonZeroUsize, task::Waker, time::Duration};
+use std::{
+    num::NonZeroUsize,
+    task::{Poll, Waker},
+    time::{Duration, Instant},
+};
+
+use futures::{FutureExt, StreamExt};
+use futures_test::future::FutureTestExt;
+use tokio::time::sleep_until;
 
 use crate::{
-    source::{adapters::transpose::TransposeBuilder, traits::SourceContext, Source, SourcePoll},
+    source::{
+        Source, SourcePoll,
+        adapters::{event_stream::EventStream, transpose::TransposeBuilder},
+        source_poll::{LowerBound, SourceBound, UpperBound},
+        traits::SourceContext,
+    },
     transposer::Transposer,
 };
 
@@ -26,7 +39,7 @@ impl Transposer for CollatzTransposer {
     }
 
     async fn init(&mut self, cx: &mut crate::transposer::InitContext<'_, Self>) {
-        cx.schedule_event(Duration::from_secs(1), ()).unwrap();
+        cx.schedule_event(Duration::from_secs(0), ());
     }
 
     async fn handle_scheduled_event(
@@ -36,7 +49,6 @@ impl Transposer for CollatzTransposer {
     ) {
         cx.schedule_event(cx.current_time() + Duration::from_secs(1), ())
             .unwrap();
-        // println!("transposer: {:?}", self);
         if self.current_value == 1 && self.count_until_1.is_none() {
             self.count_until_1 = Some(self.times_incremented);
         }
@@ -64,7 +76,6 @@ fn transpose_no_inputs_no_events() {
             times_incremented: 0,
             count_until_1: None,
         },
-        Duration::ZERO,
         [69; 32],
         NonZeroUsize::new(1).unwrap(),
     )
@@ -78,11 +89,14 @@ fn transpose_no_inputs_no_events() {
     };
     let poll = transpose.poll(Duration::from_secs_f32(70.0), context);
 
+    println!("{poll:?}");
+
     assert!(matches!(
         poll,
-        Ok(SourcePoll::Ready {
-            state: Some(14),
-            next_event_at: Some(_)
+        Ok(SourcePoll::StateProgress {
+            state: Poll::Ready(Some(14)),
+            next_event_at: Some(_),
+            finalize_bound: LowerBound(SourceBound::Exclusive(_)),
         })
     ));
 }
@@ -108,7 +122,7 @@ impl Transposer for CollatzTransposer2 {
     }
 
     async fn init(&mut self, cx: &mut crate::transposer::InitContext<'_, Self>) {
-        cx.schedule_event(Duration::from_secs(1), ()).unwrap();
+        cx.schedule_event(Duration::from_secs(0), ());
     }
 
     async fn handle_scheduled_event(
@@ -116,20 +130,23 @@ impl Transposer for CollatzTransposer2 {
         _: Self::Scheduled,
         cx: &mut crate::transposer::HandleScheduleContext<'_, Self>,
     ) {
-        cx.schedule_event(cx.current_time() + Duration::from_secs(1), ())
-            .unwrap();
-        // println!("transposer: {:?}", self);
-        if self.current_value == 1 && self.count_until_1.is_none() {
-            self.count_until_1 = Some(self.times_incremented);
+        async move {
+            cx.emit_event(self.current_value).await;
+            if self.current_value != 1 {
+                cx.schedule_event(cx.current_time() + Duration::from_secs(1), ())
+                    .unwrap();
+            } else {
+                self.count_until_1 = Some(self.times_incremented);
+            }
+            self.times_incremented += 1;
+            if self.current_value % 2 == 0 {
+                self.current_value /= 2;
+            } else {
+                self.current_value = self.current_value * 3 + 1;
+            }
         }
-        self.times_incremented += 1;
-        if self.current_value % 2 == 0 {
-            self.current_value /= 2;
-        } else {
-            self.current_value = self.current_value * 3 + 1;
-        }
-
-        cx.emit_event(self.current_value).await;
+        .pending_once()
+        .await
     }
 
     async fn interpolate(
@@ -148,7 +165,6 @@ fn transpose_no_inputs_with_events() {
             times_incremented: 0,
             count_until_1: None,
         },
-        Duration::ZERO,
         [69; 32],
         NonZeroUsize::new(1).unwrap(),
     )
@@ -163,7 +179,7 @@ fn transpose_no_inputs_with_events() {
 
     for _ in 0..100 {
         let poll = transpose
-            .poll(Duration::from_secs_f32(70.0), context.clone())
+            .poll(Duration::from_secs_f32(14.0), context.clone())
             .unwrap();
         println!("{:?}", poll);
     }
@@ -177,17 +193,43 @@ fn transpose_no_inputs_with_events() {
         .unwrap();
     println!("{:?}", poll);
 
-    transpose.advance(Duration::from_secs_f32(30.0));
+    transpose.advance(
+        LowerBound::exclusive(Duration::from_secs_f32(30.0)),
+        UpperBound::inclusive(Duration::from_secs_f32(70.0)),
+        Waker::noop().clone(),
+    );
     let poll = transpose
         .poll(Duration::from_secs(35), context.clone())
         .unwrap();
     println!("{:?}", poll);
 
-    transpose.advance(Duration::from_secs_f32(30.0));
-    println!("{:?}", transpose.main.advance_time);
     let poll = transpose
         .poll(Duration::from_secs(25), context.clone())
         .unwrap_err();
     println!("{:?}", poll);
 }
 
+#[tokio::test]
+async fn test_stream() {
+    let transpose = TransposeBuilder::new(
+        CollatzTransposer2 {
+            current_value: 70,
+            times_incremented: 0,
+            count_until_1: None,
+        },
+        [69; 32],
+        NonZeroUsize::new(1).unwrap(),
+    )
+    .build()
+    .unwrap();
+
+    let start = Instant::now();
+
+    let mut stream = EventStream::new(transpose, start, |t| sleep_until(t.into()).boxed());
+
+    while let Some(item) = stream.next().await {
+        println!("Received: {:?} after {:?}", item, Instant::now() - start);
+    }
+
+    println!("Done after {:?}", Instant::now() - start);
+}

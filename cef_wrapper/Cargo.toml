@@ -9,5 +9,5 @@ doctest = false
 
 [build-dependencies]
 cmake = "0.1"
-bindgen = "0.69"
+bindgen = "0.71.1"
 regex = "1.10.3"

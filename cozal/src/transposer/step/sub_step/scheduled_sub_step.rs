@@ -8,11 +8,11 @@ use std::{
 use archery::{SharedPointer, SharedPointerKind};
 
 use crate::transposer::{
-    input_state_manager::InputStateManager, output_event_manager::OutputEventManager,
-    step::wrapped_transposer::WrappedTransposer, Transposer,
+    Transposer, input_state_manager::InputStateManager, output_event_manager::OutputEventManager,
+    step::wrapped_transposer::WrappedTransposer,
 };
 
-use super::{BoxedSubStep, PollErr, StartSaturateErr, SubStep, SCHEDULED_SUB_STEP_SORT_PHASE};
+use super::{BoxedSubStep, PollErr, SCHEDULED_SUB_STEP_SORT_PHASE, StartSaturateErr, SubStep};
 
 pub enum ScheduledSubStep<T: Transposer + Clone, P: SharedPointerKind> {
     Unsaturated {

@@ -1,5 +1,5 @@
 use std::{
-    sync::{atomic::AtomicBool, Arc, Weak},
+    sync::{Arc, Weak, atomic::AtomicBool},
     task::Waker,
 };
 

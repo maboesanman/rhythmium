@@ -6,16 +6,16 @@ use std::{
 use archery::{ArcTK, SharedPointer, SharedPointerKind};
 
 use crate::transposer::{
+    Transposer,
     input_erasure::{ErasedInput, ErasedInputState},
     input_state_manager::InputStateManager,
     output_event_manager::OutputEventManager,
-    Transposer,
 };
 
 use super::{
-    sub_step::{scheduled_sub_step::ScheduledSubStep, BoxedSubStep, StartSaturateErr},
-    wrapped_transposer::WrappedTransposer,
     BoxedInput, FutureInputContainer, FutureInputContainerGuard, Interpolation, PreviousStep,
+    sub_step::{BoxedSubStep, StartSaturateErr, scheduled_sub_step::ScheduledSubStep},
+    wrapped_transposer::WrappedTransposer,
 };
 
 #[derive(Debug)]
@@ -312,7 +312,7 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
     /// - If the previous step's UUID does not match the current step's UUID. (only when debug assertions are enabled)
     pub fn start_saturate_clone(
         &mut self,
-        prev: &impl PreviousStep<T, P>,
+        prev: &(impl PreviousStep<T, P> + ?Sized),
     ) -> Result<(), SaturateErr>
     where
         T: Clone,
@@ -532,6 +532,10 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
     /// generally this will only be false if the step has ever been fully saturated.
     pub fn can_produce_events(&self) -> bool {
         self.can_produce_events
+    }
+
+    pub fn has_produced_events(&self) -> bool {
+        self.event_count != 0
     }
 }
 

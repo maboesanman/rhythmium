@@ -4,7 +4,7 @@ use archery::{ArcTK, SharedPointerKind};
 
 use crate::transposer::{Transposer, TransposerInput, TransposerInputEventHandler};
 
-use super::{input_sub_step::InputSubStep, BoxedSubStep, SubStep};
+use super::{BoxedSubStep, SubStep, input_sub_step::InputSubStep};
 
 /// A single type-erased input.
 #[repr(transparent)]

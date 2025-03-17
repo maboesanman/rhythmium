@@ -1,21 +1,24 @@
-use std::{collections::BTreeSet, task::Waker};
+use std::{
+    collections::BTreeSet,
+    task::{Poll, Waker},
+};
 
 use archery::ArcTK;
 
 use crate::{
     source::{
+        Source, SourcePoll,
         source_poll::{Interrupt, LowerBound, SourceBound, TrySourcePoll, UpperBound},
         traits::SourceContext,
-        Source, SourcePoll,
     },
-    transposer::{input_erasure::ErasedInputState, step::BoxedInput, Transposer},
+    transposer::{Transposer, input_erasure::ErasedInputState, step::BoxedInput},
 };
 
 use super::erased_input_source_collection::{ErasedInputSourceCollection, ErasedInputSourceGuard};
 
 #[derive(Debug, Clone)]
 pub struct InputSourceMetaData<T: Transposer + 'static> {
-    next_scheduled_time: Option<T::Time>,
+    next_scheduled_time: UpperBound<T::Time>,
     observed_times: BTreeSet<T::Time>,
     finalized_lower_bound: LowerBound<T::Time>,
     advanced_lower_bound: LowerBound<T::Time>,
@@ -25,7 +28,7 @@ pub struct InputSourceMetaData<T: Transposer + 'static> {
 impl<T: Transposer + 'static> Default for InputSourceMetaData<T> {
     fn default() -> Self {
         Self {
-            next_scheduled_time: None,
+            next_scheduled_time: UpperBound::min(),
             observed_times: BTreeSet::new(),
             finalized_lower_bound: LowerBound::min(),
             advanced_lower_bound: LowerBound::min(),
@@ -35,7 +38,7 @@ impl<T: Transposer + 'static> Default for InputSourceMetaData<T> {
 }
 
 impl<T: Transposer + 'static> InputSourceMetaData<T> {
-    pub fn next_scheduled_time(&self) -> Option<T::Time> {
+    pub fn next_scheduled_time(&self) -> UpperBound<T::Time> {
         self.next_scheduled_time
     }
 
@@ -72,8 +75,12 @@ impl<T: Transposer + 'static> InputSourceMetaData<T> {
         state_ready_fn: F,
     ) -> bool
     where
-        F: FnOnce(&mut Self),
+        F: FnOnce(&mut Self, &mut S),
     {
+        // next scheduled time needs to be min unless our interrupts are resolved,
+        // so set it here and we'll set it back if we get stateprogress.
+        self.next_scheduled_time = UpperBound::min();
+
         match poll {
             SourcePoll::StateProgress {
                 state,
@@ -84,11 +91,12 @@ impl<T: Transposer + 'static> InputSourceMetaData<T> {
                     debug_assert!(!self.advanced_upper_bound.test(t))
                 }
 
-                self.next_scheduled_time = *next_event_at;
+                self.next_scheduled_time = match next_event_at {
+                    Some(t) => UpperBound::inclusive(*t),
+                    None => UpperBound::max(),
+                };
 
-                if state.is_ready() {
-                    state_ready_fn(self);
-                }
+                state_ready_fn(self, state);
             }
             SourcePoll::Interrupt {
                 time,
@@ -104,7 +112,6 @@ impl<T: Transposer + 'static> InputSourceMetaData<T> {
                 finalize_bound,
             } => {
                 debug_assert!(self.finalized_lower_bound.test(time));
-                self.next_scheduled_time = None;
 
                 match self.observed_times.split_off(time).first().copied() {
                     Some(new_time) => {
@@ -117,8 +124,7 @@ impl<T: Transposer + 'static> InputSourceMetaData<T> {
                     None => return false,
                 }
             }
-            SourcePoll::Finalize { .. } => {}
-            SourcePoll::InterruptPending => {}
+            _ => {}
         }
 
         if let Some(finalize_bound) = poll.get_finalize_bound() {
@@ -140,14 +146,16 @@ impl<T: Transposer + 'static> Source for ErasedInputSourceGuard<'_, T, InputSour
         &mut self,
         poll_time: Self::Time,
         cx: SourceContext,
-    ) -> TrySourcePoll<Self::Time, Self::Event, Self::State> {
+    ) -> TrySourcePoll<Self::Time, Self::Event, Poll<Self::State>> {
         loop {
             let mut poll = self.get_source_mut().poll(poll_time, cx.clone())?;
 
             let metadata = self.get_metadata_mut();
             metadata.resolve_new_poll_time(poll_time);
-            if metadata.resolve_poll(&mut poll, |m| {
-                m.observed_times.insert(poll_time);
+            if metadata.resolve_poll(&mut poll, |m, state| {
+                if state.is_ready() {
+                    m.observed_times.insert(poll_time);
+                }
             }) {
                 break Ok(poll);
             }
@@ -158,13 +166,13 @@ impl<T: Transposer + 'static> Source for ErasedInputSourceGuard<'_, T, InputSour
         &mut self,
         poll_time: Self::Time,
         cx: SourceContext,
-    ) -> TrySourcePoll<Self::Time, Self::Event, Self::State> {
+    ) -> TrySourcePoll<Self::Time, Self::Event, Poll<Self::State>> {
         loop {
             let mut poll = self.get_source_mut().poll_forget(poll_time, cx.clone())?;
 
             let metadata = self.get_metadata_mut();
             metadata.resolve_new_poll_time(poll_time);
-            if metadata.resolve_poll(&mut poll, |_| {}) {
+            if metadata.resolve_poll(&mut poll, |_, _| {}) {
                 break Ok(poll);
             }
         }
@@ -179,7 +187,7 @@ impl<T: Transposer + 'static> Source for ErasedInputSourceGuard<'_, T, InputSour
                 .get_source_mut()
                 .poll_interrupts(interrupt_waker.clone())?;
 
-            if self.get_metadata_mut().resolve_poll(&mut poll, |_| {}) {
+            if self.get_metadata_mut().resolve_poll(&mut poll, |_, _| {}) {
                 break Ok(poll);
             }
         }
@@ -197,16 +205,27 @@ impl<T: Transposer + 'static> Source for ErasedInputSourceGuard<'_, T, InputSour
         &mut self,
         lower_bound: LowerBound<Self::Time>,
         upper_bound: UpperBound<Self::Time>,
+        interrupt_waker: Waker,
     ) {
         let metadata = self.get_metadata_mut();
 
-        debug_assert!(metadata.advanced_lower_bound < lower_bound);
-        metadata.advanced_lower_bound = lower_bound;
+        let mut needs_advance = false;
+        if metadata.advanced_lower_bound > lower_bound {
+            metadata.advanced_lower_bound = lower_bound;
+            needs_advance = true;
+        }
 
-        debug_assert!(metadata.advanced_upper_bound < upper_bound);
-        metadata.advanced_upper_bound = upper_bound;
+        if metadata.advanced_upper_bound > upper_bound {
+            metadata.advanced_upper_bound = upper_bound;
+            needs_advance = true;
+        }
 
-        self.get_source_mut().advance(lower_bound, upper_bound);
+        let lower = metadata.advanced_lower_bound;
+        let upper = metadata.advanced_upper_bound;
+
+        if needs_advance {
+            self.get_source_mut().advance(lower, upper, interrupt_waker);
+        }
     }
 }
 
@@ -223,16 +242,20 @@ impl<T: Transposer + 'static> ErasedInputSourceCollection<T, InputSourceMetaData
             .unwrap_or(LowerBound::max())
     }
 
-    pub fn first_next_event(&self) -> Option<T::Time> {
-        self.iter().filter_map(|x| x.1.next_scheduled_time).min()
+    pub fn next_event_upper_bound(&self) -> UpperBound<T::Time> {
+        self.iter()
+            .map(|(_, m)| m.next_scheduled_time)
+            .min()
+            .unwrap_or(UpperBound::max())
     }
 
     pub fn advance_all(
         &mut self,
         lower_bound: LowerBound<T::Time>,
         upper_bound: UpperBound<T::Time>,
+        interrupt_waker: Waker,
     ) {
         self.iter_mut()
-            .for_each(|mut x| x.advance(lower_bound, upper_bound));
+            .for_each(|mut x| x.advance(lower_bound, upper_bound, interrupt_waker.clone()));
     }
 }

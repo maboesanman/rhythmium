@@ -6,7 +6,7 @@ pub enum SourcePoll<T, E, S> {
     StateProgress {
         /// The requested state, if ready
         /// the channel waker must be called to wake if pending.
-        state: Poll<S>,
+        state: S,
 
         /// The time of the next event after the current advance upper bound.
         next_event_at: Option<T>,
@@ -37,8 +37,8 @@ pub enum SourcePoll<T, E, S> {
     InterruptPending,
 }
 
-impl<T, E, S> SourcePoll<T, E, S> {
-    pub fn map_state<F, U>(self, f: F) -> SourcePoll<T, E, U>
+impl<T, E, S> SourcePoll<T, E, Poll<S>> {
+    pub fn map_state<F, U>(self, f: F) -> SourcePoll<T, E, Poll<U>>
     where
         F: FnOnce(S) -> U,
     {
@@ -66,6 +66,71 @@ impl<T, E, S> SourcePoll<T, E, S> {
         }
     }
 
+    pub fn remove_state<F, U>(self, f: F) -> SourcePoll<T, E, ()>
+    where
+        F: FnOnce(S),
+    {
+        match self {
+            SourcePoll::StateProgress {
+                state,
+                next_event_at,
+                finalize_bound,
+            } => {
+                if let Poll::Ready(s) = state {
+                    f(s)
+                }
+                SourcePoll::StateProgress {
+                    state: (),
+                    next_event_at,
+                    finalize_bound,
+                }
+            }
+            SourcePoll::Interrupt {
+                time,
+                interrupt,
+                finalize_bound,
+            } => SourcePoll::Interrupt {
+                time,
+                interrupt,
+                finalize_bound,
+            },
+            SourcePoll::Finalize { finalize_bound } => SourcePoll::Finalize { finalize_bound },
+            SourcePoll::InterruptPending => SourcePoll::InterruptPending,
+        }
+    }
+}
+
+impl<T, E> SourcePoll<T, E, ()> {
+    pub fn set_state<F, U>(self, f: F) -> SourcePoll<T, E, Poll<U>>
+    where
+        F: FnOnce() -> U,
+    {
+        match self {
+            SourcePoll::StateProgress {
+                state: (),
+                next_event_at,
+                finalize_bound,
+            } => SourcePoll::StateProgress {
+                state: Poll::Ready(f()),
+                next_event_at,
+                finalize_bound,
+            },
+            SourcePoll::Interrupt {
+                time,
+                interrupt,
+                finalize_bound,
+            } => SourcePoll::Interrupt {
+                time,
+                interrupt,
+                finalize_bound,
+            },
+            SourcePoll::Finalize { finalize_bound } => SourcePoll::Finalize { finalize_bound },
+            SourcePoll::InterruptPending => SourcePoll::InterruptPending,
+        }
+    }
+}
+
+impl<T, E, S> SourcePoll<T, E, S> {
     pub fn map_event<F, U>(self, f: F) -> SourcePoll<T, U, S>
     where
         F: FnOnce(&T, E) -> U,

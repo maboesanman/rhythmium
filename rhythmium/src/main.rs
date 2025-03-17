@@ -29,11 +29,13 @@ pub fn main() {
     let other_proxy = proxy.clone();
 
     // this sends a "DoCefWorkNow" event every 10ms to the event loop.
-    thread::spawn(move || loop {
-        other_proxy
-            .send_event(RhythmiumEvent::DoCefWorkNow)
-            .unwrap();
-        thread::sleep(std::time::Duration::from_millis(10));
+    thread::spawn(move || {
+        loop {
+            other_proxy
+                .send_event(RhythmiumEvent::DoCefWorkNow)
+                .unwrap();
+            thread::sleep(std::time::Duration::from_millis(10));
+        }
     });
 
     if let Err(e) = initialize_from_env(&cef_app::get_settings(), || RhythmiumCefApp::new(proxy)) {

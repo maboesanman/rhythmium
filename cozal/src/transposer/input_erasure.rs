@@ -37,7 +37,6 @@ pub unsafe trait HasErasedInput<T: Transposer> {
 
 /// An extension trait for types erased types with inputs.
 pub trait HasErasedInputExt<T: Transposer>: HasErasedInput<T> {
-
     /// get the hash directly (with a default hasher).
     fn get_hash(&self) -> u64 {
         let mut hasher = std::collections::hash_map::DefaultHasher::new();

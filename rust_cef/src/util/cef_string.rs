@@ -58,8 +58,10 @@ impl From<Box<CefStr>> for cef_string_utf16_t {
 
 impl CefStr {
     unsafe extern "C" fn drop_string(ptr: *mut u16) {
-        let ptr = CefStr::from_data_raw(ptr);
-        let _ = Box::from_raw(ptr);
+        unsafe {
+            let ptr = CefStr::from_data_raw(ptr);
+            let _ = Box::from_raw(ptr);
+        }
     }
 
     unsafe fn from_data_raw(data: *mut u16) -> *mut Self {

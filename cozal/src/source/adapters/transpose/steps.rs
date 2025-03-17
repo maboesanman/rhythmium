@@ -2,13 +2,15 @@ use anyhow::Result;
 use archery::ArcTK;
 use std::collections::VecDeque;
 
-use crate::transposer::step::{BoxedInput, Interpolation, PreInitStep, Step};
+use crate::source::source_poll::LowerBound;
 use crate::transposer::Transposer;
+use crate::transposer::step::{InitStep, Interpolation, PreInitStep, PreviousStep, Step};
 
 // a collection of Rc which are guranteed not to be cloned outside the collection is Send
 // whenever the same collection, but with Arc would be Send, so we do an unsafe impl for exactly that situation.
 
 pub struct StepList<T: Transposer + 'static> {
+    init_step: InitStep<T, ArcTK>,
     steps: VecDeque<StepWrapper<T>>,
     pub next_step_uuid: u64,
     num_deleted_steps: usize,
@@ -18,18 +20,11 @@ impl<T: Transposer + Clone> StepList<T> {
     pub fn new(
         transposer: T,
         pre_init_step: PreInitStep<T>,
-        start_time: T::Time,
         rng_seed: [u8; 32],
     ) -> Result<Self, T> {
-        let mut steps = VecDeque::new();
-        steps.push_back(StepWrapper::new_init(
-            transposer,
-            pre_init_step,
-            start_time,
-            rng_seed,
-        )?);
         Ok(Self {
-            steps,
+            init_step: InitStep::new(transposer, pre_init_step, rng_seed)?,
+            steps: VecDeque::new(),
             next_step_uuid: 1,
             num_deleted_steps: 0,
         })
@@ -47,6 +42,10 @@ impl<T: Transposer + Clone> StepList<T> {
         self.steps.get_mut(self.get_step_index_by_uuid(uuid)?)
     }
 
+    pub fn get_init_step_mut(&mut self) -> &mut InitStep<T> {
+        &mut self.init_step
+    }
+
     pub fn get_last_step(&self) -> &StepWrapper<T> {
         self.steps.back().unwrap()
     }
@@ -59,8 +58,17 @@ impl<T: Transposer + Clone> StepList<T> {
         self.next_step_uuid += 1;
     }
 
-    pub fn get_last_two_steps(&mut self) -> Option<(&mut StepWrapper<T>, &mut StepWrapper<T>)> {
-        get_last_two_mut(&mut self.steps)
+    pub fn get_last_two_steps(
+        &mut self,
+    ) -> Option<(&mut dyn PreviousStep<T, ArcTK>, &mut StepWrapper<T>)> {
+        match self.steps.len() {
+            0 => None,
+            1 => Some((&mut self.init_step, self.steps.back_mut()?)),
+            _ => {
+                let (a, b) = get_last_two_mut(&mut self.steps)?;
+                Some((&mut a.step, b))
+            }
+        }
     }
 
     pub fn create_interpolation(&self, time: T::Time) -> Interpolation<T, ArcTK> {
@@ -73,12 +81,14 @@ impl<T: Transposer + Clone> StepList<T> {
         self.steps.get(i).unwrap().step.interpolate(time).unwrap()
     }
 
-    pub fn delete_at_or_after(
+    pub fn delete_outside_lower_bound(
         &mut self,
-        time: T::Time,
-    ) -> impl '_ + IntoIterator<Item = BoxedInput<'static, T, ArcTK>> {
-        let i = self.steps.partition_point(|s| s.step.get_time() < time);
-        self.steps.drain(i..).flat_map(|s| s.step.drain_inputs())
+        lower_bound: LowerBound<T::Time>,
+    ) -> impl '_ + IntoIterator<Item = Step<'static, T, ArcTK>> {
+        let i = self
+            .steps
+            .partition_point(|s| !lower_bound.test(&s.step.get_time()));
+        self.steps.drain(i..).map(|w| w.step)
     }
 
     pub fn earliest_possible_event_time(&self) -> Option<T::Time> {
@@ -89,6 +99,16 @@ impl<T: Transposer + Clone> StepList<T> {
             None
         }
     }
+
+    // the lower bound for where interrupts may come from, if coming from a step.
+    pub fn get_finalize_bound(&self) -> LowerBound<T::Time> {
+        let last_step = &self.get_last_step().step;
+        if last_step.can_produce_events() {
+            LowerBound::inclusive(last_step.get_time())
+        } else {
+            LowerBound::max()
+        }
+    }
 }
 
 pub struct StepWrapper<T: Transposer + 'static> {
@@ -97,18 +117,6 @@ pub struct StepWrapper<T: Transposer + 'static> {
 }
 
 impl<T: Transposer + Clone> StepWrapper<T> {
-    pub fn new_init(
-        transposer: T,
-        pre_init_step: PreInitStep<T>,
-        start_time: T::Time,
-        rng_seed: [u8; 32],
-    ) -> Result<Self, T> {
-        Ok(Self::new(
-            Step::new_init(transposer, pre_init_step, start_time, rng_seed)?,
-            0,
-        ))
-    }
-
     pub fn new(step: Step<'static, T, ArcTK>, uuid: u64) -> Self {
         Self { uuid, step }
     }

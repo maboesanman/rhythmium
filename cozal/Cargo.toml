@@ -4,6 +4,9 @@ description = "A deterministic timewarpable game logic pipeline"
 version.workspace = true
 edition.workspace = true
 
+[dev-dependencies]
+tokio = { version = "1.44.1", features = ["rt", "time", "macros"] }
+
 [dependencies]
 anyhow = "1.0.75"
 rpds = "1.1.0"

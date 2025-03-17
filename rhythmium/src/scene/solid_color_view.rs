@@ -28,9 +28,9 @@ impl SolidColorView {
         let mut rng = rand::thread_rng();
         Self {
             color: wgpu::Color {
-                r: rng.gen(),
-                g: rng.gen(),
-                b: rng.gen(),
+                r: rng.r#gen(),
+                g: rng.r#gen(),
+                b: rng.r#gen(),
                 a: 1.0,
             },
         }

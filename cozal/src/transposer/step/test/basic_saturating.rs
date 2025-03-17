@@ -7,8 +7,8 @@ use crate::transposer::step::step::StepPoll;
 use crate::util::dummy_waker::DummyWaker;
 use archery::ArcTK;
 
-use crate::transposer::context::{HandleScheduleContext, InitContext, InterpolateContext};
 use crate::transposer::Transposer;
+use crate::transposer::context::{HandleScheduleContext, InitContext, InterpolateContext};
 
 #[derive(Clone, Debug)]
 struct TestTransposer {

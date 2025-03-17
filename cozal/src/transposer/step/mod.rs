@@ -17,8 +17,9 @@ mod wrapped_transposer;
 mod test;
 
 pub use future_input_container::{FutureInputContainer, FutureInputContainerGuard};
+pub use init_step::InitStep;
 pub use interpolation::Interpolation;
 pub use pre_init_step::PreInitStep;
 pub use previous_step::PreviousStep;
-pub use step::Step;
+pub use step::{InterpolateErr, NextUnsaturatedErr, PollErr, SaturateErr, Step, StepPoll};
 pub use sub_step::boxed_input::BoxedInput;

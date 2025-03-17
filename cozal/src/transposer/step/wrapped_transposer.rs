@@ -1,6 +1,6 @@
 use std::ptr::NonNull;
 
-use archery::{SharedPointer, SharedPointerKind};
+use archery::SharedPointerKind;
 
 use super::init_context::InitUpdateContext;
 use super::sub_step_update_context::SubStepUpdateContext;
@@ -30,15 +30,13 @@ where
 }
 
 impl<T: Transposer, P: SharedPointerKind> WrappedTransposer<T, P> {
-    pub fn new(transposer: T, rng_seed: [u8; 32]) -> SharedPointer<Self, P> {
+    pub fn new(transposer: T, rng_seed: [u8; 32]) -> Self {
         let metadata = TransposerMetaData::new(rng_seed);
 
-        let new = Self {
+        Self {
             transposer,
             metadata,
-        };
-
-        SharedPointer::new(new)
+        }
     }
 
     /// create a wrapped transposer, and perform all T::default scheduled events.

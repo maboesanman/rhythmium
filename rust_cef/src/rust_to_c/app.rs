@@ -8,7 +8,7 @@ use cef_wrapper::cef_capi_sys::{
 use crate::{
     c_to_rust::command_line::CommandLine,
     util::{
-        cef_arc::{uninit_arc_vtable, CefArc, CefArcFromRust},
+        cef_arc::{CefArc, CefArcFromRust, uninit_arc_vtable},
         cef_string::cef_string_utf16_into_string,
         starts_with::StartsWith,
     },
@@ -100,19 +100,21 @@ pub(crate) trait AppConfigExt: AppConfig {
     unsafe extern "C" fn get_browser_process_handler_raw(
         ptr: *mut cef_app_t,
     ) -> *mut cef_browser_process_handler_t {
-        let rust_impl_ptr =
-            CefArcFromRust::<App, AppWrapper<Self>>::get_rust_impl_from_ptr(ptr.cast());
-        let rust_impl = &*rust_impl_ptr;
+        unsafe {
+            let rust_impl_ptr =
+                CefArcFromRust::<App, AppWrapper<Self>>::get_rust_impl_from_ptr(ptr.cast());
+            let rust_impl = &*rust_impl_ptr;
 
-        let browser_process_state = &*(rust_impl.browser_process_state.get() as *const _);
+            let browser_process_state = &*(rust_impl.browser_process_state.get() as *const _);
 
-        let handler = rust_impl
-            .shared
-            .get_browser_process_handler(browser_process_state);
+            let handler = rust_impl
+                .shared
+                .get_browser_process_handler(browser_process_state);
 
-        match handler {
-            Some(handler) => handler.into_raw().cast(),
-            None => std::ptr::null_mut(),
+            match handler {
+                Some(handler) => handler.into_raw().cast(),
+                None => std::ptr::null_mut(),
+            }
         }
     }
 
@@ -121,19 +123,21 @@ pub(crate) trait AppConfigExt: AppConfig {
         process_type: *const cef_string_t,
         command_line: *mut cef_command_line_t,
     ) {
-        let rust_impl_ptr =
-            CefArcFromRust::<App, AppWrapper<Self>>::get_rust_impl_from_ptr(ptr.cast());
-        let rust_impl = &*rust_impl_ptr;
-        let process_type = cef_string_utf16_into_string(process_type);
-        let command_line = command_line.cast::<CommandLine>();
-        let command_line_mut = command_line.as_mut().unwrap();
+        unsafe {
+            let rust_impl_ptr =
+                CefArcFromRust::<App, AppWrapper<Self>>::get_rust_impl_from_ptr(ptr.cast());
+            let rust_impl = &*rust_impl_ptr;
+            let process_type = cef_string_utf16_into_string(process_type);
+            let command_line = command_line.cast::<CommandLine>();
+            let command_line_mut = command_line.as_mut().unwrap();
 
-        rust_impl
-            .shared
-            .on_before_command_line_processing(process_type.as_deref(), command_line_mut);
+            rust_impl
+                .shared
+                .on_before_command_line_processing(process_type.as_deref(), command_line_mut);
 
-        let _ = command_line_mut;
-        let _ = CefArc::from_raw(command_line);
+            let _ = command_line_mut;
+            let _ = CefArc::from_raw(command_line);
+        }
     }
 }
 

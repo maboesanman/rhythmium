@@ -1,13 +1,13 @@
 use std::{collections::HashMap, sync::Arc};
 
 use taffy::NodeId;
-use wgpu::{util::DeviceExt, CommandEncoder, PipelineCompilationOptions, TextureView};
+use wgpu::{CommandEncoder, PipelineCompilationOptions, TextureView, util::DeviceExt};
 use winit::dpi::{LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize};
 
 use super::{
+    Scene,
     shared_wgpu_state::SharedWgpuState,
     view::{View, ViewBuilder},
-    Scene,
 };
 
 #[derive(Debug)]
