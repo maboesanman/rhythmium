@@ -42,7 +42,7 @@ impl<T: Transposer + 'static> InputSourceMetaData<T> {
         self.next_scheduled_time
     }
 
-    fn record_finalize_bound(&mut self, bound: LowerBound<T::Time>) {
+    fn record_interrupt_lower_bound(&mut self, bound: LowerBound<T::Time>) {
         debug_assert!(self.finalized_lower_bound < bound);
 
         self.finalized_lower_bound = bound;
@@ -109,7 +109,7 @@ impl<T: Transposer + 'static> InputSourceMetaData<T> {
             SourcePoll::Interrupt {
                 time,
                 interrupt: Interrupt::Rollback,
-                finalize_bound,
+                interrupt_lower_bound,
             } => {
                 debug_assert!(self.finalized_lower_bound.test(time));
 
@@ -118,7 +118,7 @@ impl<T: Transposer + 'static> InputSourceMetaData<T> {
                         *poll = SourcePoll::Interrupt {
                             time: new_time,
                             interrupt: Interrupt::Rollback,
-                            finalize_bound: *finalize_bound,
+                            interrupt_lower_bound: *interrupt_lower_bound,
                         }
                     }
                     None => return false,
@@ -127,8 +127,8 @@ impl<T: Transposer + 'static> InputSourceMetaData<T> {
             _ => {}
         }
 
-        if let Some(finalize_bound) = poll.get_finalize_bound() {
-            self.record_finalize_bound(finalize_bound);
+        if let Some(interrupt_lower_bound) = poll.get_interrupt_lower_bound() {
+            self.record_interrupt_lower_bound(interrupt_lower_bound);
         }
 
         true
@@ -192,6 +192,31 @@ impl<T: Transposer + 'static> Source for ErasedInputSourceGuard<'_, T, InputSour
             }
         }
     }
+    
+    fn advance_poll_lower_bound(
+        &mut self,
+        poll_lower_bound: LowerBound<Self::Time>,
+    ) {
+        let metadata = self.get_metadata_mut();
+
+        if metadata.advanced_lower_bound > poll_lower_bound {
+            metadata.advanced_lower_bound = poll_lower_bound;
+            self.get_source_mut().advance_poll_lower_bound(poll_lower_bound);
+        }
+    }
+    
+    fn advance_interrupt_upper_bound(
+        &mut self,
+        interrupt_upper_bound: UpperBound<Self::Time>,
+        interrupt_waker: Waker,
+    ) {
+        let metadata = self.get_metadata_mut();
+
+        if metadata.advanced_upper_bound > interrupt_upper_bound {
+            metadata.advanced_upper_bound = interrupt_upper_bound;
+            self.get_source_mut().advance_interrupt_upper_bound(interrupt_upper_bound, interrupt_waker);
+        }
+    }
 
     fn release_channel(&mut self, channel: usize) {
         self.get_source_mut().release_channel(channel)
@@ -199,33 +224,6 @@ impl<T: Transposer + 'static> Source for ErasedInputSourceGuard<'_, T, InputSour
 
     fn max_channel(&self) -> std::num::NonZeroUsize {
         self.get_source().max_channel()
-    }
-
-    fn advance(
-        &mut self,
-        lower_bound: LowerBound<Self::Time>,
-        upper_bound: UpperBound<Self::Time>,
-        interrupt_waker: Waker,
-    ) {
-        let metadata = self.get_metadata_mut();
-
-        let mut needs_advance = false;
-        if metadata.advanced_lower_bound > lower_bound {
-            metadata.advanced_lower_bound = lower_bound;
-            needs_advance = true;
-        }
-
-        if metadata.advanced_upper_bound > upper_bound {
-            metadata.advanced_upper_bound = upper_bound;
-            needs_advance = true;
-        }
-
-        let lower = metadata.advanced_lower_bound;
-        let upper = metadata.advanced_upper_bound;
-
-        if needs_advance {
-            self.get_source_mut().advance(lower, upper, interrupt_waker);
-        }
     }
 }
 
@@ -249,13 +247,20 @@ impl<T: Transposer + 'static> ErasedInputSourceCollection<T, InputSourceMetaData
             .unwrap_or(UpperBound::max())
     }
 
-    pub fn advance_all(
+    pub fn advance_poll_lower_bound_all(
         &mut self,
-        lower_bound: LowerBound<T::Time>,
-        upper_bound: UpperBound<T::Time>,
+        poll_lower_bound: LowerBound<T::Time>,
+    ) {
+        self.iter_mut()
+            .for_each(|mut x| x.advance_poll_lower_bound(poll_lower_bound));
+    }
+
+    pub fn advance_interrupt_upper_bound(
+        &mut self,
+        interrupt_upper_bound: UpperBound<T::Time>,
         interrupt_waker: Waker,
     ) {
         self.iter_mut()
-            .for_each(|mut x| x.advance(lower_bound, upper_bound, interrupt_waker.clone()));
+            .for_each(|mut x| x.advance_interrupt_upper_bound(interrupt_upper_bound, interrupt_waker.clone()));
     }
 }

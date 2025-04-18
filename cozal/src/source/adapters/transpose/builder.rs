@@ -17,11 +17,7 @@ use crate::{
 };
 
 use super::{
-    Transpose, TransposeMain,
-    erased_input_source_collection::{ErasedInputSource, ErasedInputSourceCollection},
-    input_channel_reservations::InputChannelReservations,
-    steps::StepList,
-    transpose_interrupt_waker::TransposeWakerObserver,
+    erased_input_source_collection::{ErasedInputSource, ErasedInputSourceCollection}, input_channel_reservations::InputChannelReservations, input_source_collection::InputSourceCollection, transpose_interrupt_waker::TransposeWakerObserver, working_timeline_slice::WorkingTimelineSlice, Transpose, TransposeMain
 };
 
 pub struct TransposeBuilder<T: Transposer + 'static> {
@@ -82,23 +78,25 @@ impl<T: Transposer + Clone + 'static> TransposeBuilder<T> {
             max_channels: _,
         } = self;
 
-        let steps = StepList::new(transposer, pre_init_step, rng_seed).map_err(|_| ())?;
+        let working_timeline_slice = WorkingTimelineSlice::new(transposer, pre_init_step, rng_seed).map_err(|_| ())?;
 
         let input_sources = ErasedInputSourceCollection::new(input_sources)?;
         let wakers = TransposeWakerObserver::new(input_sources.iter_with_hashes().map(|(h, ..)| h));
+        let input_sources = InputSourceCollection {
+            inputs: input_sources
+        };
 
         Ok(Transpose {
             main: TransposeMain {
                 input_sources,
-                steps,
-                input_buffer: BTreeSet::new(),
-                interpolations: HashMap::new(),
-                next_interpolation_uuid: 0,
-                channel_reservations: InputChannelReservations::new(),
-                advance_upper_bound: UpperBound::min(),
-                advance_lower_bound: LowerBound::min(),
-                last_emitted_finalize: LowerBound::min(),
-                returned_state_times: BTreeSet::new(),
+                working_timeline_slice,
+                // interpolations: HashMap::new(),
+                // next_interpolation_uuid: 0,
+                // channel_reservations: InputChannelReservations::new(),
+                // advance_upper_bound: UpperBound::min(),
+                // advance_lower_bound: LowerBound::min(),
+                // last_emitted_finalize: LowerBound::min(),
+                // returned_state_times: BTreeSet::new(),
             },
             wakers,
         })

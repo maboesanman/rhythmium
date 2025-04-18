@@ -1,67 +1,53 @@
-use async_trait::async_trait;
-use futures_test::future::FutureTestExt;
-use rand::Rng;
+use std::time::Duration;
 
-use super::evaluate_to;
-use crate::transposer::context::{HandleInputContext, HandleScheduleContext, InitContext, InterpolateContext};
+use futures_test::future::FutureTestExt;
+
 use crate::transposer::Transposer;
 
+
 #[derive(Clone, Debug)]
-struct TestTransposer {
-    counter: usize,
+struct CollatzTransposer2 {
+    current_value: u64,
+    times_incremented: u64,
+    count_until_1: Option<u64>,
 }
 
-#[async_trait(?Send)]
-impl Transposer for TestTransposer {
-    type Time = usize;
+impl Transposer for CollatzTransposer2 {
+    type Time = Duration;
 
-    type InputState = ();
+    type OutputEvent = u64;
 
-    type OutputState = usize;
-
-    type Input = ();
+    type OutputState = Option<u64>;
 
     type Scheduled = ();
 
-    type Output = usize;
-
-    async fn init(&mut self, cx: &mut dyn InitContext<'_, Self>) {
-        async {
-            self.counter = 0;
-            cx.schedule_event(1, ()).unwrap();
-            let _s = cx.get_input_state().await;
-        }
-        .pending_once()
-        .await
+    fn prepare_to_init(&mut self) -> bool {
+        true
     }
 
-    async fn handle_input(
-        &mut self,
-        _time: Self::Time,
-        inputs: &[Self::Input],
-        cx: &mut dyn HandleInputContext<'_, Self>,
-    ) {
-        async {
-            self.counter += inputs.len();
-            cx.emit_event(self.counter * 10).await;
-            let _s = cx.get_input_state().await;
-        }
-        .pending_once()
-        .await
+    async fn init(&mut self, cx: &mut crate::transposer::InitContext<'_, Self>) {
+        cx.schedule_event(Duration::from_secs(0), ());
     }
 
-    async fn handle_scheduled(
+    async fn handle_scheduled_event(
         &mut self,
-        time: Self::Time,
-        _payload: Self::Scheduled,
-        cx: &mut dyn HandleScheduleContext<'_, Self>,
+        _: Self::Scheduled,
+        cx: &mut crate::transposer::HandleScheduleContext<'_, Self>,
     ) {
-        async {
-            cx.schedule_event(time + 1, ()).unwrap();
-
-            self.counter += 1;
-            cx.emit_event(self.counter * 10).await;
-            let _s = cx.get_input_state().await;
+        async move {
+            cx.emit_event(self.current_value).await;
+            if self.current_value != 1 {
+                cx.schedule_event(cx.current_time() + Duration::from_secs(1), ())
+                    .unwrap();
+            } else {
+                self.count_until_1 = Some(self.times_incremented);
+            }
+            self.times_incremented += 1;
+            if self.current_value % 2 == 0 {
+                self.current_value /= 2;
+            } else {
+                self.current_value = self.current_value * 3 + 1;
+            }
         }
         .pending_once()
         .await
@@ -69,35 +55,8 @@ impl Transposer for TestTransposer {
 
     async fn interpolate(
         &self,
-        _base_time: Self::Time,
-        _interpolated_time: Self::Time,
-        cx: &mut dyn InterpolateContext<'_, Self>,
+        _cx: &mut crate::transposer::InterpolateContext<'_, Self>,
     ) -> Self::OutputState {
-        let _s = cx.get_input_state().await;
-        async { self.counter }.pending_once().await
+        self.count_until_1
     }
-}
-
-#[test]
-fn basic() {
-    let transposer = TestTransposer {
-        counter: 17
-    };
-    let rng_seed = rand::thread_rng().gen();
-
-    let state_fn = |_| async { core::future::ready(()).pending_once().await };
-
-    let fut = evaluate_to(
-        transposer,
-        100,
-        vec![(10, ()), (15, ()), (27, ()), (200, ())],
-        state_fn,
-        rng_seed,
-    );
-
-    let (x, value) = futures_executor::block_on(fut);
-
-    // 100 from scheduled events, 3 from input events
-    assert_eq!(x.len(), 103);
-    assert_eq!(value, 100 + 3);
 }

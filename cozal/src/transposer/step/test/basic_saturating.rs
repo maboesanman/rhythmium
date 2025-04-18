@@ -1,9 +1,9 @@
 use core::pin::Pin;
-use std::task::Poll;
 
 use super::super::pre_init_step::PreInitStep;
 use crate::transposer::step::init_step::InitStep;
 use crate::transposer::step::step::StepPoll;
+use crate::transposer::step::PossiblyInitStep;
 use crate::util::dummy_waker::DummyWaker;
 use archery::ArcTK;
 
@@ -55,7 +55,7 @@ fn next_scheduled_unsaturated_take() {
 
     let waker = DummyWaker::dummy();
     let mut init = InitStep::<_, ArcTK>::new(transposer, PreInitStep::new(), [0; 32]).unwrap();
-    assert!(matches!(init.poll(&waker), Ok(Poll::Ready(_))));
+    assert!(matches!(init.poll(&waker), Ok(StepPoll::Ready)));
     let mut step = init.next_scheduled_unsaturated().unwrap().unwrap();
     step.start_saturate_take(&mut init).unwrap();
 
@@ -83,7 +83,7 @@ fn next_scheduled_unsaturated_clone() {
 
     let waker = DummyWaker::dummy();
     let mut init = InitStep::<_, ArcTK>::new(transposer, PreInitStep::new(), [0; 32]).unwrap();
-    assert!(matches!(init.poll(&waker), Ok(Poll::Ready(_))));
+    assert!(matches!(init.poll(&waker), Ok(StepPoll::Ready)));
     let mut step = init.next_scheduled_unsaturated().unwrap().unwrap();
     step.start_saturate_take(&mut init).unwrap();
 

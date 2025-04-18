@@ -1,182 +1,98 @@
-use core::future::Future;
-use core::hash::Hash;
-use core::pin::Pin;
-use core::task::{Context, Poll};
-use std::collections::VecDeque;
-use std::mem::replace;
-use std::sync::Arc;
+use std::{
+    collections::{BTreeSet, HashSet},
+    num::NonZeroUsize,
+};
 
-use futures_util::FutureExt;
+use hashbrown::HashMap;
 
-use crate::transposer::schedule_storage::StorageFamily;
-use crate::transposer::step::{Interpolation, Step, StepPoll};
-use crate::transposer::Transposer;
+use crate::{
+    source::{
+        Source,
+        source_poll::{LowerBound, UpperBound},
+    },
+    transposer::{
+        Transposer, TransposerInput, TransposerInputEventHandler, input_erasure::ErasedInput,
+        step::PreInitStep,
+    },
+};
 
-#[derive(Clone, Copy)]
-struct Storage;
-
-impl StorageFamily for Storage {
-    type OrdMap<K: Ord + Eq + Clone, V: Clone> = std::collections::BTreeMap<K, V>;
-    type HashMap<K: Hash + Eq + Clone, V: Clone> = std::collections::HashMap<K, V>;
-    type Transposer<T: Clone> = Arc<T>;
-    type LazyState<T> = Arc<T>;
-}
-
-pub fn evaluate_to<T: Transposer, S, Fs>(
+pub struct TransposeBuilder<T: Transposer + 'static> {
     transposer: T,
-    until: T::Time,
-    mut events: Vec<(T::Time, T::Input)>,
-    state: S,
-    seed: [u8; 32],
-) -> EvaluateTo<T, S, Fs>
-where
-    S: Unpin + Fn(T::Time) -> Fs,
-    Fs: Future<Output = T::InputState>,
-{
-    let mut collected_events = VecDeque::new();
-    events.sort_by_key(|(t, _)| *t);
-    if let Some((mut current_time, _)) = events.first() {
-        let mut e = Vec::new();
-        for (time, input) in events {
-            if time > until {
-                break
-            }
-            if time > current_time {
-                collected_events
-                    .push_back((current_time, core::mem::take(&mut e).into_boxed_slice()));
-
-                current_time = time;
-            }
-            e.push(input)
-        }
-        if !e.is_empty() {
-            collected_events.push_back((current_time, e.into_boxed_slice()));
-        }
-    }
-    EvaluateTo {
-        frame: Box::new(Step::new_init(transposer, seed)),
-        interpolate: None,
-        events: collected_events,
-        state,
-        state_fut: None,
-        until,
-        outputs: Vec::new(),
-    }
+    pre_init_step: PreInitStep<T>,
+    input_sources: HashSet<ErasedInputSource<T>>,
+    rng_seed: [u8; 32],
+    max_channels: NonZeroUsize,
 }
 
-pub struct EvaluateTo<T: Transposer, S, Fs>
-where
-    S: Unpin + Fn(T::Time) -> Fs,
-    Fs: Future<Output = T::InputState>,
-{
-    frame:       Box<Step<T, Storage>>,
-    interpolate: Option<Box<Interpolation<T, Storage>>>,
-    events:      VecDeque<EventGroup<T>>,
-    state:       S,
-    state_fut:   Option<Pin<Box<Fs>>>,
-    until:       T::Time,
-    outputs:     EmittedEvents<T>,
-}
-
-type EventGroup<T> = (<T as Transposer>::Time, Box<[<T as Transposer>::Input]>);
-
-pub type EmittedEvents<T> = Vec<(<T as Transposer>::Time, <T as Transposer>::Output)>;
-
-impl<T: Transposer, S, Fs> Future for EvaluateTo<T, S, Fs>
-where
-    S: Clone + Unpin + Fn(T::Time) -> Fs,
-    Fs: Future<Output = T::InputState>,
-    T::Output: Unpin,
-{
-    type Output = (EmittedEvents<T>, T::OutputState);
-
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let this = self.get_mut();
-
-        loop {
-            // deal with pending state futures
-            if let Some(state_fut) = &mut this.state_fut {
-                let state = state_fut.poll_unpin(cx);
-                let state = match state {
-                    Poll::Ready(s) => {
-                        this.state_fut = None;
-                        s
-                    },
-                    Poll::Pending => return Poll::Pending,
-                };
-                if let Some(interpolate) = &mut this.interpolate {
-                    if interpolate.set_state(state).is_err() {
-                        panic!()
-                    }
-                } else {
-                    if this.frame.set_input_state(state).is_err() {
-                        panic!()
-                    }
-                }
-            }
-
-            // deal with the current interpolation
-            if let Some(interpolate) = &mut this.interpolate {
-                let result = interpolate.poll_unpin(cx);
-                let result = match result {
-                    Poll::Ready(r) => {
-                        this.interpolate = None;
-                        r
-                    },
-                    Poll::Pending => {
-                        if interpolate.needs_state() {
-                            let fut = (this.state)(this.until);
-                            this.state_fut = Some(Box::pin(fut));
-                            continue
-                        } else {
-                            return Poll::Pending
-                        }
-                    },
-                };
-                let outputs = replace(&mut this.outputs, Vec::new());
-                return Poll::Ready((outputs, result))
-            }
-
-            // deal with the step.
-            let poll = this.frame.poll(cx.waker().clone()).unwrap();
-            match poll {
-                StepPoll::NeedsState => {
-                    let fut = (this.state)(this.frame.raw_time());
-                    this.state_fut = Some(Box::pin(fut));
-                    continue
-                },
-                StepPoll::Emitted(e) => {
-                    this.outputs.push((this.frame.raw_time(), e));
-                    continue
-                },
-                StepPoll::Pending => return Poll::Pending,
-                StepPoll::Ready => {
-                    let mut next_event = this.events.pop_front();
-                    let mut next_frame = this.frame.next_unsaturated(&mut next_event).unwrap();
-                    if let Some(next_event) = next_event {
-                        this.events.push_front(next_event)
-                    };
-
-                    if let Some(f) = &next_frame {
-                        if f.raw_time() > this.until {
-                            next_frame = None
-                        }
-                    }
-
-                    match next_frame {
-                        Some(mut f) => {
-                            f.saturate_take(&mut this.frame).unwrap();
-                            this.frame = Box::new(f);
-                            continue
-                        },
-                        None => {
-                            this.interpolate =
-                                Some(Box::new(this.frame.interpolate(this.until).unwrap()));
-                            continue
-                        },
-                    };
-                },
-            }
+impl<T: Transposer + Clone + 'static> TransposeBuilder<T> {
+    /// Create a new builder
+    pub fn new(transposer: T, rng_seed: [u8; 32], max_channels: NonZeroUsize) -> Self {
+        Self {
+            transposer,
+            pre_init_step: PreInitStep::new(),
+            input_sources: HashSet::new(),
+            rng_seed,
+            max_channels,
         }
+    }
+
+    /// Assign an input source.
+    ///
+    /// Returns the reference for chaining.
+    pub fn add_input<I, S>(&mut self, input: I, source: S) -> Result<&mut Self, (I, S)>
+    where
+        I: TransposerInput<Base = T>,
+        T: TransposerInputEventHandler<I>,
+        S: 'static + Source<Time = T::Time, Event = I::InputEvent, State = I::InputState>,
+    {
+        let erased_input = ErasedInput::new(input);
+        if self.input_sources.contains(&*erased_input) {
+            return Err((input, source));
+        }
+
+        self.pre_init_step.add_input(input);
+        if source.max_channel() < self.max_channels {
+            todo!()
+            // this should multiplex the source up to the desired max_channels value.
+            // self.input_sources
+            //     .insert()
+        } else {
+            self.input_sources
+                .insert(ErasedInputSource::new(input, source));
+        }
+
+        Ok(self)
+    }
+
+    /// Complete the build operation.
+    pub fn build(self) -> Result<Transpose<T>, ()> {
+        let Self {
+            transposer,
+            pre_init_step,
+            rng_seed,
+            input_sources,
+            max_channels: _,
+        } = self;
+
+        let steps = StepList::new(transposer, pre_init_step, rng_seed).map_err(|_| ())?;
+
+        let input_sources = ErasedInputSourceCollection::new(input_sources)?;
+        let wakers = TransposeWakerObserver::new(input_sources.iter_with_hashes().map(|(h, ..)| h));
+
+        Ok(Transpose {
+            main: TransposeMain {
+                input_sources,
+                steps,
+                input_buffer: BTreeSet::new(),
+                interpolations: HashMap::new(),
+                next_interpolation_uuid: 0,
+                channel_reservations: InputChannelReservations::new(),
+                advance_upper_bound: UpperBound::min(),
+                advance_lower_bound: LowerBound::min(),
+                last_emitted_finalize: LowerBound::min(),
+                returned_state_times: BTreeSet::new(),
+            },
+            wakers,
+        })
     }
 }

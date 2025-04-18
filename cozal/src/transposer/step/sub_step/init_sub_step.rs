@@ -1,7 +1,5 @@
 use std::{
-    future::Future,
-    pin::Pin,
-    task::{Context, Poll, Waker},
+    fmt::Debug, future::Future, pin::Pin, task::{Context, Poll, Waker}
 };
 
 use archery::{SharedPointer, SharedPointerKind};
@@ -18,6 +16,15 @@ pub enum InitSubStep<T: Transposer, P: SharedPointerKind> {
     Saturated {
         wrapped_transposer: SharedPointer<WrappedTransposer<T, P>, P>,
     },
+}
+
+impl<T: Transposer, P: SharedPointerKind> Debug for InitSubStep<T, P> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Saturating { .. } => f.debug_struct("Saturating").finish(),
+            Self::Saturated { .. } => f.debug_struct("Saturated").finish(),
+        }
+    }
 }
 
 mod wrapped_handler {

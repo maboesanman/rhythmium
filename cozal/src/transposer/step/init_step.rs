@@ -3,16 +3,14 @@ use std::{
     task::{Poll, Waker},
 };
 
+use std::fmt::Debug;
+
 use archery::{ArcTK, SharedPointer, SharedPointerKind};
 
 use crate::transposer::Transposer;
 
 use super::{
-    FutureInputContainer, FutureInputContainerGuard, Interpolation, PreInitStep, Step,
-    previous_step::PreviousStep,
-    step::{InterpolateErr, NextUnsaturatedErr, PollErr, SaturateErr},
-    sub_step::{init_sub_step::InitSubStep, scheduled_sub_step::ScheduledSubStep},
-    wrapped_transposer::WrappedTransposer,
+    step::{InterpolateErr, NextUnsaturatedErr, PollErr, SaturateErr}, sub_step::{init_sub_step::InitSubStep, scheduled_sub_step::ScheduledSubStep}, wrapped_transposer::WrappedTransposer, BoxedInput, FutureInputContainer, Interpolation, PossiblyInitStep, PreInitStep, Step, StepPoll
 };
 
 pub struct InitStep<T: Transposer, P: SharedPointerKind = ArcTK> {
@@ -20,6 +18,12 @@ pub struct InitStep<T: Transposer, P: SharedPointerKind = ArcTK> {
 
     #[cfg(debug_assertions)]
     uuid_self: uuid::Uuid,
+}
+
+impl<T: Transposer, P: SharedPointerKind> Debug for InitStep<T, P> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("InitStep").field("sub_step", &self.sub_step).field("uuid_self", &self.uuid_self).finish()
+    }
 }
 
 #[allow(dead_code)]
@@ -46,74 +50,6 @@ impl<T: Transposer + Clone, P: SharedPointerKind> InitStep<T, P> {
 
     /// Create a new step that is ready to be saturated.
     ///
-    /// This will compare the time of the next scheduled event in the current schedule with the time
-    /// of `next_inputs`, and either take the next input event from the container to produce a step, or
-    /// leave it in the container and produce a step that will handle the scheduled event.
-    pub fn next_unsaturated<'a, F: FutureInputContainer<'a, T, P>>(
-        &self,
-        next_inputs: &mut F,
-    ) -> Result<Option<Step<'a, T, P>>, NextUnsaturatedErr>
-    where
-        T: 'a + Clone,
-    {
-        let wrapped_transposer = match &*self.sub_step {
-            InitSubStep::Saturated { wrapped_transposer } => &**wrapped_transposer,
-            _ => return Err(NextUnsaturatedErr::NotSaturated),
-        };
-
-        let next_scheduled_time = wrapped_transposer
-            .metadata
-            .get_next_scheduled_time()
-            .map(|t| t.time);
-
-        let next_input = next_inputs.next();
-
-        let (time, next_scheduled_time, next_input) = match (next_scheduled_time, next_input) {
-            (None, None) => return Ok(None),
-            (None, Some(i)) => (i.get_time(), None, Some(i)),
-            (Some(t), None) => (t, Some(t), None),
-            (Some(t), Some(i)) => {
-                let i_time = i.get_time();
-                if i_time > t {
-                    (t, Some(t), None)
-                } else {
-                    (i_time, None, Some(i))
-                }
-            }
-        };
-
-        let steps = match (next_scheduled_time, next_input) {
-            (None, Some(i)) => {
-                let mut steps = Vec::new();
-                let mut front = Some(i);
-                loop {
-                    let (item, new_front) = match front.take() {
-                        Some(front) => {
-                            if front.get_time() != time {
-                                break;
-                            }
-                            front.take_sub_step()
-                        }
-                        None => break,
-                    };
-                    front = new_front;
-                    steps.push(item.into());
-                }
-                steps
-            }
-            (Some(t), None) => vec![ScheduledSubStep::new_boxed(t)],
-            _ => unreachable!(),
-        };
-
-        #[cfg(debug_assertions)]
-        return Ok(Some(Step::new(time, self.uuid_self, steps)));
-
-        #[cfg(not(debug_assertions))]
-        return Ok(Some(Step::new(time, steps)));
-    }
-
-    /// Create a new step that is ready to be saturated.
-    ///
     /// This will only create a step from a scheduled event, and should be used if you know there
     /// isn't another input event in the future.
     pub fn next_scheduled_unsaturated<'a>(
@@ -124,57 +60,9 @@ impl<T: Transposer + Clone, P: SharedPointerKind> InitStep<T, P> {
     {
         self.next_unsaturated(&mut None)
     }
-
-    /// Poll a saturated step toward completion.
-    ///
-    /// While this resembles a future, it is not a future, and has more types of results.
-    ///
-    /// # Returns
-    ///
-    /// - If the step is ready, this will move the step from Saturating to Saturated, and return `Ok(StepPoll::Ready)`.
-    /// - If the step is not ready:
-    ///     - If the step has emitted an event, and is waiting for the event to be extracted, this will return `Ok(StepPoll::Emitted(event))`.
-    ///     - If the step has requested an input state and is waiting for it to be provided, this will return `Ok(StepPoll::StateRequested(type_id))`.
-    ///
-    /// # Errors
-    ///
-    /// - If the step is unsaturated, this will return `Err(PollErr::Unsaturated)`.
-    /// - If the step is saturated, this will return `Err(PollErr::Saturated)`.
-    pub fn poll(&mut self, waker: &Waker) -> Result<Poll<()>, PollErr>
-    where
-        T: Clone,
-    {
-        self.sub_step.as_mut().poll(waker)
-    }
-
-    /// Begin interpolating the output state of the step to the given time.
-    ///
-    /// This will return an `Interpolation` object that can be used like a future. While this is a future,
-    /// it must be polled manually since input state may need to be provided between polls.
-    pub fn interpolate(&self, time: T::Time) -> Result<Interpolation<T, P>, InterpolateErr>
-    where
-        T: Clone,
-    {
-        let wrapped_transposer = match &*self.sub_step {
-            InitSubStep::Saturated { wrapped_transposer } => wrapped_transposer.clone(),
-            _ => return Err(InterpolateErr::NotSaturated),
-        };
-
-        Ok(Interpolation::new(time, wrapped_transposer))
-    }
-
-    /// true if the step is saturating.
-    pub fn is_saturating(&self) -> bool {
-        matches!(*self.sub_step, InitSubStep::Saturating { .. })
-    }
-
-    /// true if the step is saturated.
-    pub fn is_saturated(&self) -> bool {
-        matches!(*self.sub_step, InitSubStep::Saturated { .. })
-    }
 }
 
-impl<'a, T: Transposer + Clone + 'a, P: SharedPointerKind + 'a> PreviousStep<T, P>
+impl<'a, T: Transposer + Clone + 'a, P: SharedPointerKind + 'a> PossiblyInitStep<'a, T, P>
     for InitStep<T, P>
 {
     #[cfg(debug_assertions)]
@@ -191,5 +79,98 @@ impl<'a, T: Transposer + Clone + 'a, P: SharedPointerKind + 'a> PreviousStep<T, 
             InitSubStep::Saturating { .. } => Err(SaturateErr::PreviousNotSaturated),
             InitSubStep::Saturated { wrapped_transposer } => Ok(wrapped_transposer.clone()),
         }
+    }
+    
+    fn next_unsaturated(
+        &self,
+        next_inputs: &mut dyn FutureInputContainer<'a, T, P>,
+    ) -> Result<Option<Step<'a, T, P>>, NextUnsaturatedErr>
+    where
+        T: 'a + Clone,
+    {
+        let wrapped_transposer = match &*self.sub_step {
+            InitSubStep::Saturated { wrapped_transposer } => &**wrapped_transposer,
+            _ => return Err(NextUnsaturatedErr::NotSaturated),
+        };
+
+        let next_scheduled_time = wrapped_transposer
+            .metadata
+            .get_next_scheduled_time()
+            .map(|t| t.time);
+
+        let next_input = next_inputs.peek_time();
+
+        let (time, next_scheduled_time, next_input) = match (next_scheduled_time, next_input) {
+            (None, None) => return Ok(None),
+            (None, Some(i)) => (i, None, Some(i)),
+            (Some(t), None) => (t, Some(t), None),
+            (Some(t), Some(i)) => {
+                let i_time = i;
+                if i_time > t {
+                    (t, Some(t), None)
+                } else {
+                    (i_time, None, Some(i))
+                }
+            }
+        };
+
+        let steps = match (next_scheduled_time, next_input) {
+            (None, Some(i)) => {
+                let mut steps = Vec::new();
+                while next_inputs.peek_time() == Some(i) {
+                    steps.push(next_inputs.take_next().unwrap().into());
+                }
+                steps
+            }
+            (Some(t), None) => vec![ScheduledSubStep::new_boxed(t)],
+            _ => unreachable!(),
+        };
+
+        #[cfg(debug_assertions)]
+        return Ok(Some(Step::new(time, self.uuid_self, steps)));
+
+        #[cfg(not(debug_assertions))]
+        return Ok(Some(Step::new(time, steps)));
+    }
+    
+    fn desaturate(&mut self) {
+        todo!()
+    }
+    
+    fn poll(&mut self, waker: &Waker) -> Result<super::StepPoll<T>, PollErr>
+    where
+        T: Clone {
+        Ok(match self.sub_step.as_mut().poll(waker)?{
+            Poll::Ready(()) => StepPoll::Ready,
+            Poll::Pending => StepPoll::Pending,
+        })
+    }
+    
+    fn interpolate(&self, time: T::Time) -> Result<Interpolation<T, P>, InterpolateErr>
+    where
+        T: Clone,
+    {
+        let wrapped_transposer = match &*self.sub_step {
+            InitSubStep::Saturated { wrapped_transposer } => wrapped_transposer.clone(),
+            _ => return Err(InterpolateErr::NotSaturated),
+        };
+
+        Ok(Interpolation::new(time, wrapped_transposer))
+    }
+    
+    fn is_unsaturated(&self) -> bool {
+        false
+    }
+    
+    fn is_saturating(&self) -> bool {
+        matches!(*self.sub_step, InitSubStep::Saturating { .. })
+    }
+    
+    fn is_saturated(&self) -> bool {
+        matches!(*self.sub_step, InitSubStep::Saturated { .. })
+    }
+
+    fn get_time(&self) -> <T as Transposer>::Time {
+        unimplemented!()
     }
 }

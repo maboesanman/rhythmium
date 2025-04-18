@@ -1,8 +1,18 @@
 use std::task::Poll;
 
-#[derive(Debug)]
+
+/// The return type used by [`Source::poll`], [`Source::poll_forget`] and [`Source::poll_interrupts`] to communicate the current state of the source.
+#[derive(Debug, PartialEq, Eq)]
 pub enum SourcePoll<T, E, S> {
-    /// Indicates the poll is complete
+    /// Indicates the set of known events in the range `interrupt_lower_bound..interrupt_upper_bound` have all been emitted. Once this has happened the source may begin making progress on events (in the case of `poll` or `poll_forget`) or simply use this variant to communicate that the source has finished emitting events it knows about in the range.
+    /// 
+    /// The source must invoke the interrupt waker if the next_event_at value might change, or if there might be new interrupts.
+    /// 
+    /// The source must invoke the state waker if the state was a Poll::Pending value and might make progress.
+    /// 
+    /// For `poll` and `poll_forget`, S is Poll<Src::OutputState>.
+    /// 
+    /// For `poll_interrupts`, S is ().
     StateProgress {
         /// The requested state, if ready
         /// the channel waker must be called to wake if pending.
@@ -12,10 +22,12 @@ pub enum SourcePoll<T, E, S> {
         next_event_at: Option<T>,
 
         /// The current finalize bound (after this state is processed)
-        finalize_bound: LowerBound<T>,
+        interrupt_lower_bound: LowerBound<T>,
     },
 
-    /// Indicates information must be handled before state is emitted
+    /// Indicates a new rollback or event is available and must be processed.
+    /// 
+    /// This does not necesserily schedule a wakeup, so the source must be polled again after this is processed.
     Interrupt {
         /// The time the information pertains to
         time: T,
@@ -24,13 +36,7 @@ pub enum SourcePoll<T, E, S> {
         interrupt: Interrupt<E>,
 
         /// The current finalize bound (after this interrupt is processed)
-        finalize_bound: LowerBound<T>,
-    },
-
-    /// Indicates that the finalized bound has changed.
-    Finalize {
-        /// The current finalize bound
-        finalize_bound: LowerBound<T>,
+        interrupt_lower_bound: LowerBound<T>,
     },
 
     /// pending operation. interrupt waker will be called when progress may be made toward interrupts being resolved.
@@ -46,22 +52,21 @@ impl<T, E, S> SourcePoll<T, E, Poll<S>> {
             SourcePoll::StateProgress {
                 state,
                 next_event_at,
-                finalize_bound,
+                interrupt_lower_bound,
             } => SourcePoll::StateProgress {
                 state: state.map(f),
                 next_event_at,
-                finalize_bound,
+                interrupt_lower_bound,
             },
             SourcePoll::Interrupt {
                 time,
                 interrupt,
-                finalize_bound,
+                interrupt_lower_bound,
             } => SourcePoll::Interrupt {
                 time,
                 interrupt,
-                finalize_bound,
+                interrupt_lower_bound,
             },
-            SourcePoll::Finalize { finalize_bound } => SourcePoll::Finalize { finalize_bound },
             SourcePoll::InterruptPending => SourcePoll::InterruptPending,
         }
     }
@@ -74,7 +79,7 @@ impl<T, E, S> SourcePoll<T, E, Poll<S>> {
             SourcePoll::StateProgress {
                 state,
                 next_event_at,
-                finalize_bound,
+                interrupt_lower_bound,
             } => {
                 if let Poll::Ready(s) = state {
                     f(s)
@@ -82,19 +87,18 @@ impl<T, E, S> SourcePoll<T, E, Poll<S>> {
                 SourcePoll::StateProgress {
                     state: (),
                     next_event_at,
-                    finalize_bound,
+                    interrupt_lower_bound,
                 }
             }
             SourcePoll::Interrupt {
                 time,
                 interrupt,
-                finalize_bound,
+                interrupt_lower_bound,
             } => SourcePoll::Interrupt {
                 time,
                 interrupt,
-                finalize_bound,
+                interrupt_lower_bound,
             },
-            SourcePoll::Finalize { finalize_bound } => SourcePoll::Finalize { finalize_bound },
             SourcePoll::InterruptPending => SourcePoll::InterruptPending,
         }
     }
@@ -109,22 +113,21 @@ impl<T, E> SourcePoll<T, E, ()> {
             SourcePoll::StateProgress {
                 state: (),
                 next_event_at,
-                finalize_bound,
+                interrupt_lower_bound,
             } => SourcePoll::StateProgress {
                 state: Poll::Ready(f()),
                 next_event_at,
-                finalize_bound,
+                interrupt_lower_bound,
             },
             SourcePoll::Interrupt {
                 time,
                 interrupt,
-                finalize_bound,
+                interrupt_lower_bound,
             } => SourcePoll::Interrupt {
                 time,
                 interrupt,
-                finalize_bound,
+                interrupt_lower_bound,
             },
-            SourcePoll::Finalize { finalize_bound } => SourcePoll::Finalize { finalize_bound },
             SourcePoll::InterruptPending => SourcePoll::InterruptPending,
         }
     }
@@ -139,33 +142,31 @@ impl<T, E, S> SourcePoll<T, E, S> {
             SourcePoll::StateProgress {
                 state,
                 next_event_at,
-                finalize_bound,
+                interrupt_lower_bound,
             } => SourcePoll::StateProgress {
                 state,
                 next_event_at,
-                finalize_bound,
+                interrupt_lower_bound,
             },
             SourcePoll::Interrupt {
                 time,
                 interrupt,
-                finalize_bound,
+                interrupt_lower_bound,
             } => SourcePoll::Interrupt {
                 interrupt: interrupt.map_event(|e| f(&time, e)),
                 time,
-                finalize_bound,
+                interrupt_lower_bound,
             },
-            SourcePoll::Finalize { finalize_bound } => SourcePoll::Finalize { finalize_bound },
             SourcePoll::InterruptPending => SourcePoll::InterruptPending,
         }
     }
 }
 
 impl<T: Copy, E, S> SourcePoll<T, E, S> {
-    pub fn get_finalize_bound(&self) -> Option<LowerBound<T>> {
+    pub fn get_interrupt_lower_bound(&self) -> Option<LowerBound<T>> {
         match self {
-            SourcePoll::StateProgress { finalize_bound, .. } => Some(*finalize_bound),
-            SourcePoll::Interrupt { finalize_bound, .. } => Some(*finalize_bound),
-            SourcePoll::Finalize { finalize_bound } => Some(*finalize_bound),
+            SourcePoll::StateProgress { interrupt_lower_bound, .. } => Some(*interrupt_lower_bound),
+            SourcePoll::Interrupt { interrupt_lower_bound, .. } => Some(*interrupt_lower_bound),
             SourcePoll::InterruptPending => None,
         }
     }
@@ -333,7 +334,7 @@ impl<T: Ord> UpperBound<T> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 /// The type of interrupt emitted from the source
 pub enum Interrupt<E> {
     /// A new event is available.
@@ -362,6 +363,15 @@ pub enum SourcePollErr {
     PollAfterAdvance,
     PollBeforeDefault,
     SpecificError(anyhow::Error),
+}
+
+impl PartialEq for SourcePollErr {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::SpecificError(_), Self::SpecificError(_)) => false,
+            _ => core::mem::discriminant(self) == core::mem::discriminant(other),
+        }
+    }
 }
 
 pub type TrySourcePoll<T, E, S> = Result<SourcePoll<T, E, S>, SourcePollErr>;

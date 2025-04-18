@@ -118,14 +118,17 @@ where
         self.source.max_channel()
     }
 
-    fn advance(
+    fn advance_poll_lower_bound(&mut self, poll_lower_bound: LowerBound<Self::Time>) {
+        self.source.advance_poll_lower_bound(poll_lower_bound);
+    }
+
+    fn advance_interrupt_upper_bound(
         &mut self,
-        lower_bound: LowerBound<Self::Time>,
-        upper_bound: UpperBound<Self::Time>,
+        interrupt_upper_bound: UpperBound<Self::Time>,
         interrupt_waker: Waker,
     ) {
         self.source
-            .advance(lower_bound, upper_bound, interrupt_waker);
+            .advance_interrupt_upper_bound(interrupt_upper_bound, interrupt_waker);
     }
 }
 
@@ -258,6 +261,12 @@ impl<T: Transposer + 'static, M> ErasedInputSourceCollection<T, M> {
 
     pub fn iter_mut(&mut self) -> impl Iterator<Item = ErasedInputSourceGuard<T, M>> {
         self.0.iter_mut().map(TableEntry::into_guard)
+    }
+
+    pub fn iter_mut_with_hashes(&mut self) -> impl Iterator<Item = (u64, ErasedInputSourceGuard<T, M>)> {
+        self.0.iter_mut().map(|entry| {
+            (entry.hash, entry.into_guard())
+        })
     }
 
     pub fn iter_with_hashes(&self) -> impl Iterator<Item = (u64, &ErasedInputSource<T>, &M)> {
