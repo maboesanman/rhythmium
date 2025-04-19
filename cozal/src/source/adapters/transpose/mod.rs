@@ -14,7 +14,7 @@ use std::num::NonZeroUsize;
 use std::pin::Pin;
 use std::task::{Context, Poll, Waker};
 use transpose_interrupt_waker::{
-    InnerGuard, TransposeWakerObserver
+    FutureStatus, InnerGuard, StepStatus, TransposeWakerObserver
 };
 
 mod builder;
@@ -748,6 +748,7 @@ impl<T: Transposer + Clone + 'static> Source for Transpose<T> {
         };
 
         let next_step_at = 'steps: loop {
+            locked.wakers.step_interrupt = None;
             match locked.main.working_timeline_slice.poll(|step_uuid| {
                 locked.outer_wakers.get_step_waker(step_uuid)
             }) {
@@ -759,7 +760,14 @@ impl<T: Transposer + Clone + 'static> Source for Transpose<T> {
                 WorkingTimelineSlicePoll::Ready { next_time } => {
                     break 'steps next_time;
                 },
-                WorkingTimelineSlicePoll::Pending => return TrySourcePoll::Ok(SourcePoll::InterruptPending),
+                WorkingTimelineSlicePoll::Pending { step_uuid } => {
+                    locked.wakers.step_interrupt = Some(StepStatus {
+                        step_uuid,
+                        step_saturation_future_status: transpose_interrupt_waker::FutureStatus::Pending,
+                        input_state_status: transpose_interrupt_waker::InputStateStatus::None,
+                    });
+                    return TrySourcePoll::Ok(SourcePoll::InterruptPending);
+                }
             }
         };
 

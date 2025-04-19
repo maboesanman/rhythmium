@@ -160,11 +160,10 @@ impl<T: Transposer + Clone> WorkingTimelineSlice<T> {
 
     /// poll work on the steps, which is only complete when the next step is after the
     /// interrupt_upper_bound, or there are no more steps available.
-    pub fn poll<F>(&mut self, mut interrupt_waker_fn: F,
-    ) -> WorkingTimelineSlicePoll<T>  where F: FnMut(u64) -> Waker {
+    pub fn poll<F>(&mut self, mut interrupt_waker_fn: F) -> WorkingTimelineSlicePoll<T>  where F: FnMut(u64) -> Waker {
         // assume the top step is never saturated unless there are no remaining events.
         loop {
-            let top_step_waker = interrupt_waker_fn(self.top_uuid());
+            let top_step_uuid = self.top_uuid();
 
             let top_step: &mut dyn PossiblyInitStep<_, _> = match self.steps.back_mut() {
                 Some(s) => &mut s.step,
@@ -187,6 +186,7 @@ impl<T: Transposer + Clone> WorkingTimelineSlice<T> {
             }
 
             if top_step.is_saturating() {
+                let top_step_waker = interrupt_waker_fn(top_step_uuid);
                 match top_step.poll(&top_step_waker).unwrap() {
                     StepPoll::Emitted(event) => return WorkingTimelineSlicePoll::Emitted {
                         time: top_step.get_time(),
@@ -197,7 +197,9 @@ impl<T: Transposer + Clone> WorkingTimelineSlice<T> {
                         input,
                         step_uuid: self.top_uuid()
                     },
-                    StepPoll::Pending => return WorkingTimelineSlicePoll::Pending,
+                    StepPoll::Pending => return WorkingTimelineSlicePoll::Pending {
+                        step_uuid: self.top_uuid()
+                    },
                     StepPoll::Ready => {},
                 }
 
@@ -277,5 +279,7 @@ pub enum WorkingTimelineSlicePoll<T: Transposer> {
     Ready {
         next_time: Option<T::Time>,
     },
-    Pending,
+    Pending {
+        step_uuid: u64,
+    },
 }
