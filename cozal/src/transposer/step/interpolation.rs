@@ -163,6 +163,7 @@ mod interpolate {
 
     pub type FutureImpl<T: Transposer, P: SharedPointerKind> = impl Future<Output = T::OutputState>;
 
+    #[define_opaque(FutureImpl)]
     pub fn invoke<T: Transposer, P: SharedPointerKind>(
         interpolation_time: T::Time,
         wrapped_transposer: SharedPointer<WrappedTransposer<T, P>, P>,

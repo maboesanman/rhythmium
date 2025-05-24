@@ -33,6 +33,7 @@ mod wrapped_handler {
     pub type WrappedHandlerFuture<T: Transposer + Clone, P: SharedPointerKind> =
         impl Future<Output = SharedPointer<WrappedTransposer<T, P>, P>>;
 
+    #[define_opaque(WrappedHandlerFuture)]
     pub fn handle<T: Transposer + Clone, P: SharedPointerKind>(
         mut wrapped_transposer: SharedPointer<WrappedTransposer<T, P>, P>,
         time: T::Time,

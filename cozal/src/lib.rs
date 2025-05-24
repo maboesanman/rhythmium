@@ -1,4 +1,3 @@
-#![feature(hash_raw_entry)]
 #![feature(type_alias_impl_trait)]
 #![feature(ptr_metadata)]
 #![feature(btree_set_entry)]

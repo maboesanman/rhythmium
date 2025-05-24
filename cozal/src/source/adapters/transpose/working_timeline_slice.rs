@@ -264,6 +264,16 @@ impl<T: Transposer + Clone> WorkingTimelineSlice<T> {
             None => LowerBound::min(),
         }
     }
+
+    pub fn get_time(&self, uuid: u64) -> Option<T::Time> {
+        match uuid {
+            0 => None,
+            uuid => {
+                let index = self.steps.binary_search_by_key(&uuid, |s| s.uuid).ok()?;
+                Some(self.steps.get(index)?.step.get_time())
+            }
+        }
+    }
 }
 
 pub enum WorkingTimelineSlicePoll<T: Transposer> {

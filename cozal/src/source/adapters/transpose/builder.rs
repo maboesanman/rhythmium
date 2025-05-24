@@ -42,8 +42,36 @@ impl<T: Transposer + Clone + 'static> TransposeBuilder<T> {
 
     /// Assign an input source.
     ///
+    /// Returns the self for chaining.
+    pub fn add_input<I, S>(mut self, input: I, source: S) -> Result<Self, (I, S)>
+    where
+        I: TransposerInput<Base = T>,
+        T: TransposerInputEventHandler<I>,
+        S: 'static + Source<Time = T::Time, Event = I::InputEvent, State = I::InputState>,
+    {
+        let erased_input = ErasedInput::new(input);
+        if self.input_sources.contains(&*erased_input) {
+            return Err((input, source));
+        }
+
+        self.pre_init_step.add_input(input);
+        if source.max_channel() < self.max_channels {
+            todo!()
+            // this should multiplex the source up to the desired max_channels value.
+            // self.input_sources
+            //     .insert()
+        } else {
+            self.input_sources
+                .insert(ErasedInputSource::new(input, source));
+        }
+
+        Ok(self)
+    }
+
+    /// Assign an input source.
+    ///
     /// Returns the reference for chaining.
-    pub fn add_input<I, S>(&mut self, input: I, source: S) -> Result<&mut Self, (I, S)>
+    pub fn add_input_mut<I, S>(&mut self, input: I, source: S) -> Result<&mut Self, (I, S)>
     where
         I: TransposerInput<Base = T>,
         T: TransposerInputEventHandler<I>,
@@ -82,9 +110,7 @@ impl<T: Transposer + Clone + 'static> TransposeBuilder<T> {
 
         let input_sources = ErasedInputSourceCollection::new(input_sources)?;
         let wakers = TransposeWakerObserver::new(input_sources.iter_with_hashes().map(|(h, ..)| h));
-        let input_sources = InputSourceCollection {
-            inputs: input_sources
-        };
+        let input_sources = InputSourceCollection::new(input_sources);
 
         Ok(Transpose {
             main: TransposeMain {

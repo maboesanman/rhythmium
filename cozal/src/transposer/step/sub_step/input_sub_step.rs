@@ -65,6 +65,7 @@ mod wrapped_handler {
         T: Transposer + TransposerInputEventHandler<I> + Clone,
     = impl Future<Output = SharedPointer<WrappedTransposer<T, P>, P>>;
 
+    #[define_opaque(WrappedHandlerFuture)]
     pub fn handle<T, P, I>(
         mut wrapped_transposer: SharedPointer<WrappedTransposer<T, P>, P>,
         time: T::Time,

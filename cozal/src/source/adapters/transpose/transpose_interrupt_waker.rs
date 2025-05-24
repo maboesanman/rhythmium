@@ -8,6 +8,8 @@ use std::{
 use futures::task::{ArcWake, waker};
 use parking_lot::Mutex;
 
+use crate::source::traits::SourceContext;
+
 pub struct TransposeWakerObserver {
     inner: Arc<Mutex<TransposeInterruptWakerContainer>>,
 }
@@ -77,48 +79,30 @@ impl TransposeWakerObserver {
         }
     }
 
-    pub fn get_source_interrupt_waker(&self, source_hash: u64) -> Waker {
+    pub fn get_waker_for_input_poll_interrupt(&self, input_hash: u64) -> Waker {
         waker(Arc::new(WrappedWaker {
-            data: InputInterruptWakerData { source_hash },
+            data: InputInterruptWakerData { input_hash },
             inner: self.inner.clone(),
         }))
     }
 
-    pub fn get_source_channel_waker(&self, source_hash: u64, interpolation_uuid: u64) -> Waker {
-        todo!();
-        // waker(Arc::new(WrappedWaker {
-        //     data: SourceChannelWakerData {
-        //         source_hash,
-        //         interpolation_uuid,
-        //     },
-        //     inner: self.inner.clone(),
-        // }))
-    }
-
-    pub fn get_source_step_waker(&self, source_hash: u64, step_uuid: u64) -> Waker {
-        todo!();
-        // waker(Arc::new(WrappedWaker {
-        //     data: SourceStepWakerData {
-        //         source_hash,
-        //         step_uuid,
-        //     },
-        //     inner: self.inner.clone(),
-        // }))
-    }
-
-    pub fn get_step_waker(&self, step_uuid: u64) -> Waker {
+    pub fn get_waker_for_future_poll_from_step(&self, step_uuid: u64) -> Waker {
         waker(Arc::new(WrappedWaker {
             data: StepFutureWakerData { step_uuid },
             inner: self.inner.clone(),
         }))
     }
 
-    pub fn get_interpolation_waker(&self, interpolation_uuid: u64) -> Waker {
-        todo!();
-        // waker(Arc::new(WrappedWaker {
-        //     data: InterpolationWakerData { interpolation_uuid },
-        //     inner: self.inner.clone(),
-        // }))
+    pub fn get_context_for_input_poll_from_step(&self, input_hash: u64, step_id: u64) -> SourceContext {
+        todo!()
+    }
+
+    pub fn get_waker_for_future_poll_from_interpolation(&self, interpolation_uuid: u64) -> Waker {
+        todo!()
+    }
+
+    pub fn get_context_for_input_poll_from_interpolation(&self, input_hash: u64, interpolation_uuid: u64, channel: u64) -> SourceContext {
+        todo!()
     }
 }
 
@@ -253,24 +237,24 @@ impl<D: WakerData> ArcWake for WrappedWaker<D> {
 
 #[derive(Debug, Clone, Copy)]
 struct InputInterruptWakerData {
-    source_hash: u64,
+    input_hash: u64,
 }
 
 impl WakerData for InputInterruptWakerData {
     fn wake(&self, inner: &mut TransposeInterruptWakerInner) {
-        if inner.input_interrupt_woken.contains(&self.source_hash) {
+        if inner.input_interrupt_woken.contains(&self.input_hash) {
             return;
         }
 
         if let Some(pos) = inner
             .input_interrupt_pending
             .iter()
-            .position(|&x| x == self.source_hash)
+            .position(|&x| x == self.input_hash)
         {
             inner.input_interrupt_pending.swap_remove_back(pos);
         }
 
-        inner.input_interrupt_woken.push_back(self.source_hash);
+        inner.input_interrupt_woken.push_back(self.input_hash);
         inner.interrupt_waker.wake_by_ref();
     }
 

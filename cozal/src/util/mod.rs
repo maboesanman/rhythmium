@@ -4,7 +4,6 @@
 #![allow(unused)]
 
 pub mod dummy_waker;
-pub mod extended_entry;
 pub mod extractable_rpds;
 pub mod observing_waker;
 pub mod option_min;

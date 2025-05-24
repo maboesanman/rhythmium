@@ -117,7 +117,9 @@ impl Transposer for CollatzTransposer2 {
     }
 
     async fn init(&mut self, cx: &mut crate::transposer::InitContext<'_, Self>) {
-        cx.schedule_event(Duration::from_secs(0), ());
+        async move {
+            cx.schedule_event(Duration::from_secs(0), ());
+        }.pending_once().await
     }
 
     async fn handle_scheduled_event(
@@ -148,7 +150,10 @@ impl Transposer for CollatzTransposer2 {
         &self,
         _cx: &mut crate::transposer::InterpolateContext<'_, Self>,
     ) -> Self::OutputState {
-        self.count_until_1
+        async move {
+            self.count_until_1
+        }.pending_once()
+        .await
     }
 }
 
