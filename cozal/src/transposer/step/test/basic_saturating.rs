@@ -1,9 +1,9 @@
 use core::pin::Pin;
 
 use super::super::pre_init_step::PreInitStep;
+use crate::transposer::step::PossiblyInitStep;
 use crate::transposer::step::init_step::InitStep;
 use crate::transposer::step::step::StepPoll;
-use crate::transposer::step::PossiblyInitStep;
 use crate::util::dummy_waker::DummyWaker;
 use archery::ArcTK;
 

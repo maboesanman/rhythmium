@@ -1,4 +1,7 @@
-use std::{collections::{hash_map::Entry, HashMap}, task::{Poll, Waker}};
+use std::{
+    collections::HashMap,
+    task::{Poll, Waker},
+};
 
 use archery::ArcTK;
 
@@ -24,7 +27,10 @@ pub struct InputSourceCollection<T: Transposer + 'static> {
 
 impl<T: Transposer + 'static> InputSourceCollection<T> {
     pub fn new(inputs: ErasedInputSourceCollection<T, ()>) -> Self {
-        let interrupt_lower_bounds = inputs.iter_with_hashes().map(|(h, _, _)| (h, LowerBound::min())).collect();
+        let interrupt_lower_bounds = inputs
+            .iter_with_hashes()
+            .map(|(h, _, _)| (h, LowerBound::min()))
+            .collect();
         Self {
             inputs,
             next_events_at: HashMap::new(),
@@ -57,7 +63,11 @@ impl<T: Transposer + 'static> InputSourceCollection<T> {
 
     /// return the min of the returned lower bounds of all the inputs.
     pub fn get_input_interrupt_lower_bound(&self) -> LowerBound<T::Time> {
-        self.interrupt_lower_bounds.values().min().copied().unwrap_or(LowerBound::max())
+        self.interrupt_lower_bounds
+            .values()
+            .min()
+            .copied()
+            .unwrap_or(LowerBound::max())
     }
 
     pub fn get_input_next_event_at(&self) -> Option<T::Time> {
@@ -71,11 +81,16 @@ impl<T: Transposer + 'static> InputSourceCollection<T> {
         };
     }
 
-    pub fn register_interrupt_lower_bound(&mut self, input_hash: u64, interrupt_lower_bound: LowerBound<T::Time>) {
+    pub fn register_interrupt_lower_bound(
+        &mut self,
+        input_hash: u64,
+        interrupt_lower_bound: LowerBound<T::Time>,
+    ) {
         if interrupt_lower_bound == LowerBound::max() {
             self.interrupt_lower_bounds.remove(&input_hash);
         } else {
-            self.interrupt_lower_bounds.insert(input_hash, interrupt_lower_bound);
+            self.interrupt_lower_bounds
+                .insert(input_hash, interrupt_lower_bound);
         }
     }
 
@@ -103,13 +118,18 @@ impl<T: Transposer + 'static> InputSourceCollection<T> {
                 .unwrap();
 
             match poll {
-                SourcePoll::StateProgress { state: (), next_event_at, interrupt_lower_bound  } => {
+                SourcePoll::StateProgress {
+                    state: (),
+                    next_event_at,
+                    interrupt_lower_bound,
+                } => {
                     self.register_interrupt_lower_bound(input_hash, interrupt_lower_bound);
                     self.register_next_event_at(input_hash, next_event_at);
                 }
                 SourcePoll::Interrupt {
-                    time, interrupt,
-                    interrupt_lower_bound, 
+                    time,
+                    interrupt,
+                    interrupt_lower_bound,
                 } => {
                     self.register_interrupt_lower_bound(input_hash, interrupt_lower_bound);
                     wakers_inner.input_interrupt_woken.push_back(input_hash);

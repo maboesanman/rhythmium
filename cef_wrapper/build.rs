@@ -76,7 +76,6 @@ fn get_cef_dir() -> std::path::PathBuf {
     let platform = "linux64";
 
     current_dir.join(format!(
-        "../third_party/cef/cef_binary_{}_{}",
-        version, platform
+        "../third_party/cef/cef_binary_{version}_{platform}"
     ))
 }

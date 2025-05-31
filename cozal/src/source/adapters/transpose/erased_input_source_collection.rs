@@ -53,10 +53,9 @@ where
                 interrupt: Interrupt::Event(event),
                 ..
             } = &poll
+                && !<I::Base as TransposerInputEventHandler<I>>::can_handle(*time, event)
             {
-                if !<I::Base as TransposerInputEventHandler<I>>::can_handle(*time, event) {
-                    continue;
-                }
+                continue;
             }
 
             break Ok(poll
@@ -77,10 +76,9 @@ where
                 interrupt: Interrupt::Event(event),
                 ..
             } = &poll
+                && !<I::Base as TransposerInputEventHandler<I>>::can_handle(*time, event)
             {
-                if !<I::Base as TransposerInputEventHandler<I>>::can_handle(*time, event) {
-                    continue;
-                }
+                continue;
             }
 
             break Ok(poll
@@ -100,10 +98,9 @@ where
                 interrupt: Interrupt::Event(event),
                 ..
             } = &poll
+                && !<I::Base as TransposerInputEventHandler<I>>::can_handle(*time, event)
             {
-                if !<I::Base as TransposerInputEventHandler<I>>::can_handle(*time, event) {
-                    continue;
-                }
+                continue;
             }
 
             break Ok(poll.map_event(|t, e| BoxedInput::new(*t, self.input, e)));
@@ -263,10 +260,12 @@ impl<T: Transposer + 'static, M> ErasedInputSourceCollection<T, M> {
         self.0.iter_mut().map(TableEntry::into_guard)
     }
 
-    pub fn iter_mut_with_hashes(&mut self) -> impl Iterator<Item = (u64, ErasedInputSourceGuard<T, M>)> {
-        self.0.iter_mut().map(|entry| {
-            (entry.hash, entry.into_guard())
-        })
+    pub fn iter_mut_with_hashes(
+        &mut self,
+    ) -> impl Iterator<Item = (u64, ErasedInputSourceGuard<T, M>)> {
+        self.0
+            .iter_mut()
+            .map(|entry| (entry.hash, entry.into_guard()))
     }
 
     pub fn iter_with_hashes(&self) -> impl Iterator<Item = (u64, &ErasedInputSource<T>, &M)> {

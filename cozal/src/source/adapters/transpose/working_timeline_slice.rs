@@ -1,15 +1,18 @@
 use std::{
     collections::{BTreeSet, VecDeque},
-    ops::Bound,
     task::Waker,
 };
 
 use archery::ArcTK;
 
 use crate::{
-    source::source_poll::{Interrupt, LowerBound, SourceBound, UpperBound},
+    source::source_poll::{Interrupt, LowerBound, UpperBound},
     transposer::{
-        input_erasure::{ErasedInput, ErasedInputState}, step::{BoxedInput, InitStep, Interpolation, PossiblyInitStep, PreInitStep, Step, StepPoll}, Transposer
+        Transposer,
+        input_erasure::{ErasedInput, ErasedInputState},
+        step::{
+            BoxedInput, InitStep, Interpolation, PossiblyInitStep, PreInitStep, Step, StepPoll,
+        },
     },
 };
 
@@ -67,7 +70,7 @@ impl<T: Transposer + Clone> WorkingTimelineSlice<T> {
 
         let last_deleted_index = match first_included_index.checked_sub(1) {
             Some(i) => i,
-            None => return
+            None => return,
         };
 
         self.init_step = None;
@@ -76,13 +79,21 @@ impl<T: Transposer + Clone> WorkingTimelineSlice<T> {
 
     /// get the top uuid, and the previous, both mutably.
     /// errors when there aren't any non-init steps.
-    fn get_last_two_steps(&mut self) -> Result<
-        (&mut dyn PossiblyInitStep<'static, T, ArcTK>, &mut StepWrapper<T>),
-        &mut dyn PossiblyInitStep<'static, T, ArcTK>
+    fn get_last_two_steps(
+        &mut self,
+    ) -> Result<
+        (
+            &mut dyn PossiblyInitStep<'static, T, ArcTK>,
+            &mut StepWrapper<T>,
+        ),
+        &mut dyn PossiblyInitStep<'static, T, ArcTK>,
     > {
         match self.steps.len() {
             0 => Err(&mut **self.init_step.as_mut().unwrap()),
-            1 => Ok((&mut **self.init_step.as_mut().unwrap(), self.steps.back_mut().unwrap())),
+            1 => Ok((
+                &mut **self.init_step.as_mut().unwrap(),
+                self.steps.back_mut().unwrap(),
+            )),
             _ => {
                 let (a, b) = self.steps.as_mut_slices();
 
@@ -92,10 +103,7 @@ impl<T: Transposer + Clone> WorkingTimelineSlice<T> {
                     _ => b.split_at_mut(b.len() - 1),
                 };
 
-                Ok((
-                    &mut a.last_mut().unwrap().step,
-                    b.last_mut().unwrap(),
-                ))
+                Ok((&mut a.last_mut().unwrap().step, b.last_mut().unwrap()))
             }
         }
     }
@@ -120,7 +128,7 @@ impl<T: Transposer + Clone> WorkingTimelineSlice<T> {
     }
 
     /// Advance the upper bound to which all outgoing events must be calculated.
-    /// 
+    ///
     /// The poll function must populate the step chain all the way up to this upper bound
     /// (and a single unsaturated event past it, if one exists).
     pub fn advance_interrupt_upper_bound(&mut self, interrupt_upper_bound: UpperBound<T::Time>) {
@@ -160,7 +168,10 @@ impl<T: Transposer + Clone> WorkingTimelineSlice<T> {
 
     /// poll work on the steps, which is only complete when the next step is after the
     /// interrupt_upper_bound, or there are no more steps available.
-    pub fn poll<F>(&mut self, mut interrupt_waker_fn: F) -> WorkingTimelineSlicePoll<T>  where F: FnMut(u64) -> Waker {
+    pub fn poll<F>(&mut self, mut interrupt_waker_fn: F) -> WorkingTimelineSlicePoll<T>
+    where
+        F: FnMut(u64) -> Waker,
+    {
         // assume the top step is never saturated unless there are no remaining events.
         loop {
             let top_step_uuid = self.top_uuid();
@@ -172,7 +183,9 @@ impl<T: Transposer + Clone> WorkingTimelineSlice<T> {
 
             if top_step.is_unsaturated() {
                 if !self.interrupt_upper_bound.test(&top_step.get_time()) {
-                    return WorkingTimelineSlicePoll::Ready { next_time: Some(top_step.get_time()) }
+                    return WorkingTimelineSlicePoll::Ready {
+                        next_time: Some(top_step.get_time()),
+                    };
                 }
 
                 let (prev, curr) = match self.get_last_two_steps() {
@@ -188,19 +201,25 @@ impl<T: Transposer + Clone> WorkingTimelineSlice<T> {
             if top_step.is_saturating() {
                 let top_step_waker = interrupt_waker_fn(top_step_uuid);
                 match top_step.poll(&top_step_waker).unwrap() {
-                    StepPoll::Emitted(event) => return WorkingTimelineSlicePoll::Emitted {
-                        time: top_step.get_time(),
-                        event
-                    },
-                    StepPoll::StateRequested(input) => return WorkingTimelineSlicePoll::StateRequested {
-                        time: top_step.get_time(),
-                        input,
-                        step_uuid: self.top_uuid()
-                    },
-                    StepPoll::Pending => return WorkingTimelineSlicePoll::Pending {
-                        step_uuid: self.top_uuid()
-                    },
-                    StepPoll::Ready => {},
+                    StepPoll::Emitted(event) => {
+                        return WorkingTimelineSlicePoll::Emitted {
+                            time: top_step.get_time(),
+                            event,
+                        };
+                    }
+                    StepPoll::StateRequested(input) => {
+                        return WorkingTimelineSlicePoll::StateRequested {
+                            time: top_step.get_time(),
+                            input,
+                            step_uuid: self.top_uuid(),
+                        };
+                    }
+                    StepPoll::Pending => {
+                        return WorkingTimelineSlicePoll::Pending {
+                            step_uuid: self.top_uuid(),
+                        };
+                    }
+                    StepPoll::Ready => {}
                 }
 
                 continue;
@@ -243,12 +262,16 @@ impl<T: Transposer + Clone> WorkingTimelineSlice<T> {
 
     /// produce an interpolation for the given time.
     pub fn interpolate(&self, time: T::Time) -> Result<Interpolation<T, ArcTK>, ()> {
-
         // TODO: THIS SEEMS LIKE THE EQUALS CASE IS WRONG
-        match self.steps.partition_point(|s| s.step.get_time() <= time).checked_sub(1) {
+        match self
+            .steps
+            .partition_point(|s| s.step.get_time() <= time)
+            .checked_sub(1)
+        {
             Some(i) => self.steps.get(i).unwrap().step.interpolate(time),
             None => self.init_step.as_ref().ok_or(())?.interpolate(time),
-        }.map_err(|_| ())
+        }
+        .map_err(|_| ())
     }
 
     /// the lower bound for times that a step might request state
@@ -256,11 +279,11 @@ impl<T: Transposer + Clone> WorkingTimelineSlice<T> {
         match self.steps.back() {
             Some(last) => {
                 if last.step.can_produce_events() {
-                    return LowerBound::inclusive(last.step.get_time())
+                    return LowerBound::inclusive(last.step.get_time());
                 }
 
-                return LowerBound::max()
-            },
+                LowerBound::max()
+            }
             None => LowerBound::min(),
         }
     }

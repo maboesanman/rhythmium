@@ -1,5 +1,10 @@
 use std::{
-    assert_matches::assert_matches, io::Write, num::NonZeroUsize, sync::atomic::AtomicBool, task::{Context, Poll, Waker}, time::{Duration, Instant}
+    assert_matches::assert_matches,
+    io::Write,
+    num::NonZeroUsize,
+    sync::atomic::AtomicBool,
+    task::{Context, Poll, Waker},
+    time::{Duration, Instant},
 };
 
 use futures::{FutureExt, StreamExt};
@@ -8,7 +13,13 @@ use tokio::time::sleep_until;
 
 use crate::{
     source::{
-        adapters::{event_stream::{self, into_event_stream}, transpose::TransposeBuilder}, source_poll::{Interrupt, LowerBound, SourceBound, UpperBound}, traits::SourceContext, Source, SourcePoll
+        Source, SourcePoll,
+        adapters::{
+            event_stream::{self, into_event_stream},
+            transpose::TransposeBuilder,
+        },
+        source_poll::{Interrupt, LowerBound, SourceBound, UpperBound},
+        traits::SourceContext,
     },
     transposer::Transposer,
 };
@@ -119,7 +130,9 @@ impl Transposer for CollatzTransposer2 {
     async fn init(&mut self, cx: &mut crate::transposer::InitContext<'_, Self>) {
         async move {
             cx.schedule_event(Duration::from_secs(0), ());
-        }.pending_once().await
+        }
+        .pending_once()
+        .await
     }
 
     async fn handle_scheduled_event(
@@ -150,10 +163,7 @@ impl Transposer for CollatzTransposer2 {
         &self,
         _cx: &mut crate::transposer::InterpolateContext<'_, Self>,
     ) -> Self::OutputState {
-        async move {
-            self.count_until_1
-        }.pending_once()
-        .await
+        async move { self.count_until_1 }.pending_once().await
     }
 }
 
@@ -193,9 +203,7 @@ fn transpose_no_inputs_with_events() {
         .unwrap();
     println!("{:?}", poll);
 
-    transpose.advance_poll_lower_bound(
-        LowerBound::exclusive(Duration::from_secs_f32(30.0)),
-    );
+    transpose.advance_poll_lower_bound(LowerBound::exclusive(Duration::from_secs_f32(30.0)));
 
     let poll = transpose
         .poll(Duration::from_secs(35), context.clone())
@@ -230,7 +238,6 @@ async fn test_stream() {
 
     println!("complete")
 }
-
 
 // #[tokio::test]
 // async fn test_stream_wakers() {
@@ -283,7 +290,7 @@ async fn test_stream() {
 //     // first call completes, and lets us know the next event is at time 0
 //     let (waker1, count1) = futures_test::task::new_count_waker();
 //     let poll = transpose.poll_interrupts(waker1);
-//     assert_eq!(poll, 
+//     assert_eq!(poll,
 //         Ok(SourcePoll::StateProgress {
 //             state: (),
 //             next_event_at: Some(Duration::ZERO),
@@ -308,9 +315,9 @@ async fn test_stream() {
 //     // second poll goes through
 //     let (waker4, count4) = futures_test::task::new_count_waker();
 //     let poll = transpose.poll_interrupts(waker4);
-//     assert_eq!(poll, 
+//     assert_eq!(poll,
 //         Ok(SourcePoll::Interrupt {
-//             time: Duration::ZERO, interrupt: Interrupt::Event(70), 
+//             time: Duration::ZERO, interrupt: Interrupt::Event(70),
 //             interrupt_lower_bound: LowerBound::inclusive(Duration::ZERO) }
 //     ));
 //     assert_eq!(count4.get(), 0);
@@ -318,7 +325,7 @@ async fn test_stream() {
 //     // third poll returns state progress
 //     let (waker5, count5) = futures_test::task::new_count_waker();
 //     let poll = transpose.poll_interrupts(waker5);
-//     assert_eq!(poll, 
+//     assert_eq!(poll,
 //         Ok(SourcePoll::StateProgress {
 //             state: (),
 //             next_event_at: Some(Duration::from_secs(1)),
@@ -343,9 +350,9 @@ async fn test_stream() {
 //     // second poll goes through
 //     let (waker8, count8) = futures_test::task::new_count_waker();
 //     let poll = transpose.poll_interrupts(waker8);
-//     assert_eq!(poll, 
+//     assert_eq!(poll,
 //         Ok(SourcePoll::Interrupt {
-//             time: Duration::from_secs(1), interrupt: Interrupt::Event(35), 
+//             time: Duration::from_secs(1), interrupt: Interrupt::Event(35),
 //             interrupt_lower_bound: LowerBound::inclusive(Duration::from_secs(1)) }
 //     ));
 //     assert_eq!(count8.get(), 0);
@@ -353,7 +360,7 @@ async fn test_stream() {
 //     // third poll returns state progress
 //     let (waker9, count9) = futures_test::task::new_count_waker();
 //     let poll = transpose.poll_interrupts(waker9);
-//     assert_eq!(poll, 
+//     assert_eq!(poll,
 //         Ok(SourcePoll::StateProgress {
 //             state: (),
 //             next_event_at: Some(Duration::from_secs(2)),
@@ -361,4 +368,3 @@ async fn test_stream() {
 //         }));
 //     assert_eq!(count9.get(), 0);
 // }
-

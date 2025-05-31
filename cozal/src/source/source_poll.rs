@@ -1,17 +1,16 @@
 use std::task::Poll;
 
-
 /// The return type used by [`Source::poll`], [`Source::poll_forget`] and [`Source::poll_interrupts`] to communicate the current state of the source.
 #[derive(Debug, PartialEq, Eq)]
 pub enum SourcePoll<T, E, S> {
     /// Indicates the set of known events in the range `interrupt_lower_bound..interrupt_upper_bound` have all been emitted. Once this has happened the source may begin making progress on events (in the case of `poll` or `poll_forget`) or simply use this variant to communicate that the source has finished emitting events it knows about in the range.
-    /// 
+    ///
     /// The source must invoke the interrupt waker if the next_event_at value might change, or if there might be new interrupts.
-    /// 
+    ///
     /// The source must invoke the state waker if the state was a Poll::Pending value and might make progress.
-    /// 
+    ///
     /// For `poll` and `poll_forget`, S is Poll<Src::OutputState>.
-    /// 
+    ///
     /// For `poll_interrupts`, S is ().
     StateProgress {
         /// The requested state, if ready
@@ -26,7 +25,7 @@ pub enum SourcePoll<T, E, S> {
     },
 
     /// Indicates a new rollback or event is available and must be processed.
-    /// 
+    ///
     /// This does not necesserily schedule a wakeup, so the source must be polled again after this is processed.
     Interrupt {
         /// The time the information pertains to
@@ -165,8 +164,14 @@ impl<T, E, S> SourcePoll<T, E, S> {
 impl<T: Copy, E, S> SourcePoll<T, E, S> {
     pub fn get_interrupt_lower_bound(&self) -> Option<LowerBound<T>> {
         match self {
-            SourcePoll::StateProgress { interrupt_lower_bound, .. } => Some(*interrupt_lower_bound),
-            SourcePoll::Interrupt { interrupt_lower_bound, .. } => Some(*interrupt_lower_bound),
+            SourcePoll::StateProgress {
+                interrupt_lower_bound,
+                ..
+            } => Some(*interrupt_lower_bound),
+            SourcePoll::Interrupt {
+                interrupt_lower_bound,
+                ..
+            } => Some(*interrupt_lower_bound),
             SourcePoll::InterruptPending => None,
         }
     }
@@ -340,7 +345,7 @@ pub enum Interrupt<E> {
     /// A new event is available.
     Event(E),
 
-    /// All events before at or after time T must be discarded.
+    /// All events at or after time T must be discarded.
     Rollback,
 }
 

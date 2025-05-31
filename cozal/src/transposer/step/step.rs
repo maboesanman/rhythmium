@@ -13,7 +13,9 @@ use crate::transposer::{
 };
 
 use super::{
-    sub_step::{scheduled_sub_step::ScheduledSubStep, BoxedSubStep, StartSaturateErr}, wrapped_transposer::WrappedTransposer, BoxedInput, FutureInputContainer, Interpolation, PossiblyInitStep
+    BoxedInput, FutureInputContainer, Interpolation, PossiblyInitStep,
+    sub_step::{BoxedSubStep, StartSaturateErr, scheduled_sub_step::ScheduledSubStep},
+    wrapped_transposer::WrappedTransposer,
 };
 
 #[derive(Debug)]
@@ -299,7 +301,9 @@ impl<'a, T: Transposer + 'a, P: SharedPointerKind + 'a> Step<'a, T, P> {
     }
 }
 
-impl<'a, T: Transposer + Clone + 'a, P: SharedPointerKind + 'a> PossiblyInitStep<'a, T, P> for Step<'a, T, P> {
+impl<'a, T: Transposer + Clone + 'a, P: SharedPointerKind + 'a> PossiblyInitStep<'a, T, P>
+    for Step<'a, T, P>
+{
     #[cfg(debug_assertions)]
     fn get_uuid(&self) -> uuid::Uuid {
         self.uuid_self
@@ -399,15 +403,15 @@ impl<'a, T: Transposer + Clone + 'a, P: SharedPointerKind + 'a> PossiblyInitStep
         };
 
         #[cfg(debug_assertions)]
-        if let Some(t) = wrapped_transposer.metadata.last_updated {
-            if t.time > time {
-                return Err(InterpolateErr::TimePast);
-            }
+        if let Some(t) = wrapped_transposer.metadata.last_updated
+            && t.time > time
+        {
+            return Err(InterpolateErr::TimePast);
         }
 
         Ok(Interpolation::new(time, wrapped_transposer))
     }
-    
+
     fn next_unsaturated(
         &self,
         next_inputs: &mut dyn FutureInputContainer<'a, T, P>,
@@ -425,13 +429,12 @@ impl<'a, T: Transposer + Clone + 'a, P: SharedPointerKind + 'a> PossiblyInitStep
             .get_next_scheduled_time()
             .map(|t| t.time);
 
-
         let next_input = next_inputs.peek_time();
 
-        if let Some(i) = next_input.as_ref() {
-            if i <= &self.time {
-                return Err(NextUnsaturatedErr::InputPastOrPresent);
-            }
+        if let Some(i) = next_input.as_ref()
+            && i <= &self.time
+        {
+            return Err(NextUnsaturatedErr::InputPastOrPresent);
         }
 
         let (time, next_scheduled_time, next_input) = match (next_scheduled_time, next_input) {
@@ -474,7 +477,7 @@ impl<'a, T: Transposer + Clone + 'a, P: SharedPointerKind + 'a> PossiblyInitStep
             uuid_prev: self.uuid_self,
         }))
     }
-    
+
     fn desaturate(&mut self) {
         match self.get_step_status_mut() {
             ActiveStepStatusMut::Saturated(step) => step.as_mut().desaturate(),
@@ -498,7 +501,7 @@ impl<'a, T: Transposer + Clone + 'a, P: SharedPointerKind + 'a> PossiblyInitStep
     fn is_saturated(&self) -> bool {
         matches!(self.status, StepStatus::Saturated)
     }
-    
+
     fn get_time(&self) -> <T as Transposer>::Time {
         self.time
     }

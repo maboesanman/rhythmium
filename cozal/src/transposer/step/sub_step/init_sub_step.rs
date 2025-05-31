@@ -1,5 +1,8 @@
 use std::{
-    fmt::Debug, future::Future, pin::Pin, task::{Context, Poll, Waker}
+    fmt::Debug,
+    future::Future,
+    pin::Pin,
+    task::{Context, Poll, Waker},
 };
 
 use archery::{SharedPointer, SharedPointerKind};

@@ -1,13 +1,10 @@
 use std::{
-    collections::{BTreeMap, btree_map::Entry},
-    fmt::Debug,
+    collections::BTreeMap,
     pin::Pin,
     task::{Context, Poll},
-    time::{Duration, Instant},
 };
 
 use futures::{FutureExt, Stream, StreamExt};
-use smallvec::{SmallVec, smallvec};
 
 use crate::source::{
     Source, SourcePoll,
@@ -23,12 +20,10 @@ pub fn into_event_stream<Src: Source>(source: Src) -> impl Stream<Item = (Src::T
     })
 }
 
-
 struct EventStreamRaw<Src: Source> {
     source: Src,
     buffered_events: BTreeMap<Src::Time, Vec<Src::Event>>,
 }
-
 
 impl<Src: Source> EventStreamRaw<Src> {
     pub fn new(mut source: Src) -> Self {
@@ -48,16 +43,16 @@ fn prune_by_lower_bound<T: Ord, E>(
         SourceBound::Min => BTreeMap::new(),
         SourceBound::Inclusive(t) => {
             let at_or_after = buffer.split_off(&t);
-            let before = core::mem::replace(buffer, at_or_after);
-            before
+
+            core::mem::replace(buffer, at_or_after)
         }
         SourceBound::Exclusive(t) => {
             let mut after = buffer.split_off(&t);
             if let Some(x) = after.remove(&t) {
                 buffer.insert(t, x);
             }
-            let before = core::mem::replace(buffer, after);
-            before
+
+            core::mem::replace(buffer, after)
         }
         SourceBound::Max => core::mem::take(buffer),
     }
@@ -82,18 +77,24 @@ impl<Src: Source> Stream for EventStreamRaw<Src> {
                         return Poll::Ready(Some(to_emit));
                     }
 
-                    if interrupt_lower_bound == LowerBound::max() && this.buffered_events.is_empty() {
-                        return Poll::Ready(None);
+                    if next_event_at.is_some() && interrupt_lower_bound == LowerBound::max() {
+                        panic!()
                     }
 
                     if this.buffered_events.is_empty() {
+                        if interrupt_lower_bound == LowerBound::max() {
+                            return Poll::Ready(None);
+                        }
+
                         if let Some(t) = next_event_at {
                             this.source.advance_interrupt_upper_bound(
                                 UpperBound::inclusive(t),
                                 cx.waker().clone(),
                             );
+                            // we loop to the beginning and try repolling.
                         } else {
-                            println!("empty")
+                            // just gotta wait for more events.
+                            return Poll::Pending;
                         }
                     }
                 }
@@ -103,17 +104,10 @@ impl<Src: Source> Stream for EventStreamRaw<Src> {
                     interrupt_lower_bound,
                 } => {
                     match interrupt {
-                        Interrupt::Event(event) => match this.buffered_events.entry(time) {
-                            Entry::Vacant(vacant_entry) => {
-                                vacant_entry.insert(vec![event]);
-                            }
-                            Entry::Occupied(occupied_entry) => {
-                                occupied_entry.into_mut().push(event);
-                            }
-                        },
-                        Interrupt::Rollback => {
-                            this.buffered_events.split_off(&time);
+                        Interrupt::Event(event) => {
+                            this.buffered_events.entry(time).or_default().push(event)
                         }
+                        Interrupt::Rollback => drop(this.buffered_events.split_off(&time)),
                     }
 
                     let to_emit =
@@ -121,6 +115,7 @@ impl<Src: Source> Stream for EventStreamRaw<Src> {
                     if !to_emit.is_empty() {
                         return Poll::Ready(Some(to_emit));
                     }
+                    // we loop to the beginning and try repolling, since we need to poll after interrupts.
                 }
                 SourcePoll::InterruptPending => return Poll::Pending,
             }

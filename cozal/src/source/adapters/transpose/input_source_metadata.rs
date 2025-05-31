@@ -192,19 +192,17 @@ impl<T: Transposer + 'static> Source for ErasedInputSourceGuard<'_, T, InputSour
             }
         }
     }
-    
-    fn advance_poll_lower_bound(
-        &mut self,
-        poll_lower_bound: LowerBound<Self::Time>,
-    ) {
+
+    fn advance_poll_lower_bound(&mut self, poll_lower_bound: LowerBound<Self::Time>) {
         let metadata = self.get_metadata_mut();
 
         if metadata.advanced_lower_bound > poll_lower_bound {
             metadata.advanced_lower_bound = poll_lower_bound;
-            self.get_source_mut().advance_poll_lower_bound(poll_lower_bound);
+            self.get_source_mut()
+                .advance_poll_lower_bound(poll_lower_bound);
         }
     }
-    
+
     fn advance_interrupt_upper_bound(
         &mut self,
         interrupt_upper_bound: UpperBound<Self::Time>,
@@ -214,7 +212,8 @@ impl<T: Transposer + 'static> Source for ErasedInputSourceGuard<'_, T, InputSour
 
         if metadata.advanced_upper_bound > interrupt_upper_bound {
             metadata.advanced_upper_bound = interrupt_upper_bound;
-            self.get_source_mut().advance_interrupt_upper_bound(interrupt_upper_bound, interrupt_waker);
+            self.get_source_mut()
+                .advance_interrupt_upper_bound(interrupt_upper_bound, interrupt_waker);
         }
     }
 
@@ -247,10 +246,7 @@ impl<T: Transposer + 'static> ErasedInputSourceCollection<T, InputSourceMetaData
             .unwrap_or(UpperBound::max())
     }
 
-    pub fn advance_poll_lower_bound_all(
-        &mut self,
-        poll_lower_bound: LowerBound<T::Time>,
-    ) {
+    pub fn advance_poll_lower_bound_all(&mut self, poll_lower_bound: LowerBound<T::Time>) {
         self.iter_mut()
             .for_each(|mut x| x.advance_poll_lower_bound(poll_lower_bound));
     }
@@ -260,7 +256,8 @@ impl<T: Transposer + 'static> ErasedInputSourceCollection<T, InputSourceMetaData
         interrupt_upper_bound: UpperBound<T::Time>,
         interrupt_waker: Waker,
     ) {
-        self.iter_mut()
-            .for_each(|mut x| x.advance_interrupt_upper_bound(interrupt_upper_bound, interrupt_waker.clone()));
+        self.iter_mut().for_each(|mut x| {
+            x.advance_interrupt_upper_bound(interrupt_upper_bound, interrupt_waker.clone())
+        });
     }
 }

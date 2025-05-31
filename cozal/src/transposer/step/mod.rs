@@ -15,7 +15,7 @@ mod wrapped_transposer;
 #[cfg(test)]
 mod test;
 
-use std::{fmt::Debug, task::Waker};
+use std::task::Waker;
 
 use archery::{SharedPointer, SharedPointerKind};
 pub use future_input_container::FutureInputContainer;
@@ -30,7 +30,6 @@ use super::Transposer;
 
 /// A trait for shared functionality between the `InitStep` and `Step` types.
 pub trait PossiblyInitStep<'a, T: Transposer + Clone + 'a, P: SharedPointerKind + 'a> {
-
     /// Create a new step that is ready to be saturated.
     ///
     /// This will compare the time of the next scheduled event in the current schedule with the time

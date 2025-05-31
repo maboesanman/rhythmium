@@ -1,41 +1,32 @@
 // #![allow(dead_code)]
 
-use archery::ArcTK;
-use erased_input_source_collection::ErasedInputSourceCollection;
-use futures::lock;
-use hashbrown::{HashMap, HashSet};
-use input_channel_reservations::InputChannelReservations;
 use input_source_collection::{AggregateSourcePoll, InputSourceCollection};
-use input_source_metadata::InputSourceMetaData;
-use working_timeline_slice::{WorkingTimelineSlice, WorkingTimelineSlicePoll};
-use std::collections::BTreeSet;
 use std::future::Future;
 use std::num::NonZeroUsize;
-use std::pin::Pin;
-use std::task::{Context, Poll, Waker};
+use std::task::{Poll, Waker};
 use transpose_interrupt_waker::{
-    FutureStatus, InnerGuard, InputStateStatus, StepStatus, TransposeWakerObserver
+    FutureStatus, InnerGuard, InputStateStatus, StepStatus, TransposeWakerObserver,
 };
+use working_timeline_slice::{WorkingTimelineSlice, WorkingTimelineSlicePoll};
 
 mod builder;
 mod erased_input_source_collection;
 mod input_channel_reservations;
+mod input_source_collection;
 mod input_source_metadata;
 mod transpose_interrupt_waker;
 mod working_timeline_slice;
-mod input_source_collection;
 
 #[cfg(test)]
 mod test;
 
 pub use builder::TransposeBuilder;
 
-use crate::source::source_poll::{Interrupt, LowerBound, SourcePollErr, TrySourcePoll, UpperBound};
+use crate::source::source_poll::{Interrupt, LowerBound, TrySourcePoll, UpperBound};
 use crate::source::traits::SourceContext;
 use crate::source::{Source, SourcePoll};
 use crate::transposer::Transposer;
-use crate::transposer::input_erasure::HasErasedInputExt;
-use crate::transposer::step::{BoxedInput, Interpolation, PossiblyInitStep, StepPoll};
+use crate::transposer::step::PossiblyInitStep;
 
 pub struct Transpose<T: Transposer + 'static> {
     // most of the fields
@@ -62,7 +53,6 @@ struct TransposeMain<T: Transposer + 'static> {
 
     // the working steps and buffered inputs
     pub working_timeline_slice: WorkingTimelineSlice<T>,
-
     // // uuid -> (forget, interpolation)
     // interpolations: HashMap<u64, (bool, Pin<Box<Interpolation<T, ArcTK>>>)>,
 
@@ -127,18 +117,50 @@ impl<T: Transposer + Clone + 'static> Source for Transpose<T> {
         locked.wakers.interrupt_waker = interrupt_waker;
 
         let (next_input_event_at, inputs_interrupt_lower_bound) = 'input_interrupts: loop {
-            match locked.main.input_sources.poll_aggregate_interrupts(&mut locked.wakers, |source_hash| {
-                locked.outer_wakers.get_waker_for_input_poll_interrupt(source_hash)
-            }) {
-                AggregateSourcePoll::StateProgress { next_event_at, interrupt_lower_bound } => {
-                    locked.main.working_timeline_slice.advance_interrupt_lower_bound(interrupt_lower_bound);
-                    break 'input_interrupts (next_event_at, interrupt_lower_bound);
+            match locked.main.input_sources.poll_aggregate_interrupts(
+                &mut locked.wakers,
+                |source_hash| {
+                    locked
+                        .outer_wakers
+                        .get_waker_for_input_poll_interrupt(source_hash)
                 },
-                AggregateSourcePoll::Interrupt { input_hash, time, interrupt, interrupt_lower_bound } => {
-                    locked.main.working_timeline_slice.advance_interrupt_lower_bound(interrupt_lower_bound);
-                    if let Some(time) = locked.main.working_timeline_slice.handle_interrupt(input_hash, time, interrupt) {
-                        let interrupt_lower_bound = interrupt_lower_bound.min(locked.main.working_timeline_slice.tentative_state_and_event_lower_bound());
-                        return TrySourcePoll::Ok(SourcePoll::Interrupt { time, interrupt: Interrupt::Rollback, interrupt_lower_bound })
+            ) {
+                AggregateSourcePoll::StateProgress {
+                    next_event_at,
+                    interrupt_lower_bound,
+                } => {
+                    locked
+                        .main
+                        .working_timeline_slice
+                        .advance_interrupt_lower_bound(interrupt_lower_bound);
+                    break 'input_interrupts (next_event_at, interrupt_lower_bound);
+                }
+                AggregateSourcePoll::Interrupt {
+                    input_hash,
+                    time,
+                    interrupt,
+                    interrupt_lower_bound,
+                } => {
+                    locked
+                        .main
+                        .working_timeline_slice
+                        .advance_interrupt_lower_bound(interrupt_lower_bound);
+                    if let Some(time) = locked
+                        .main
+                        .working_timeline_slice
+                        .handle_interrupt(input_hash, time, interrupt)
+                    {
+                        let interrupt_lower_bound = interrupt_lower_bound.min(
+                            locked
+                                .main
+                                .working_timeline_slice
+                                .tentative_state_and_event_lower_bound(),
+                        );
+                        return TrySourcePoll::Ok(SourcePoll::Interrupt {
+                            time,
+                            interrupt: Interrupt::Rollback,
+                            interrupt_lower_bound,
+                        });
                     }
                 }
                 AggregateSourcePoll::InterruptPending => {
@@ -150,28 +172,73 @@ impl<T: Transposer + Clone + 'static> Source for Transpose<T> {
         let next_step_at = 'steps: loop {
             // check the current status, and poll the input if needed.
             if let Some(step_status) = &mut locked.wakers.step_interrupt {
-                if let transpose_interrupt_waker::InputStateStatus::Woken { input_hash, input_channel } = step_status.input_state_status {
-                    let time = locked.main.working_timeline_slice.get_time(step_status.step_uuid).unwrap();
-                    let cx = locked.outer_wakers.get_context_for_input_poll_from_step(input_hash, step_status.step_uuid);
-                    match locked.main.input_sources.poll_single(input_hash, time, cx, false) {
-                        SourcePoll::StateProgress { state, next_event_at, interrupt_lower_bound } => {
-                            locked.main.working_timeline_slice.advance_interrupt_lower_bound(interrupt_lower_bound);
+                if let transpose_interrupt_waker::InputStateStatus::Woken {
+                    input_hash,
+                    input_channel,
+                } = step_status.input_state_status
+                {
+                    let time = locked
+                        .main
+                        .working_timeline_slice
+                        .get_time(step_status.step_uuid)
+                        .unwrap();
+                    let cx = locked
+                        .outer_wakers
+                        .get_context_for_input_poll_from_step(input_hash, step_status.step_uuid);
+                    match locked
+                        .main
+                        .input_sources
+                        .poll_single(input_hash, time, cx, false)
+                    {
+                        SourcePoll::StateProgress {
+                            state,
+                            next_event_at,
+                            interrupt_lower_bound,
+                        } => {
+                            locked
+                                .main
+                                .working_timeline_slice
+                                .advance_interrupt_lower_bound(interrupt_lower_bound);
                             if let Poll::Ready(state) = state {
-                                if let Err(_) = locked.main.working_timeline_slice.provide_input_state(step_status.step_uuid, state) {
+                                if let Err(_) = locked
+                                    .main
+                                    .working_timeline_slice
+                                    .provide_input_state(step_status.step_uuid, state)
+                                {
                                     panic!()
                                 }
                                 step_status.input_state_status = InputStateStatus::None;
                                 step_status.step_saturation_future_status = FutureStatus::Woken;
                             }
-                        },
-                        SourcePoll::Interrupt { time, interrupt, interrupt_lower_bound } => {
-                            locked.main.working_timeline_slice.advance_interrupt_lower_bound(interrupt_lower_bound);
-                            if let Some(time) = locked.main.working_timeline_slice.handle_interrupt(input_hash, time, interrupt) {
-                                let interrupt_lower_bound = interrupt_lower_bound.min(locked.main.working_timeline_slice.tentative_state_and_event_lower_bound());
-                                return TrySourcePoll::Ok(SourcePoll::Interrupt { time, interrupt: Interrupt::Rollback, interrupt_lower_bound })
+                        }
+                        SourcePoll::Interrupt {
+                            time,
+                            interrupt,
+                            interrupt_lower_bound,
+                        } => {
+                            locked
+                                .main
+                                .working_timeline_slice
+                                .advance_interrupt_lower_bound(interrupt_lower_bound);
+                            if let Some(time) = locked
+                                .main
+                                .working_timeline_slice
+                                .handle_interrupt(input_hash, time, interrupt)
+                            {
+                                let interrupt_lower_bound = interrupt_lower_bound.min(
+                                    locked
+                                        .main
+                                        .working_timeline_slice
+                                        .tentative_state_and_event_lower_bound(),
+                                );
+                                return TrySourcePoll::Ok(SourcePoll::Interrupt {
+                                    time,
+                                    interrupt: Interrupt::Rollback,
+                                    interrupt_lower_bound,
+                                });
                             }
-                        },
-                        SourcePoll::InterruptPending => {},
+                        }
+                        SourcePoll::InterruptPending => {}
                     }
                 }
 
@@ -183,20 +250,36 @@ impl<T: Transposer + Clone + 'static> Source for Transpose<T> {
             locked.wakers.step_interrupt = None;
 
             match locked.main.working_timeline_slice.poll(|step_uuid| {
-                locked.outer_wakers.get_waker_for_future_poll_from_step(step_uuid)
+                locked
+                    .outer_wakers
+                    .get_waker_for_future_poll_from_step(step_uuid)
             }) {
                 WorkingTimelineSlicePoll::Emitted { time, event } => {
-                    let interrupt_lower_bound = inputs_interrupt_lower_bound.min(locked.main.working_timeline_slice.tentative_state_and_event_lower_bound());
-                    return TrySourcePoll::Ok(SourcePoll::Interrupt { time, interrupt: Interrupt::Event(event), interrupt_lower_bound })
-                },
-                WorkingTimelineSlicePoll::StateRequested { time, input, step_uuid } => todo!(),
+                    let interrupt_lower_bound = inputs_interrupt_lower_bound.min(
+                        locked
+                            .main
+                            .working_timeline_slice
+                            .tentative_state_and_event_lower_bound(),
+                    );
+                    return TrySourcePoll::Ok(SourcePoll::Interrupt {
+                        time,
+                        interrupt: Interrupt::Event(event),
+                        interrupt_lower_bound,
+                    });
+                }
+                WorkingTimelineSlicePoll::StateRequested {
+                    time,
+                    input,
+                    step_uuid,
+                } => todo!(),
                 WorkingTimelineSlicePoll::Ready { next_time } => {
                     break 'steps next_time;
-                },
+                }
                 WorkingTimelineSlicePoll::Pending { step_uuid } => {
                     locked.wakers.step_interrupt = Some(StepStatus {
                         step_uuid,
-                        step_saturation_future_status: transpose_interrupt_waker::FutureStatus::Pending,
+                        step_saturation_future_status:
+                            transpose_interrupt_waker::FutureStatus::Pending,
                         input_state_status: transpose_interrupt_waker::InputStateStatus::None,
                     });
                     return TrySourcePoll::Ok(SourcePoll::InterruptPending);
@@ -210,21 +293,33 @@ impl<T: Transposer + Clone + 'static> Source for Transpose<T> {
             (Some(t), None) => Some(t),
             (Some(t1), Some(t2)) => Some(t1.min(t2)),
         };
-        let interrupt_lower_bound = inputs_interrupt_lower_bound.min(locked.main.working_timeline_slice.tentative_state_and_event_lower_bound());
-        TrySourcePoll::Ok(SourcePoll::StateProgress { state: (), next_event_at, interrupt_lower_bound })
+        let interrupt_lower_bound = inputs_interrupt_lower_bound.min(
+            locked
+                .main
+                .working_timeline_slice
+                .tentative_state_and_event_lower_bound(),
+        );
+        TrySourcePoll::Ok(SourcePoll::StateProgress {
+            state: (),
+            next_event_at,
+            interrupt_lower_bound,
+        })
     }
 
     fn release_channel(&mut self, channel: usize) {
         todo!()
     }
 
-    fn advance_poll_lower_bound(
-        &mut self,
-        poll_lower_bound: LowerBound<Self::Time>,
-    ) {
+    fn advance_poll_lower_bound(&mut self, poll_lower_bound: LowerBound<Self::Time>) {
         let locked = TransposeLocked::from_transpose(self);
-        locked.main.input_sources.advance_poll_lower_bound(poll_lower_bound);
-        locked.main.working_timeline_slice.advance_poll_lower_bound(poll_lower_bound);
+        locked
+            .main
+            .input_sources
+            .advance_poll_lower_bound(poll_lower_bound);
+        locked
+            .main
+            .working_timeline_slice
+            .advance_poll_lower_bound(poll_lower_bound);
     }
 
     fn advance_interrupt_upper_bound(
@@ -234,10 +329,18 @@ impl<T: Transposer + Clone + 'static> Source for Transpose<T> {
     ) {
         let mut locked = TransposeLocked::from_transpose(self);
         locked.wakers.interrupt_waker = interrupt_waker;
-        locked.main.input_sources.advance_interrupt_upper_bound(interrupt_upper_bound, |source_hash| {
-            locked.outer_wakers.get_waker_for_input_poll_interrupt(source_hash)
-        });
-        locked.main.working_timeline_slice.advance_interrupt_upper_bound(interrupt_upper_bound);
+        locked.main.input_sources.advance_interrupt_upper_bound(
+            interrupt_upper_bound,
+            |source_hash| {
+                locked
+                    .outer_wakers
+                    .get_waker_for_input_poll_interrupt(source_hash)
+            },
+        );
+        locked
+            .main
+            .working_timeline_slice
+            .advance_interrupt_upper_bound(interrupt_upper_bound);
     }
 
     fn max_channel(&self) -> std::num::NonZeroUsize {
@@ -247,6 +350,7 @@ impl<T: Transposer + Clone + 'static> Source for Transpose<T> {
             .iter()
             .map(|(s, _)| s.max_channel())
             .min()
-            .unwrap_or(NonZeroUsize::MIN).saturating_add(1)
+            .unwrap_or(NonZeroUsize::MIN)
+            .saturating_add(1)
     }
 }

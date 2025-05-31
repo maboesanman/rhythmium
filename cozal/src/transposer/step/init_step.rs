@@ -10,7 +10,10 @@ use archery::{ArcTK, SharedPointer, SharedPointerKind};
 use crate::transposer::Transposer;
 
 use super::{
-    step::{InterpolateErr, NextUnsaturatedErr, PollErr, SaturateErr}, sub_step::{init_sub_step::InitSubStep, scheduled_sub_step::ScheduledSubStep}, wrapped_transposer::WrappedTransposer, BoxedInput, FutureInputContainer, Interpolation, PossiblyInitStep, PreInitStep, Step, StepPoll
+    FutureInputContainer, Interpolation, PossiblyInitStep, PreInitStep, Step, StepPoll,
+    step::{InterpolateErr, NextUnsaturatedErr, PollErr, SaturateErr},
+    sub_step::{init_sub_step::InitSubStep, scheduled_sub_step::ScheduledSubStep},
+    wrapped_transposer::WrappedTransposer,
 };
 
 pub struct InitStep<T: Transposer, P: SharedPointerKind = ArcTK> {
@@ -22,7 +25,10 @@ pub struct InitStep<T: Transposer, P: SharedPointerKind = ArcTK> {
 
 impl<T: Transposer, P: SharedPointerKind> Debug for InitStep<T, P> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("InitStep").field("sub_step", &self.sub_step).field("uuid_self", &self.uuid_self).finish()
+        f.debug_struct("InitStep")
+            .field("sub_step", &self.sub_step)
+            .field("uuid_self", &self.uuid_self)
+            .finish()
     }
 }
 
@@ -80,7 +86,7 @@ impl<'a, T: Transposer + Clone + 'a, P: SharedPointerKind + 'a> PossiblyInitStep
             InitSubStep::Saturated { wrapped_transposer } => Ok(wrapped_transposer.clone()),
         }
     }
-    
+
     fn next_unsaturated(
         &self,
         next_inputs: &mut dyn FutureInputContainer<'a, T, P>,
@@ -132,20 +138,21 @@ impl<'a, T: Transposer + Clone + 'a, P: SharedPointerKind + 'a> PossiblyInitStep
         #[cfg(not(debug_assertions))]
         return Ok(Some(Step::new(time, steps)));
     }
-    
+
     fn desaturate(&mut self) {
         todo!()
     }
-    
+
     fn poll(&mut self, waker: &Waker) -> Result<super::StepPoll<T>, PollErr>
     where
-        T: Clone {
-        Ok(match self.sub_step.as_mut().poll(waker)?{
+        T: Clone,
+    {
+        Ok(match self.sub_step.as_mut().poll(waker)? {
             Poll::Ready(()) => StepPoll::Ready,
             Poll::Pending => StepPoll::Pending,
         })
     }
-    
+
     fn interpolate(&self, time: T::Time) -> Result<Interpolation<T, P>, InterpolateErr>
     where
         T: Clone,
@@ -157,15 +164,15 @@ impl<'a, T: Transposer + Clone + 'a, P: SharedPointerKind + 'a> PossiblyInitStep
 
         Ok(Interpolation::new(time, wrapped_transposer))
     }
-    
+
     fn is_unsaturated(&self) -> bool {
         false
     }
-    
+
     fn is_saturating(&self) -> bool {
         matches!(*self.sub_step, InitSubStep::Saturating { .. })
     }
-    
+
     fn is_saturated(&self) -> bool {
         matches!(*self.sub_step, InitSubStep::Saturated { .. })
     }

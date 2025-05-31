@@ -17,7 +17,9 @@ pub trait FutureInputContainer<'t, T: Transposer + 't, P: SharedPointerKind + 't
     fn take_next(&mut self) -> Option<BoxedInput<'t, T, P>>;
 }
 
-impl<'t, T: Transposer + 't, P: SharedPointerKind + 't> FutureInputContainer<'t, T, P> for Option<BoxedInput<'t, T, P>> {
+impl<'t, T: Transposer + 't, P: SharedPointerKind + 't> FutureInputContainer<'t, T, P>
+    for Option<BoxedInput<'t, T, P>>
+{
     fn peek_time(&self) -> Option<T::Time> {
         self.as_ref().map(|i| i.get_time())
     }
@@ -27,7 +29,9 @@ impl<'t, T: Transposer + 't, P: SharedPointerKind + 't> FutureInputContainer<'t,
     }
 }
 
-impl<'t, T: Transposer + 't, P: SharedPointerKind + 't> FutureInputContainer<'t, T, P> for BTreeSet<BoxedInput<'t, T, P>> {
+impl<'t, T: Transposer + 't, P: SharedPointerKind + 't> FutureInputContainer<'t, T, P>
+    for BTreeSet<BoxedInput<'t, T, P>>
+{
     fn peek_time(&self) -> Option<T::Time> {
         self.first().map(|i| i.get_time())
     }

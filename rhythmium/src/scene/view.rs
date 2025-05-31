@@ -120,11 +120,11 @@ impl ApplicationHandler<RhythmiumEvent> for ActiveView {
 
         let next_cef_work = &mut self.assume_init_mut().next_cef_work;
 
-        if let Some(instant) = *next_cef_work {
-            if Instant::now() >= instant {
-                do_message_loop_work();
-                *next_cef_work = None;
-            }
+        if let Some(instant) = *next_cef_work
+            && Instant::now() >= instant
+        {
+            do_message_loop_work();
+            *next_cef_work = None;
         }
     }
 

@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::VecDeque,
     ops::{Deref, DerefMut},
     sync::Arc,
     task::Waker,
@@ -93,7 +93,11 @@ impl TransposeWakerObserver {
         }))
     }
 
-    pub fn get_context_for_input_poll_from_step(&self, input_hash: u64, step_id: u64) -> SourceContext {
+    pub fn get_context_for_input_poll_from_step(
+        &self,
+        input_hash: u64,
+        step_id: u64,
+    ) -> SourceContext {
         todo!()
     }
 
@@ -101,7 +105,12 @@ impl TransposeWakerObserver {
         todo!()
     }
 
-    pub fn get_context_for_input_poll_from_interpolation(&self, input_hash: u64, interpolation_uuid: u64, channel: u64) -> SourceContext {
+    pub fn get_context_for_input_poll_from_interpolation(
+        &self,
+        input_hash: u64,
+        interpolation_uuid: u64,
+        channel: u64,
+    ) -> SourceContext {
         todo!()
     }
 }
@@ -152,7 +161,6 @@ pub struct TransposeInterruptWakerInner {
     /// this holds metadata about the saturation future and the input state polls
     /// for any state requests.
     pub step_interrupt: Option<StepStatus>,
-
     // /// the channel usage information for input channels.
     // pub channels: HashMap<usize /* channel */, ChannelItem>,
 }
@@ -263,7 +271,6 @@ impl WakerData for InputInterruptWakerData {
     }
 }
 
-
 #[derive(Debug, Clone, Copy)]
 struct StepFutureWakerData {
     step_uuid: u64,
@@ -339,7 +346,6 @@ impl WakerData for StepFutureWakerData {
 //         DeferredWake::SourceChannel(*self)
 //     }
 // }
-
 
 // #[derive(Debug, Clone, Copy)]
 // struct SourceStepWakerData {

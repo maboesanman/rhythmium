@@ -1,15 +1,7 @@
-use std::{
-    collections::{BTreeSet, HashSet},
-    num::NonZeroUsize,
-};
-
-use hashbrown::HashMap;
+use std::{collections::HashSet, num::NonZeroUsize};
 
 use crate::{
-    source::{
-        Source,
-        source_poll::{LowerBound, UpperBound},
-    },
+    source::Source,
     transposer::{
         Transposer, TransposerInput, TransposerInputEventHandler, input_erasure::ErasedInput,
         step::PreInitStep,
@@ -17,7 +9,11 @@ use crate::{
 };
 
 use super::{
-    erased_input_source_collection::{ErasedInputSource, ErasedInputSourceCollection}, input_channel_reservations::InputChannelReservations, input_source_collection::InputSourceCollection, transpose_interrupt_waker::TransposeWakerObserver, working_timeline_slice::WorkingTimelineSlice, Transpose, TransposeMain
+    Transpose, TransposeMain,
+    erased_input_source_collection::{ErasedInputSource, ErasedInputSourceCollection},
+    input_source_collection::InputSourceCollection,
+    transpose_interrupt_waker::TransposeWakerObserver,
+    working_timeline_slice::WorkingTimelineSlice,
 };
 
 pub struct TransposeBuilder<T: Transposer + 'static> {
@@ -106,7 +102,8 @@ impl<T: Transposer + Clone + 'static> TransposeBuilder<T> {
             max_channels: _,
         } = self;
 
-        let working_timeline_slice = WorkingTimelineSlice::new(transposer, pre_init_step, rng_seed).map_err(|_| ())?;
+        let working_timeline_slice =
+            WorkingTimelineSlice::new(transposer, pre_init_step, rng_seed).map_err(|_| ())?;
 
         let input_sources = ErasedInputSourceCollection::new(input_sources)?;
         let wakers = TransposeWakerObserver::new(input_sources.iter_with_hashes().map(|(h, ..)| h));

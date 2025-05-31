@@ -3,7 +3,14 @@ use std::{num::NonZeroUsize, time::Duration};
 use futures::StreamExt;
 use futures_test::future::FutureTestExt;
 
-use crate::{source::{adapters::{event_stream::into_event_stream, transpose::TransposeBuilder}, source_poll::{LowerBound, UpperBound}, Source}, transposer::{Transposer, TransposerInput, TransposerInputEventHandler}};
+use crate::{
+    source::{
+        Source,
+        adapters::{event_stream::into_event_stream, transpose::TransposeBuilder},
+        source_poll::{LowerBound, UpperBound},
+    },
+    transposer::{Transposer, TransposerInput, TransposerInputEventHandler},
+};
 
 #[derive(Clone, Debug)]
 struct CollatzTransposer {
@@ -28,7 +35,9 @@ impl Transposer for CollatzTransposer {
     async fn init(&mut self, cx: &mut crate::transposer::InitContext<'_, Self>) {
         async move {
             cx.schedule_event(Duration::from_secs(0), ());
-        }.pending_once().await
+        }
+        .pending_once()
+        .await
     }
 
     async fn handle_scheduled_event(
@@ -58,7 +67,8 @@ impl Transposer for CollatzTransposer {
     async fn interpolate(
         &self,
         _cx: &mut crate::transposer::InterpolateContext<'_, Self>,
-    ) -> Self::OutputState { }
+    ) -> Self::OutputState {
+    }
 }
 
 #[tokio::test]
@@ -86,7 +96,7 @@ async fn test_stream() {
 
 #[derive(Clone, Debug, Default)]
 struct CollatzTransposerDelayer {
-    input_registered: bool
+    input_registered: bool,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash, Debug)]
@@ -116,7 +126,6 @@ impl Transposer for CollatzTransposerDelayer {
     ) {
         async move {
             cx.emit_event(val).await;
-            
         }
         .pending_once()
         .await
@@ -125,7 +134,8 @@ impl Transposer for CollatzTransposerDelayer {
     async fn interpolate(
         &self,
         _cx: &mut crate::transposer::InterpolateContext<'_, Self>,
-    ) -> Self::OutputState { }
+    ) -> Self::OutputState {
+    }
 }
 
 impl TransposerInput for CollatzTransposerDelayerInput {
@@ -151,7 +161,6 @@ impl TransposerInputEventHandler<CollatzTransposerDelayerInput> for CollatzTrans
         event: &<CollatzTransposerDelayerInput as TransposerInput>::InputEvent,
         cx: &mut crate::transposer::HandleInputContext<'_, Self>,
     ) {
-
         async move {
             let scheduled_time = cx.current_time() + Duration::from_millis(350);
             cx.schedule_event(scheduled_time, *event).unwrap();
@@ -181,7 +190,8 @@ async fn test_stream_composed() {
         NonZeroUsize::new(1).unwrap(),
     )
     .add_input(CollatzTransposerDelayerInput, transpose)
-    .ok().unwrap()
+    .ok()
+    .unwrap()
     .build()
     .unwrap();
 
@@ -214,7 +224,8 @@ fn test_manual_composed() {
         NonZeroUsize::new(1).unwrap(),
     )
     .add_input(CollatzTransposerDelayerInput, transpose)
-    .ok().unwrap()
+    .ok()
+    .unwrap()
     .build()
     .unwrap();
 
@@ -225,15 +236,24 @@ fn test_manual_composed() {
         let poll_result = transpose.poll_interrupts(count_waker).unwrap();
 
         match &poll_result {
-            crate::source::SourcePoll::StateProgress { state, next_event_at, interrupt_lower_bound } => {
+            crate::source::SourcePoll::StateProgress {
+                state,
+                next_event_at,
+                interrupt_lower_bound,
+            } => {
                 if let Some(at) = next_event_at {
                     let (count_waker, awoken_count) = futures_test::task::new_count_waker();
-                    transpose.advance_interrupt_upper_bound(UpperBound::inclusive(*at), count_waker);
+                    transpose
+                        .advance_interrupt_upper_bound(UpperBound::inclusive(*at), count_waker);
                     println!("advance {:?}", awoken_count);
                 }
-            },
-            crate::source::SourcePoll::Interrupt { time, interrupt, interrupt_lower_bound } => {},
-            crate::source::SourcePoll::InterruptPending =>  {},
+            }
+            crate::source::SourcePoll::Interrupt {
+                time,
+                interrupt,
+                interrupt_lower_bound,
+            } => {}
+            crate::source::SourcePoll::InterruptPending => {}
         }
 
         println!("{:?}", poll_result);
