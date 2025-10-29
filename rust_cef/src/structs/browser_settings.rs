@@ -33,7 +33,6 @@ pub struct BrowserSettings {
     pub text_area_resize: Option<bool>,
     pub tab_to_links: Option<bool>,
     pub local_storage: Option<bool>,
-    pub databases: Option<bool>,
     pub webgl: Option<bool>,
     pub background_color: u32,
     pub chrome_status_bubble: Option<bool>,
@@ -75,11 +74,11 @@ impl From<&BrowserSettings> for cef_browser_settings_t {
             text_area_resize: wrap_bool(&value.text_area_resize),
             tab_to_links: wrap_bool(&value.tab_to_links),
             local_storage: wrap_bool(&value.local_storage),
-            databases: wrap_bool(&value.databases),
             webgl: wrap_bool(&value.webgl),
             background_color: value.background_color,
             chrome_status_bubble: wrap_bool(&value.chrome_status_bubble),
             chrome_zoom_bubble: wrap_bool(&value.chrome_zoom_bubble),
+            databases_deprecated: wrap_bool(&Some(false)),
         }
     }
 }

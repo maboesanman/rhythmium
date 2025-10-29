@@ -24,6 +24,7 @@ impl LifeSpanHandler {
             on_after_created: Some(C::on_after_created_raw),
             do_close: None,
             on_before_close: None,
+            on_before_popup_aborted: None,
         });
         CefArc::new(v_table, config).type_erase()
     }

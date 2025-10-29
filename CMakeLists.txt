@@ -34,13 +34,13 @@ find_package(CEF REQUIRED)
 # Set up corrosion
 
 include(FetchContent)
+set(Rust_TOOLCHAIN "nightly")
 
 FetchContent_Declare(
-  Corrosion
-  GIT_REPOSITORY https://github.com/corrosion-rs/corrosion.git
-  GIT_TAG v0.4 # Optionally specify a commit hash, version tag or branch here
+    Corrosion
+    GIT_REPOSITORY https://github.com/corrosion-rs/corrosion.git
+    GIT_TAG v0.5 # Optionally specify a commit hash, version tag or branch here
 )
-# Set any global configuration variables such as `Rust_TOOLCHAIN` before this line!
 FetchContent_MakeAvailable(Corrosion)
 
 corrosion_import_crate(MANIFEST_PATH ${CMAKE_SOURCE_DIR}/Cargo.toml)

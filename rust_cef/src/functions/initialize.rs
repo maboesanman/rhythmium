@@ -1,4 +1,4 @@
-use cef_wrapper::cef_capi_sys::cef_initialize;
+use cef_wrapper::cef_capi_sys::{CEF_API_VERSION, CEF_API_VERSION_LAST, cef_api_hash, cef_initialize};
 
 use crate::{
     rust_to_c::app::App,
@@ -14,6 +14,7 @@ where
 {
     try_start_subprocess(&main_args);
     unsafe {
+        cef_api_hash(CEF_API_VERSION_LAST as i32, 0);
         cef_initialize(
             &main_args.into(),
             &settings.into(),

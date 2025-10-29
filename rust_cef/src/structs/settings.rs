@@ -45,6 +45,7 @@ pub struct Settings {
     pub user_agent: Option<String>,
     pub user_agent_product: Option<String>,
     pub windowless_rendering_enabled: bool,
+    pub disable_signal_handlers: bool,
 }
 
 impl From<&Settings> for cef_settings_t {
@@ -69,7 +70,7 @@ impl From<&Settings> for cef_settings_t {
             #[cfg(not(target_os = "windows"))]
             chrome_app_icon_id: 0,
             chrome_policy_id: wrap_string(&value.chrome_policy_id),
-            chrome_runtime: wrap_boolean(value.chrome_runtime),
+            // chrome_runtime: wrap_boolean(value.chrome_runtime),
             command_line_args_disabled: wrap_boolean(value.command_line_args_disabled),
             cookieable_schemes_exclude_defaults: wrap_boolean(
                 value.cookieable_schemes_exclude_defaults,
@@ -102,9 +103,9 @@ impl From<&Settings> for cef_settings_t {
             no_sandbox: 0,
             #[cfg(not(feature = "sandbox"))]
             no_sandbox: 1,
-            pack_loading_disabled: wrap_boolean(value.pack_loading_disabled),
+            // pack_loading_disabled: wrap_boolean(value.pack_loading_disabled),
             persist_session_cookies: wrap_boolean(value.persist_session_cookies),
-            persist_user_preferences: wrap_boolean(value.persist_user_preferences),
+            // persist_user_preferences: wrap_boolean(value.persist_user_preferences),
             remote_debugging_port: value.remote_debugging_port.unwrap_or(0) as i32,
             resources_dir_path: wrap_pathbuf(&value.resources_dir_path),
             root_cache_path: wrap_pathbuf(&value.root_cache_path),
@@ -112,6 +113,7 @@ impl From<&Settings> for cef_settings_t {
             user_agent_product: wrap_string(&value.user_agent_product),
             user_agent: wrap_string(&value.user_agent),
             windowless_rendering_enabled: wrap_boolean(value.windowless_rendering_enabled),
+            disable_signal_handlers: wrap_boolean(value.disable_signal_handlers),
         }
     }
 }
