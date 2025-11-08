@@ -17,3 +17,4 @@ bundled = []
 [dependencies]
 cef_wrapper.workspace = true
 flagset = "0.4.4"
+path-clean.workspace = true

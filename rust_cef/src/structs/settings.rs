@@ -7,6 +7,8 @@ use crate::{
     util::{cef_string::str_into_cef_string_utf16, wrap_boolean::wrap_boolean},
 };
 
+use path_clean::PathClean;
+
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct Settings {
     pub accept_languages: Vec<String>,
@@ -55,7 +57,7 @@ impl From<&Settings> for cef_settings_t {
         let wrap_string = |s: &Option<String>| wrap_str(s.as_deref());
 
         let wrap_pathbuf = |p: &Option<PathBuf>| match p.as_ref() {
-            Some(p) => str_into_cef_string_utf16(&p.canonicalize().unwrap().to_string_lossy()),
+            Some(p) => str_into_cef_string_utf16(&p.clean().to_string_lossy()),
             None => str_into_cef_string_utf16(""),
         };
 

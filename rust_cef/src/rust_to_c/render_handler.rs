@@ -1,11 +1,10 @@
 use cef_wrapper::cef_capi_sys::{
-    cef_base_ref_counted_t, cef_browser_t, cef_paint_element_type_t, cef_rect_t,
-    cef_render_handler_t, cef_screen_info_t,
+    cef_accelerated_paint_info_t, cef_base_ref_counted_t, cef_browser_t, cef_paint_element_type_t, cef_rect_t, cef_render_handler_t, cef_screen_info_t
 };
 
 use crate::{
     c_to_rust::browser::Browser,
-    enums::paint_element_type::PaintElementType,
+    enums::{color_type::ColorType, paint_element_type::PaintElementType},
     structs::{geometry::Rect, screen_info::ScreenInfo},
     util::{
         cef_arc::{CefArc, CefArcFromRust, uninit_arc_vtable},
@@ -33,6 +32,7 @@ impl RenderHandler {
             on_popup_size: None,
             on_paint: Some(C::on_paint_raw),
             on_accelerated_paint: None,
+            // on_accelerated_paint: Some(C::on_accelerrated_paint_raw),
             get_touch_handle_size: None,
             on_touch_handle_state_changed: None,
             start_dragging: None,
@@ -45,6 +45,8 @@ impl RenderHandler {
         CefArc::new(v_table, config).type_erase()
     }
 }
+
+pub use cef_wrapper::cef_capi_sys::cef_accelerated_paint_info_common_t;
 
 // these methods are all called on the ui thread, so they can take mutable references to self.
 pub trait RenderHandlerConfig: Sized + Send {
@@ -60,6 +62,17 @@ pub trait RenderHandlerConfig: Sized + Send {
         _height: usize,
     ) {
     }
+
+    // fn on_accelerated_paint(
+    //     &mut self,
+    //     _browser: CefArc<Browser>,
+    //     _paint_element_type: PaintElementType,
+    //     _dirty_rects: &[Rect],
+    //     _color_type: ColorType,
+    //     _shared_texture_io_surface: *mut std::os::raw::c_void,
+    //     _common_info: &cef_accelerated_paint_info_common_t,
+    // ) {
+    // }
 
     fn get_screen_info(&mut self, _browser: CefArc<Browser>) -> Option<ScreenInfo> {
         None
@@ -133,6 +146,43 @@ pub(crate) trait RenderHandlerConfigExt: RenderHandlerConfig {
             );
         }
     }
+
+    // unsafe extern "C" fn on_accelerrated_paint_raw(
+    //     ptr: *mut cef_render_handler_t,
+    //     browser: *mut cef_browser_t,
+    //     paint_element_type: cef_paint_element_type_t,
+    //     dirty_rects_count: usize,
+    //     dirty_rects_start: *const cef_rect_t,
+    //     accelerated_paint_info: *const cef_accelerated_paint_info_t,
+    // ) {
+    //     unsafe {
+    //         let rust_impl_ptr =
+    //             CefArcFromRust::<RenderHandler, Self>::get_rust_impl_from_ptr(ptr.cast());
+    //         let rust_impl = &mut *rust_impl_ptr;
+
+    //         let browser = browser.cast::<Browser>();
+    //         let browser = CefArc::from_raw(browser);
+
+    //         let dirty_rects = std::slice::from_raw_parts(dirty_rects_start, dirty_rects_count);
+    //         let dirty_rects = dirty_rects
+    //             .iter()
+    //             .copied()
+    //             .map(|rect| rect.into())
+    //             .collect::<Vec<_>>();
+            
+    //         let accelerated_paint_info = &*accelerated_paint_info;
+            
+
+    //         rust_impl.on_accelerated_paint(
+    //             browser,
+    //             paint_element_type.into(),
+    //             &dirty_rects,
+    //             accelerated_paint_info.format.into(),
+    //             accelerated_paint_info.shared_texture_io_surface,
+    //             &accelerated_paint_info.extra,
+    //         );
+    //     }
+    // }
 
     unsafe extern "C" fn get_screen_info_raw(
         ptr: *mut cef_render_handler_t,
