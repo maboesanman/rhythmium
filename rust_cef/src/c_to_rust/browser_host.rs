@@ -37,6 +37,13 @@ impl BrowserHost {
             self.0.notify_screen_info_changed.unwrap()(ptr);
         }
     }
+
+    pub fn send_external_begin_frame(&self) {
+        let ptr = &self.0 as *const _ as *mut _;
+        unsafe {
+            self.0.send_external_begin_frame.unwrap()(ptr);
+        }
+    }
 }
 
 impl BrowserHost {

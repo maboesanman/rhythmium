@@ -1,14 +1,16 @@
 use std::{borrow::Cow, sync::Arc};
 
+use futures::{FutureExt as _, future::BoxFuture};
 use image::GenericImageView;
 use wgpu::{CommandEncoder, PipelineCompilationOptions, TextureView, util::DeviceExt};
 use winit::dpi::PhysicalSize;
+
+use crate::scene::view::RefreshToken;
 
 use super::{
     shared_wgpu_state::SharedWgpuState,
     view::{View, ViewBuilder},
 };
-use anyhow::*;
 
 pub struct ImageViewBuilder<'a> {
     image_bytes: &'a [u8],
@@ -49,6 +51,8 @@ pub struct ImageView {
     index_buffer: wgpu::Buffer,
 
     diffuse_bind_group: wgpu::BindGroup,
+
+    frame_count: usize,
 }
 
 impl View for ImageView {
@@ -67,7 +71,7 @@ impl View for ImageView {
         &'pass mut self,
         command_encoder: &'pass mut CommandEncoder,
         output_view: &TextureView,
-    ) {
+    ) -> usize {
         {
             let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Image View Render Pass"),
@@ -90,6 +94,28 @@ impl View for ImageView {
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
             render_pass.draw_indexed(0..6, 0, 0..1);
         }
+
+        self.frame_count
+    }
+    
+    fn request_refresh(&mut self) -> Result<BoxFuture<'static, super::view::RefreshToken>, usize> {
+        let fut = std::future::ready(RefreshToken(self.frame_count + 1));
+        Ok(fut.boxed())
+    }
+    
+    fn complete_refresh<'pass>(
+        &'pass mut self,
+        _command_encoder: &'pass mut CommandEncoder,refresh_token: super::view::RefreshToken) -> anyhow::Result<()> {
+        if refresh_token.0 != self.frame_count + 1 {
+            return Err(anyhow::anyhow!("invalid refresh token"));
+        }
+
+        self.frame_count += 1;
+        Ok(())
+    }
+    
+    fn get_current_frame(&mut self) -> usize {
+        self.frame_count
     }
 }
 
@@ -211,14 +237,10 @@ impl ImageView {
             index_buffer,
             diffuse_bind_group,
             fit,
+            frame_count: 0
         }
     }
 }
-// impl View for ImageView {
-
-// }
-
-// let Vertex
 
 #[derive(Debug)]
 pub struct Texture {
@@ -232,7 +254,7 @@ impl Texture {
         shared_wgpu_state: &SharedWgpuState,
         bytes: &[u8],
         label: Option<&str>,
-    ) -> Result<Self> {
+    ) -> anyhow::Result<Self> {
         let image = image::load_from_memory(bytes)?;
         Self::from_image(shared_wgpu_state, &image, label)
     }
@@ -241,7 +263,7 @@ impl Texture {
         shared_wgpu_state: &SharedWgpuState,
         image: &image::DynamicImage,
         label: Option<&str>,
-    ) -> Result<Self> {
+    ) -> anyhow::Result<Self> {
         let dimensions = image.dimensions();
 
         let device = &shared_wgpu_state.device;

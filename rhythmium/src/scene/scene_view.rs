@@ -164,7 +164,7 @@ impl View for SceneView {
         &'pass mut self,
         command_encoder: &'pass mut CommandEncoder,
         output_view: &TextureView,
-    ) {
+    ) -> usize {
         {
             let self_size: PhysicalSize<f32> = self.size.cast();
             let layout: Vec<_> = self
@@ -229,7 +229,21 @@ impl View for SceneView {
                 render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
                 render_pass.draw_indexed(0..6, 0, 0..1);
             }
+
+            todo!()
         }
+    }
+    
+    fn request_refresh(&mut self) -> Result<futures::future::BoxFuture<'static, super::view::RefreshToken>, usize> {
+        todo!()
+    }
+    
+    fn complete_refresh<'pass>(&'pass mut self, command_encoder: &'pass mut CommandEncoder, refresh_token: super::view::RefreshToken) -> anyhow::Result<()> {
+        todo!()
+    }
+    
+    fn get_current_frame(&mut self) -> usize {
+        todo!()
     }
 }
 

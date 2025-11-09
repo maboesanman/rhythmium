@@ -83,7 +83,7 @@ pub fn get_settings() -> Settings {
         ),
         #[cfg(all(target_os = "linux", not(feature = "bundled")))]
         resources_dir_path: Some(
-            parent_dir.join("../../third_party/cef/cef_binary_121.3.2+gce31761+chromium-121.0.6167.75_linux64/Resources/"),
+            // parent_dir.join("../../third_party/cef/cef_binary_121.3.2+gce31761+chromium-121.0.6167.75_linux64/Resources/"),
         ),
         ..Default::default()
     }

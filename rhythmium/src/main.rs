@@ -13,6 +13,8 @@ use scene::{
 use taffy::prelude::*;
 use winit::event_loop::EventLoop;
 
+use crate::scene::view::RhythmiumEvent;
+
 pub mod cef_app;
 pub mod scene;
 
@@ -27,6 +29,7 @@ pub fn main() {
 
     let proxy = event_loop.create_proxy();
     let other_proxy = proxy.clone();
+    let other_proxy_2 = proxy.clone();
 
     // this sends a "DoCefWorkNow" event every 10ms to the event loop.
     thread::spawn(move || {
@@ -99,16 +102,10 @@ pub fn main() {
         )),
     );
 
-    let mut active_view = ActiveView::new(WebViewBuilder::new());
+    let mut active_view = ActiveView::new(WebViewBuilder::new(), other_proxy_2);
 
     event_loop.run_app(&mut active_view).unwrap();
 
     // scene::view::run(event_loop, Box::new(view_builder));
 }
 
-#[derive(Debug, Clone)]
-pub enum RhythmiumEvent {
-    RenderFrame,
-    DoCefWorkNow,
-    DoCefWorkLater(u64),
-}

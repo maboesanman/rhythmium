@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
+use futures::future::BoxFuture;
 use winit::dpi::PhysicalSize;
+
+use crate::scene::view::RefreshToken;
 
 use super::{shared_wgpu_state::SharedWgpuState, view::View};
 
@@ -61,6 +64,21 @@ impl RootSurface {
 
         // set the view size
         self.view.set_size(size);
+    }
+
+    pub fn request_refresh(&mut self) -> Result<BoxFuture<'static, RefreshToken>, usize> {
+        self.view.request_refresh()
+    }
+
+    pub fn complete_refresh(&mut self, refresh_token: RefreshToken) {
+        let mut encoder =
+            self.shared_wgpu_state
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("Render Encoder"),
+                });
+        
+        self.view.complete_refresh(&mut encoder, refresh_token).unwrap()
     }
 
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
