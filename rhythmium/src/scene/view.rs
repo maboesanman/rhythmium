@@ -187,6 +187,7 @@ impl ApplicationHandler<RhythmiumEvent> for ActiveView {
     ) {
         match event {
             WindowEvent::RedrawRequested => {
+                println!("redraw");
                 let active_view_init = self.assume_init_mut();
                 if active_view_init.render_future.is_some() {
                     return;

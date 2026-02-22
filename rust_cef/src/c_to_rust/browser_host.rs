@@ -1,4 +1,4 @@
-use cef_wrapper::cef_capi_sys::{self, cef_base_ref_counted_t, cef_browser_host_t, cef_client_t};
+use cef_wrapper::cef_capi_sys::{self, cef_base_ref_counted_t, cef_browser_host_t, cef_client_t, cef_paint_element_type_t_PET_POPUP, cef_paint_element_type_t_PET_VIEW};
 use std::ptr;
 
 use crate::{
@@ -42,6 +42,13 @@ impl BrowserHost {
         let ptr = &self.0 as *const _ as *mut _;
         unsafe {
             self.0.send_external_begin_frame.unwrap()(ptr);
+        }
+    }
+
+    pub fn invalidate(&self) {
+        let ptr = &self.0 as *const _ as *mut _;
+        unsafe {
+            self.0.invalidate.unwrap()(ptr, cef_paint_element_type_t_PET_VIEW);
         }
     }
 }

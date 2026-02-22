@@ -102,7 +102,11 @@ pub fn main() {
         )),
     );
 
-    let mut active_view = ActiveView::new(WebViewBuilder::new(), other_proxy_2);
+    // let mut active_view = ActiveView::new(WebViewBuilder::new(), other_proxy_2);
+    let mut active_view = ActiveView::new(ImageViewBuilder::new(
+            include_bytes!("../assets/bold-and-brash.jpg"),
+            ImageFit::Contain
+        ), other_proxy_2);
 
     event_loop.run_app(&mut active_view).unwrap();
 

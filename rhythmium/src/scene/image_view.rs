@@ -1,6 +1,6 @@
 use std::{borrow::Cow, sync::Arc};
 
-use futures::{FutureExt as _, future::BoxFuture};
+use futures::{FutureExt as _, channel::oneshot::{self, channel}, future::BoxFuture};
 use image::GenericImageView;
 use wgpu::{CommandEncoder, PipelineCompilationOptions, TextureView, util::DeviceExt};
 use winit::dpi::PhysicalSize;
@@ -53,10 +53,12 @@ pub struct ImageView {
     diffuse_bind_group: wgpu::BindGroup,
 
     frame_count: usize,
+    send_new_frame: Option<oneshot::Sender<RefreshToken>>,
 }
 
 impl View for ImageView {
     fn set_size(&mut self, size: PhysicalSize<u32>) {
+        println!("set_size");
         self.size = size;
 
         self.vertex_buffer = get_vertex_buffer(
@@ -72,6 +74,7 @@ impl View for ImageView {
         command_encoder: &'pass mut CommandEncoder,
         output_view: &TextureView,
     ) -> usize {
+        println!("render");
         {
             let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Image View Render Pass"),
@@ -99,8 +102,14 @@ impl View for ImageView {
     }
     
     fn request_refresh(&mut self) -> Result<BoxFuture<'static, super::view::RefreshToken>, usize> {
-        let fut = std::future::ready(RefreshToken(self.frame_count + 1));
-        Ok(fut.boxed())
+        if self.send_new_frame.is_some() {
+            return Err(self.frame_count)
+        }
+        let (send, recv) = channel();
+        self.send_new_frame = Some(send);
+        Ok(async move {
+            recv.await.unwrap()
+        }.boxed())
     }
     
     fn complete_refresh<'pass>(
@@ -237,7 +246,8 @@ impl ImageView {
             index_buffer,
             diffuse_bind_group,
             fit,
-            frame_count: 0
+            frame_count: 0,
+            send_new_frame: None,
         }
     }
 }

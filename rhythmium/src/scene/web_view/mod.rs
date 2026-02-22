@@ -6,6 +6,7 @@ use rust_cef::{
     c_to_rust::{browser::Browser, browser_host::BrowserHost},
     rust_to_c::{
         client::{Client, ClientConfig},
+        load_handler::{LoadHandler, LoadHandlerConfig},
         render_handler::{RenderHandler, RenderHandlerConfig},
     },
     structs::{geometry::Rect, screen_info::ScreenInfo},
@@ -266,6 +267,7 @@ impl WebView {
             frame_count: 0,
             notifier: None,
             dirty: false,
+            loading: true,
         }));
 
         let client = WebViewClient::new(
@@ -285,6 +287,7 @@ impl WebView {
         );
         let browser_host = browser.get_host();
         let current_scale_factor = shared_wgpu_state.window.scale_factor();
+        // browser_host.
 
         Self {
             shared_wgpu_state,
@@ -352,8 +355,11 @@ impl View for WebView {
         shared.notifier = Some(send);
         shared.dirty = true;
 
-        println!("send_external_begin_frame");
-        self.browser_host.send_external_begin_frame();
+        if !shared.loading {
+            println!("send_external_begin_frame");
+            // self.browser_host.invalidate();
+            self.browser_host.send_external_begin_frame();
+        }
 
         Ok(async { recv.await.unwrap() }.boxed())
     }
@@ -385,7 +391,7 @@ impl View for WebView {
             },
         );
         shared.dirty = false;
-        
+
         Ok(())
     }
 
@@ -437,6 +443,7 @@ impl Vertex {
 
 struct WebViewClient {
     render_handler: CefArc<RenderHandler>,
+    load_handler: CefArc<LoadHandler>,
 }
 
 impl WebViewClient {
@@ -451,7 +458,13 @@ impl WebViewClient {
             texture_bind_group_layout: texture_bind_group_layout.clone(),
         });
 
-        Client::new(Self { render_handler })
+        let load_handler = LoadHandler::new(WebViewLoadHandler {
+            shared_writable: shared_writable.clone(),});
+
+        Client::new(Self {
+            render_handler,
+            load_handler,
+        })
     }
 }
 
@@ -459,12 +472,10 @@ impl ClientConfig for WebViewClient {
     fn get_render_handler(&self) -> Option<CefArc<RenderHandler>> {
         Some(self.render_handler.clone())
     }
-}
 
-struct WebViewRenderHandler {
-    shared_wgpu_state: Arc<SharedWgpuState>,
-    texture_bind_group_layout: Arc<wgpu::BindGroupLayout>,
-    shared_writable: Arc<RwLock<SharedWritable>>,
+    fn get_load_handler(&self) -> Option<CefArc<LoadHandler>> {
+        Some(self.load_handler.clone())
+    }
 }
 
 #[derive(Debug)]
@@ -476,10 +487,18 @@ struct SharedWritable {
     frame_count: usize,
     notifier: Option<oneshot::Sender<RefreshToken>>,
     dirty: bool,
+    loading: bool,
+}
+
+struct WebViewRenderHandler {
+    shared_wgpu_state: Arc<SharedWgpuState>,
+    texture_bind_group_layout: Arc<wgpu::BindGroupLayout>,
+    shared_writable: Arc<RwLock<SharedWritable>>,
 }
 
 impl RenderHandlerConfig for WebViewRenderHandler {
     fn get_view_rect(&mut self, _: CefArc<Browser>) -> Option<Rect> {
+        println!("get_view_rect");
         let physical_size = self.shared_writable.read().size;
         let logical_size: LogicalSize<i32> =
             physical_size.to_logical(self.shared_wgpu_state.window.scale_factor());
@@ -512,29 +531,35 @@ impl RenderHandlerConfig for WebViewRenderHandler {
                 depth_or_array_layers: 1,
             };
 
-            shared_writable.working_texture = self.shared_wgpu_state.device.create_texture(&wgpu::TextureDescriptor {
-                label: Some("WebView Texture"),
-                size: texture_size,
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Bgra8UnormSrgb,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING
-                    | wgpu::TextureUsages::COPY_DST
-                    | wgpu::TextureUsages::COPY_SRC,
-                view_formats: &[],
-            });
+            shared_writable.working_texture =
+                self.shared_wgpu_state
+                    .device
+                    .create_texture(&wgpu::TextureDescriptor {
+                        label: Some("WebView Texture"),
+                        size: texture_size,
+                        mip_level_count: 1,
+                        sample_count: 1,
+                        dimension: wgpu::TextureDimension::D2,
+                        format: wgpu::TextureFormat::Bgra8UnormSrgb,
+                        usage: wgpu::TextureUsages::TEXTURE_BINDING
+                            | wgpu::TextureUsages::COPY_DST
+                            | wgpu::TextureUsages::COPY_SRC,
+                        view_formats: &[],
+                    });
 
-            shared_writable.visible_texture = self.shared_wgpu_state.device.create_texture(&wgpu::TextureDescriptor {
-                label: Some("WebView Texture"),
-                size: texture_size,
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Bgra8UnormSrgb,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-                view_formats: &[],
-            });
+            shared_writable.visible_texture =
+                self.shared_wgpu_state
+                    .device
+                    .create_texture(&wgpu::TextureDescriptor {
+                        label: Some("WebView Texture"),
+                        size: texture_size,
+                        mip_level_count: 1,
+                        sample_count: 1,
+                        dimension: wgpu::TextureDimension::D2,
+                        format: wgpu::TextureFormat::Bgra8UnormSrgb,
+                        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                        view_formats: &[],
+                    });
 
             self.shared_wgpu_state.queue.write_texture(
                 wgpu::ImageCopyTexture {
@@ -568,7 +593,9 @@ impl RenderHandlerConfig for WebViewRenderHandler {
                 texture_size,
             );
 
-            let texture_view = shared_writable.visible_texture.create_view(&wgpu::TextureViewDescriptor::default());
+            let texture_view = shared_writable
+                .visible_texture
+                .create_view(&wgpu::TextureViewDescriptor::default());
             let texture_sampler =
                 self.shared_wgpu_state
                     .device
@@ -638,17 +665,21 @@ impl RenderHandlerConfig for WebViewRenderHandler {
 
         shared_writable.frame_count += 1;
         let frame_count = shared_writable.frame_count;
-        shared_writable.notifier.take().map(|n| n.send(RefreshToken(frame_count)));
+        shared_writable
+            .notifier
+            .take()
+            .map(|n| n.send(RefreshToken(frame_count)));
     }
 
     fn get_screen_info(&mut self, _browser: CefArc<Browser>) -> Option<ScreenInfo> {
+        println!("get_screen_info");
         let device_scale_factor = self.shared_wgpu_state.window.scale_factor() as f32;
-
+        let size = self.shared_writable.read().size;
         let dummy_rect = Rect {
             x: 0,
             y: 0,
-            width: 0,
-            height: 0,
+            width: size.width as i32,
+            height: size.height as i32,
         };
         Some(ScreenInfo {
             device_scale_factor,
@@ -671,5 +702,22 @@ impl RenderHandlerConfig for WebViewRenderHandler {
         let physical_position = logical_position.to_physical(scale_factor);
 
         Some((physical_position.x, physical_position.y))
+    }
+}
+
+struct WebViewLoadHandler {
+    shared_writable: Arc<RwLock<SharedWritable>>,}
+
+impl LoadHandlerConfig for WebViewLoadHandler {
+    fn on_load_end(&mut self, browser: CefArc<Browser>, status_code: u32) {
+        println!("LOAD_END: {status_code}");
+        let mut shared = self.shared_writable.write();
+        shared.loading = false;
+        browser.get_host().was_resized();
+        browser.get_host().invalidate();
+        if shared.dirty {
+            println!("send_external_begin_frame");
+            browser.get_host().send_external_begin_frame();
+        }
     }
 }

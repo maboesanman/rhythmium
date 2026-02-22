@@ -1,13 +1,13 @@
 // use crate::util::{cef_arc::{CefArc, VTableKindArc}, cef_type::VTable};
 
 use cef_wrapper::cef_capi_sys::{
-    cef_base_ref_counted_t, cef_client_t, cef_life_span_handler_t, cef_render_handler_t,
+    cef_base_ref_counted_t, cef_client_t, cef_life_span_handler_t, cef_load_handler_t, cef_render_handler_t
 };
 
-use crate::util::{
+use crate::{rust_to_c::load_handler::LoadHandler, util::{
     cef_arc::{CefArc, CefArcFromRust, uninit_arc_vtable},
     starts_with::StartsWith,
-};
+}};
 
 use super::{life_span_handler::LifeSpanHandler, render_handler::RenderHandler};
 
@@ -36,7 +36,7 @@ impl Client {
             get_jsdialog_handler: None,
             get_keyboard_handler: None,
             get_life_span_handler: Some(C::get_life_span_handler_raw),
-            get_load_handler: None,
+            get_load_handler: Some(C::get_load_handler_raw),
             get_print_handler: None,
             get_render_handler: Some(C::get_render_handler_raw),
             get_request_handler: None,
@@ -52,6 +52,10 @@ pub trait ClientConfig: Sized + Send + Sync {
     }
 
     fn get_render_handler(&self) -> Option<CefArc<RenderHandler>> {
+        None
+    }
+
+    fn get_load_handler(&self) -> Option<CefArc<LoadHandler>> {
         None
     }
 }
@@ -85,6 +89,23 @@ pub(crate) trait ClientConfigExt: ClientConfig {
             match render_handler {
                 Some(render_handler) => render_handler
                     .type_erase::<cef_render_handler_t>()
+                    .into_raw(),
+                None => std::ptr::null_mut(),
+            }
+        }
+    }
+
+    unsafe extern "C" fn get_load_handler_raw(
+        ptr: *mut cef_client_t,
+    ) -> *mut cef_load_handler_t {
+        unsafe {
+            let rust_impl_ptr = CefArcFromRust::<Client, Self>::get_rust_impl_from_ptr(ptr.cast());
+            let rust_impl = &mut *rust_impl_ptr;
+            let load_handler = rust_impl.get_load_handler();
+
+            match load_handler {
+                Some(load_handler) => load_handler
+                    .type_erase::<cef_load_handler_t>()
                     .into_raw(),
                 None => std::ptr::null_mut(),
             }
