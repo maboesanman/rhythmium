@@ -12,124 +12,40 @@ pub enum SourcePoll<T, E, S> {
     /// For `poll` and `poll_forget`, S is Poll<Src::OutputState>.
     ///
     /// For `poll_interrupts`, S is ().
-    StateProgress {
-        /// The requested state, if ready
-        /// the channel waker must be called to wake if pending.
-        state: S,
-
+    Ready {
         /// The time of the next event after the current advance upper bound.
         next_event_at: Option<T>,
-
-        /// The current finalize bound (after this state is processed)
-        interrupt_lower_bound: LowerBound<T>,
     },
 
-    /// Indicates a new rollback or event is available and must be processed.
-    ///
-    /// This does not necesserily schedule a wakeup, so the source must be polled again after this is processed.
-    Interrupt {
-        /// The time the information pertains to
+    Event {
         time: T,
+        event: E,
+    },
 
-        /// The type of interrupt
-        interrupt: Interrupt<E>,
+    State {
+        time: T,
+        event: E,
+    },
 
-        /// The current finalize bound (after this interrupt is processed)
-        interrupt_lower_bound: LowerBound<T>,
+    RollbackEvents {
+        bound: LowerBound<T>
+    },
+
+    RollbackStateAndEvents {
+        bound: LowerBound<T>
+    },
+
+    FinalizeEvents {
+        event_rollback_lower_bound: LowerBound<T>,
+    },
+
+    /// Implies Finalize
+    FinalizeStateAndEvents {
+        state_lower_bound: LowerBound<T>,
     },
 
     /// pending operation. interrupt waker will be called when progress may be made toward interrupts being resolved.
-    InterruptPending,
-}
-
-impl<T, E, S> SourcePoll<T, E, Poll<S>> {
-    pub fn map_state<F, U>(self, f: F) -> SourcePoll<T, E, Poll<U>>
-    where
-        F: FnOnce(S) -> U,
-    {
-        match self {
-            SourcePoll::StateProgress {
-                state,
-                next_event_at,
-                interrupt_lower_bound,
-            } => SourcePoll::StateProgress {
-                state: state.map(f),
-                next_event_at,
-                interrupt_lower_bound,
-            },
-            SourcePoll::Interrupt {
-                time,
-                interrupt,
-                interrupt_lower_bound,
-            } => SourcePoll::Interrupt {
-                time,
-                interrupt,
-                interrupt_lower_bound,
-            },
-            SourcePoll::InterruptPending => SourcePoll::InterruptPending,
-        }
-    }
-
-    pub fn remove_state<F, U>(self, f: F) -> SourcePoll<T, E, ()>
-    where
-        F: FnOnce(S),
-    {
-        match self {
-            SourcePoll::StateProgress {
-                state,
-                next_event_at,
-                interrupt_lower_bound,
-            } => {
-                if let Poll::Ready(s) = state {
-                    f(s)
-                }
-                SourcePoll::StateProgress {
-                    state: (),
-                    next_event_at,
-                    interrupt_lower_bound,
-                }
-            }
-            SourcePoll::Interrupt {
-                time,
-                interrupt,
-                interrupt_lower_bound,
-            } => SourcePoll::Interrupt {
-                time,
-                interrupt,
-                interrupt_lower_bound,
-            },
-            SourcePoll::InterruptPending => SourcePoll::InterruptPending,
-        }
-    }
-}
-
-impl<T, E> SourcePoll<T, E, ()> {
-    pub fn set_state<F, U>(self, f: F) -> SourcePoll<T, E, Poll<U>>
-    where
-        F: FnOnce() -> U,
-    {
-        match self {
-            SourcePoll::StateProgress {
-                state: (),
-                next_event_at,
-                interrupt_lower_bound,
-            } => SourcePoll::StateProgress {
-                state: Poll::Ready(f()),
-                next_event_at,
-                interrupt_lower_bound,
-            },
-            SourcePoll::Interrupt {
-                time,
-                interrupt,
-                interrupt_lower_bound,
-            } => SourcePoll::Interrupt {
-                time,
-                interrupt,
-                interrupt_lower_bound,
-            },
-            SourcePoll::InterruptPending => SourcePoll::InterruptPending,
-        }
-    }
+    Pending,
 }
 
 impl<T, E, S> SourcePoll<T, E, S> {
@@ -138,12 +54,10 @@ impl<T, E, S> SourcePoll<T, E, S> {
         F: FnOnce(&T, E) -> U,
     {
         match self {
-            SourcePoll::StateProgress {
-                state,
+            SourcePoll::Ready {
                 next_event_at,
                 interrupt_lower_bound,
-            } => SourcePoll::StateProgress {
-                state,
+            } => SourcePoll::Ready {
                 next_event_at,
                 interrupt_lower_bound,
             },
@@ -164,7 +78,7 @@ impl<T, E, S> SourcePoll<T, E, S> {
 impl<T: Copy, E, S> SourcePoll<T, E, S> {
     pub fn get_interrupt_lower_bound(&self) -> Option<LowerBound<T>> {
         match self {
-            SourcePoll::StateProgress {
+            SourcePoll::Ready {
                 interrupt_lower_bound,
                 ..
             } => Some(*interrupt_lower_bound),
@@ -341,21 +255,25 @@ impl<T: Ord> UpperBound<T> {
 
 #[derive(Debug, PartialEq, Eq)]
 /// The type of interrupt emitted from the source
-pub enum Interrupt<E> {
+pub enum Interrupt<E, S> {
     /// A new event is available.
     Event(E),
+
+    /// A new requested state is available.
+    RequestedState(S),
 
     /// All events at or after time T must be discarded.
     Rollback,
 }
 
-impl<E> Interrupt<E> {
-    pub fn map_event<F, U>(self, f: F) -> Interrupt<U>
+impl<E, S> Interrupt<E, S> {
+    pub fn map_event<F, U>(self, f: F) -> Interrupt<U, S>
     where
         F: FnOnce(E) -> U,
     {
         match self {
             Interrupt::Event(e) => Interrupt::Event(f(e)),
+            Interrupt::RequestedState(s) => Interrupt::RequestedState(s),
             Interrupt::Rollback => Interrupt::Rollback,
         }
     }
