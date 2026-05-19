@@ -1,5 +1,4 @@
 use std::{
-    assert_matches::assert_matches,
     io::Write,
     num::NonZeroUsize,
     sync::atomic::AtomicBool,
