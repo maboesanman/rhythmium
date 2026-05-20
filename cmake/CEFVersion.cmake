@@ -1,3 +1,6 @@
 
 # Specify the CEF distribution version.
-set(CEF_VERSION "126.2.9+g169fea9+chromium-126.0.6478.127")
+set(CEF_VERSION "147.0.14+g76d2442+chromium-147.0.7727.138")
+
+# Stable CEF API version to compile against (excludes experimental APIs).
+set(CEF_API_VERSION_VALUE 14700)

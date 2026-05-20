@@ -16,7 +16,6 @@ pub struct Settings {
     #[cfg(target_os = "windows")]
     pub chrome_app_icon_id: Option<usize>,
     pub chrome_policy_id: Option<String>,
-    pub chrome_runtime: bool,
     pub command_line_args_disabled: bool,
     pub cookieable_schemes_exclude_defaults: bool,
     pub cookieable_schemes: Vec<String>,
@@ -35,9 +34,7 @@ pub struct Settings {
     #[cfg(any(target_os = "windows", target_os = "linux"))]
     pub multi_threaded_message_loop: bool,
     // no_sandbox: bool,
-    pub pack_loading_disabled: bool,
     pub persist_session_cookies: bool,
-    pub persist_user_preferences: bool,
     pub remote_debugging_port: Option<u16>,
     pub resources_dir_path: Option<PathBuf>,
     pub root_cache_path: Option<PathBuf>,
@@ -69,7 +66,6 @@ impl From<&Settings> for cef_settings_t {
             #[cfg(not(target_os = "windows"))]
             chrome_app_icon_id: 0,
             chrome_policy_id: wrap_string(&value.chrome_policy_id),
-            chrome_runtime: wrap_boolean(value.chrome_runtime),
             command_line_args_disabled: wrap_boolean(value.command_line_args_disabled),
             cookieable_schemes_exclude_defaults: wrap_boolean(
                 value.cookieable_schemes_exclude_defaults,
@@ -102,9 +98,9 @@ impl From<&Settings> for cef_settings_t {
             no_sandbox: 0,
             #[cfg(not(feature = "sandbox"))]
             no_sandbox: 1,
-            pack_loading_disabled: wrap_boolean(value.pack_loading_disabled),
+            disable_signal_handlers: 0,
+            use_views_default_popup: 0,
             persist_session_cookies: wrap_boolean(value.persist_session_cookies),
-            persist_user_preferences: wrap_boolean(value.persist_user_preferences),
             remote_debugging_port: value.remote_debugging_port.unwrap_or(0) as i32,
             resources_dir_path: wrap_pathbuf(&value.resources_dir_path),
             root_cache_path: wrap_pathbuf(&value.root_cache_path),

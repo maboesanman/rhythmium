@@ -74,6 +74,7 @@ impl From<cef_screen_info_t> for ScreenInfo {
 impl From<ScreenInfo> for cef_screen_info_t {
     fn from(val: ScreenInfo) -> Self {
         cef_screen_info_t {
+            size: std::mem::size_of::<cef_screen_info_t>(),
             device_scale_factor: val.device_scale_factor,
             depth: val.depth as i32,
             depth_per_component: val.depth_per_component as i32,

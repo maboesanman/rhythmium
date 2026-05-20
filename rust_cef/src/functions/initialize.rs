@@ -1,4 +1,9 @@
-use cef_wrapper::cef_capi_sys::cef_initialize;
+use std::ffi::CStr;
+
+use cef_wrapper::{
+    CEF_API_HASH_PLATFORM, CEF_API_VERSION_VALUE,
+    cef_capi_sys::{cef_initialize, cef_api_hash},
+};
 
 use crate::{
     rust_to_c::app::App,
@@ -14,6 +19,16 @@ where
 {
     try_start_subprocess(&main_args);
     unsafe {
+        let library_hash_ptr = cef_api_hash(CEF_API_VERSION_VALUE, 0);
+        if !library_hash_ptr.is_null() {
+            let library_hash = CStr::from_ptr(library_hash_ptr).to_str().unwrap_or("");
+            assert_eq!(
+                library_hash,
+                CEF_API_HASH_PLATFORM,
+                "CEF binary hash mismatch: built against API version {} but library returned a different hash",
+                CEF_API_VERSION_VALUE,
+            );
+        }
         cef_initialize(
             &main_args.into(),
             &settings.into(),

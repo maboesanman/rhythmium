@@ -11,3 +11,4 @@ doctest = false
 cmake = "0.1"
 bindgen = "0.71.1"
 regex = "1.10.3"
+cc = "1"

@@ -20,6 +20,7 @@ impl LifeSpanHandler {
         let v_table = LifeSpanHandler(cef_life_span_handler_t {
             base: uninit_arc_vtable(),
             on_before_popup: None,
+            on_before_popup_aborted: None,
             on_before_dev_tools_popup: None,
             on_after_created: Some(C::on_after_created_raw),
             do_close: None,
