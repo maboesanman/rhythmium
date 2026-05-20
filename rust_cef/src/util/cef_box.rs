@@ -47,7 +47,9 @@ unsafe impl<V: StartsWith<cef_base_scoped_t>, RustImpl> StartsWith<cef_base_scop
 impl<V: StartsWith<cef_base_scoped_t>, R> CefBoxFromRust<V, R> {
     pub(crate) fn new(mut capi_v_table: V, rust_impl: R) -> Self {
         let base = capi_v_table.get_start_mut();
-        base.size = std::mem::size_of::<CefBoxFromRust<V, R>>();
+        // the purpose of size is to be a versioning check. it is the size of the vtable,
+        // not the allocation (and in particular not the rust_impl in our case)
+        base.size = std::mem::size_of::<V>();
         base.del = Some(del_ptr::<CefBoxFromRust<V, R>>);
 
         Self {

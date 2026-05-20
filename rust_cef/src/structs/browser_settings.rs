@@ -1,8 +1,7 @@
 use std::num::NonZeroU32;
 
 use cef_wrapper::cef_capi_sys::{
-    cef_browser_settings_t, cef_state_t_STATE_DEFAULT, cef_state_t_STATE_DISABLED,
-    cef_state_t_STATE_ENABLED,
+    cef_browser_settings_t, cef_state_t_STATE_DEFAULT, cef_state_t_STATE_DISABLED, cef_state_t_STATE_ENABLED,
 };
 
 use crate::util::cef_string::str_into_cef_string_utf16;
@@ -75,7 +74,7 @@ impl From<&BrowserSettings> for cef_browser_settings_t {
             text_area_resize: wrap_bool(&value.text_area_resize),
             tab_to_links: wrap_bool(&value.tab_to_links),
             local_storage: wrap_bool(&value.local_storage),
-            databases: wrap_bool(&value.databases),
+            databases_deprecated: wrap_bool(&value.databases),
             webgl: wrap_bool(&value.webgl),
             background_color: value.background_color,
             chrome_status_bubble: wrap_bool(&value.chrome_status_bubble),

@@ -24,6 +24,9 @@ set(CMAKE_INCLUDE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/include)
 # Add this project's cmake/ directory to the module path.
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/../cmake")
 
+# Load CEF version variables (CEF_VERSION, CEF_API_VERSION_VALUE).
+include(CEFVersion)
+
 # Download and extract CEF.
 include(DownloadCEF)
 DownloadCEF("${CMAKE_SOURCE_DIR}/../third_party/cef")
@@ -33,6 +36,9 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CEF_ROOT}/cmake")
 
 # Load the CEF configuration (executes FindCEF.cmake).
 find_package(CEF REQUIRED)
+
+# Use a stable CEF API version rather than the default experimental API.
+add_compile_definitions(CEF_API_VERSION=${CEF_API_VERSION_VALUE})
 
 # Include the libcef_dll_wrapper target (executes libcef_dll/CMakeLists.txt).
 add_subdirectory(${CEF_LIBCEF_DLL_WRAPPER_PATH} libcef_dll_wrapper)

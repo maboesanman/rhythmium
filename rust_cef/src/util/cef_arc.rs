@@ -68,7 +68,9 @@ impl<V: StartsWith<cef_base_ref_counted_t>, R> CefArcFromRust<V, R> {
     /// the values in the base will be populatef by this function.
     pub(crate) fn new(mut capi_v_table: V, rust_impl: R) -> Self {
         let base = capi_v_table.get_start_mut();
-        base.size = std::mem::size_of::<CefArcFromRust<V, R>>();
+        // the purpose of size is to be a versioning check. it is the size of the vtable,
+        // not the allocation (and in particular not the rust_impl in our case)
+        base.size = std::mem::size_of::<V>();
         base.add_ref = Some(c_callbacks::add_ref_ptr::<V, R>);
         base.release = Some(c_callbacks::release_ptr::<V, R>);
         base.has_one_ref = Some(c_callbacks::has_one_ref_ptr::<V, R>);

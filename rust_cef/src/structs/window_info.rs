@@ -21,6 +21,7 @@ pub struct WindowInfo {
 impl From<&WindowInfo> for cef_window_info_t {
     fn from(val: &WindowInfo) -> Self {
         cef_window_info_t {
+            size: std::mem::size_of::<cef_window_info_t>(),
             window_name: cef_string::str_into_cef_string_utf16(&val.window_name),
             bounds: val.bounds.into(),
             #[cfg(target_os = "linux")]
